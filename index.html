@@ -1888,7 +1888,6 @@ async function honExtractWithClaude(file) {
 }
 
 async function honCrearFactura(datos, cartaId) {
-  _odooUid = null;
   const parseNum = v => parseFloat((v||'0').toString().replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
   const neto = parseNum(datos.neto) || parseNum(datos.total);
   const iva = parseNum(datos.iva);
@@ -1988,7 +1987,7 @@ async function honProcesar() {
         <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
         <td><span class="badge badge-danger">✗ Error</span></td>`;
     }
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 300));
   }
 
   pf.style.width = '100%';
@@ -2101,7 +2100,7 @@ async function procesarComprobantes() {
 
   try {
     pt.textContent = 'Conectando a Odoo...'; pf.style.width = '3%';
-    try { await compOdooAuth(); pt.textContent = '✓ Odoo conectado. Cargando PDF...'; }
+    try { await odooAuth(); pt.textContent = '✓ Odoo conectado. Cargando PDF...'; }
     catch(e) { pt.textContent = '⚠ Sin conexión Odoo — procesando igual...'; }
 
     const ab = await compSelectedFile.arrayBuffer();
