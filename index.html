@@ -1611,7 +1611,12 @@ async function odooCall(model, method, args, kwargs={}) {
     })
   });
   const d = await r.json();
-  if (d.error) throw new Error(typeof d.error === 'string' ? d.error : (d.error.faultString || d.error.message || JSON.stringify(d.error)));
+  if (d.error) {
+    const errMsg = typeof d.error === 'string' ? d.error :
+      (d.error.faultString ? d.error.faultString.split('\n').pop() :
+      (d.error.message || JSON.stringify(d.error)));
+    throw new Error(errMsg);
+  }
   return d.result;
 }
 
@@ -1849,7 +1854,7 @@ function honAddFiles(files) {
   }
 }
 
-async function honExtractWithClaude(file) {
+async function honExtractWithClaude(file, intentos = 3) {
   const claudeKey = localStorage.getItem('claude_key');
   if (!claudeKey) throw new Error('API key de Claude no configurada');
   const portalPass = sessionStorage.getItem('portal_pass_session') || '';
@@ -1859,31 +1864,62 @@ async function honExtractWithClaude(file) {
     r.onerror = () => rej(new Error('Error leyendo archivo'));
     r.readAsDataURL(file);
   });
-  const resp = await fetch(PROXY_URL.replace('/proxy', '/claude'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      portal_password: portalPass,
-      claude_key: claudeKey,
-      payload: {
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
-            { type: 'text', text: HON_PROMPT }
-          ]
-        }]
+
+  for (let intento = 1; intento <= intentos; intento++) {
+    try {
+      const resp = await fetch(PROXY_URL.replace('/proxy', '/claude'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portal_password: portalPass,
+          claude_key: claudeKey,
+          payload: {
+            model: 'claude-sonnet-4-5',
+            max_tokens: 1000,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+                { type: 'text', text: HON_PROMPT }
+              ]
+            }]
+          }
+        })
+      });
+
+      if (!resp.ok) {
+        const e = await resp.json().catch(() => ({}));
+        const msg = e.error?.message || `HTTP ${resp.status}`;
+        if (intento < intentos) { await new Promise(r => setTimeout(r, 3000 * intento)); continue; }
+        throw new Error(msg);
       }
-    })
-  });
-  if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || `Error ${resp.status}`); }
-  const data = await resp.json();
-  if (data.error) throw new Error(data.error);
-  if (!data.content || !data.content[0]) throw new Error('Respuesta vacía de Claude');
-  const text = data.content[0].text.replace(/```json|```/g,'').trim();
-  return JSON.parse(text);
+
+      const data = await resp.json();
+      if (data.error) {
+        const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
+        if (intento < intentos) { await new Promise(r => setTimeout(r, 3000 * intento)); continue; }
+        throw new Error(msg);
+      }
+      if (!data.content?.[0]?.text) {
+        if (intento < intentos) { await new Promise(r => setTimeout(r, 3000 * intento)); continue; }
+        throw new Error('Respuesta vacía de Claude');
+      }
+
+      const text = data.content[0].text.replace(/```json|```/g,'').trim();
+      try {
+        return JSON.parse(text);
+      } catch(parseErr) {
+        // Try to extract JSON from the text
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) return JSON.parse(match[0]);
+        if (intento < intentos) { await new Promise(r => setTimeout(r, 2000)); continue; }
+        throw new Error('JSON inválido de Claude: ' + text.substring(0, 100));
+      }
+    } catch(e) {
+      if (intento >= intentos) throw e;
+      await new Promise(r => setTimeout(r, 3000 * intento));
+    }
+  }
 }
 
 async function honCrearFactura(datos, cartaId) {
