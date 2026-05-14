@@ -660,129 +660,52 @@ tbody tr:hover td { background: #f8faf9; }
 
     <!-- ══════════ DASHBOARD ══════════ -->
     <div id="page-dashboard" class="page active">
-
       <div class="metrics-grid">
         <div class="metric-card success">
-          <div class="metric-label">Honorarios cargados</div>
-          <div class="metric-value">312</div>
-          <div class="metric-sub">de 380 esperados este mes</div>
-        </div>
-        <div class="metric-card danger">
-          <div class="metric-label">Faltantes</div>
-          <div class="metric-value">68</div>
-          <div class="metric-sub">en 4 cartas · mayo 2026</div>
-        </div>
-        <div class="metric-card warn">
-          <div class="metric-label">Sin depósito Carta 29</div>
-          <div class="metric-value">3</div>
-          <div class="metric-sub">subconvenios sin ingresar</div>
+          <div class="metric-label">Honorarios cargados hoy</div>
+          <div class="metric-value" id="dash-hon-count">—</div>
+          <div class="metric-sub" id="dash-hon-sub">usá el módulo Honorarios</div>
         </div>
         <div class="metric-card info">
-          <div class="metric-label">Monto total cargado</div>
-          <div class="metric-value">$284M</div>
-          <div class="metric-sub">ARS honorarios este mes</div>
+          <div class="metric-label">Comprobantes separados</div>
+          <div class="metric-value" id="dash-comp-count">—</div>
+          <div class="metric-sub">en esta sesión</div>
         </div>
-      </div>
-
-      <div class="grid2" style="margin-bottom:16px;">
-        <div>
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title"><i class="ti ti-alert-triangle"></i> Alertas activas</div>
-              <span class="badge badge-danger">5 urgentes</span>
-            </div>
-            <div class="card-body">
-              <div class="alert danger">
-                <i class="ti ti-x"></i>
-                <div><strong>29.8 — Frigorífico del Norte</strong> sin depósito en mayo ni abril. 8 honorarios sin saldo.</div>
-              </div>
-              <div class="alert danger">
-                <i class="ti ti-x"></i>
-                <div><strong>29.4 — Riosma</strong> sin COGAYT descontado. Saldo sobreestimado $831.420.</div>
-              </div>
-              <div class="alert warn">
-                <i class="ti ti-alert-circle"></i>
-                <div><strong>INIDEP.28</strong> — 34 faltantes. Consultores que estuvieron los últimos 4 meses no enviaron factura.</div>
-              </div>
-              <div class="alert warn">
-                <i class="ti ti-alert-circle"></i>
-                <div><strong>3 proveedores sin CBU</strong> registrado en Odoo. No se pueden incluir en Interbanking.</div>
-              </div>
-              <div class="alert info">
-                <i class="ti ti-clock"></i>
-                <div><strong>CONICET.7</strong> — saldo crítico $0.3M. Solo alcanza para 4 de 20 honorarios.</div>
-              </div>
-            </div>
-          </div>
+        <div class="metric-card">
+          <div class="metric-label">Portal</div>
+          <div class="metric-value" style="font-size:16px;color:var(--success);">✓ Conectado</div>
+          <div class="metric-sub">Odoo + Railway activos</div>
         </div>
-
-        <div>
-          <div class="card" style="margin-bottom:16px;">
-            <div class="card-header">
-              <div class="card-title"><i class="ti ti-chart-bar"></i> Avance por carta</div>
-            </div>
-            <div class="card-body">
-              <div class="progress-row">
-                <div class="progress-label">SENASA.28.1</div>
-                <div class="progress"><div class="progress-fill ok" style="width:92%"></div></div>
-                <div class="progress-count">46/50</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label">INIDEP.28</div>
-                <div class="progress"><div class="progress-fill danger" style="width:53%"></div></div>
-                <div class="progress-count">38/72</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label">MAGyP.14</div>
-                <div class="progress"><div class="progress-fill ok" style="width:100%"></div></div>
-                <div class="progress-count">28/28</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label">CONICET.7</div>
-                <div class="progress"><div class="progress-fill warn" style="width:67%"></div></div>
-                <div class="progress-count">40/60</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label">SENASA.29</div>
-                <div class="progress"><div class="progress-fill warn" style="width:78%"></div></div>
-                <div class="progress-count">78/100</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title"><i class="ti ti-wallet"></i> Saldos críticos</div>
-            </div>
-            <div class="card-body">
-              <table>
-                <thead><tr><th>Carta</th><th>Saldo</th><th>Estado</th></tr></thead>
-                <tbody>
-                  <tr><td>SENASA.28.1</td><td style="font-family:'JetBrains Mono',monospace;">$12.4M</td><td><span class="badge badge-ok">OK</span></td></tr>
-                  <tr><td>INIDEP.28</td><td style="font-family:'JetBrains Mono',monospace;">$1.2M</td><td><span class="badge badge-warn">Bajo</span></td></tr>
-                  <tr><td>MAGyP.14</td><td style="font-family:'JetBrains Mono',monospace;">$8.7M</td><td><span class="badge badge-ok">OK</span></td></tr>
-                  <tr><td>CONICET.7</td><td style="font-family:'JetBrains Mono',monospace;">$0.3M</td><td><span class="badge badge-danger">Crítico</span></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div class="metric-card">
+          <div class="metric-label">Versión</div>
+          <div class="metric-value" style="font-size:16px;">v1.0</div>
+          <div class="metric-sub">ArgenINTA · Tesorería</div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <div class="card-title"><i class="ti ti-clock"></i> Actividad reciente</div>
+          <div class="card-title"><i class="ti ti-layout-dashboard"></i> Accesos rápidos</div>
         </div>
         <div class="card-body">
-          <table>
-            <thead><tr><th>Hora</th><th>Acción</th><th>Usuario</th><th>Resultado</th></tr></thead>
-            <tbody>
-              <tr><td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">09:42</td><td>Carga honorarios SENASA.28.1 — 5 PDFs</td><td>R. Flores</td><td><span class="badge badge-ok">5 cargadas</span></td></tr>
-              <tr><td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">09:15</td><td>Separador comprobantes — 47 páginas</td><td>R. Flores</td><td><span class="badge badge-ok">47 separados</span></td></tr>
-              <tr><td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">08:50</td><td>Export Interbanking — 312 proveedores</td><td>Sistema</td><td><span class="badge badge-ok">Enviado</span></td></tr>
-              <tr><td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">ayer</td><td>Reporte saldos diario — 18 organismos</td><td>Sistema</td><td><span class="badge badge-ok">Enviado</span></td></tr>
-            </tbody>
-          </table>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+            <button class="btn" onclick="showPage('honorarios',document.querySelectorAll('.nav-item')[2])" style="padding:16px;flex-direction:column;gap:8px;height:auto;">
+              <i class="ti ti-file-invoice" style="font-size:24px;color:var(--verde);"></i>
+              <span>Cargar honorarios</span>
+            </button>
+            <button class="btn" onclick="showPage('comprobantes',document.querySelectorAll('.nav-item')[3])" style="padding:16px;flex-direction:column;gap:8px;height:auto;">
+              <i class="ti ti-receipt-2" style="font-size:24px;color:var(--info);"></i>
+              <span>Separar comprobantes</span>
+            </button>
+            <button class="btn" onclick="showPage('interbanking',document.querySelectorAll('.nav-item')[4])" style="padding:16px;flex-direction:column;gap:8px;height:auto;">
+              <i class="ti ti-building-bank" style="font-size:24px;color:var(--warn);"></i>
+              <span>Interbanking</span>
+            </button>
+            <button class="btn" onclick="showPage('carta29',document.querySelectorAll('.nav-item')[5])" style="padding:16px;flex-direction:column;gap:8px;height:auto;">
+              <i class="ti ti-cash" style="font-size:24px;color:var(--success);"></i>
+              <span>Carta 29</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1048,9 +971,11 @@ tbody tr:hover td { background: #f8faf9; }
             <div class="card-body">
               <div class="field">
                 <label>Carta / Convenio</label>
-                <select id="hon-sel-carta">
+                <input type="text" id="hon-carta-search" placeholder="Escribí para buscar..." oninput="honFiltrarCartas()" autocomplete="off" style="margin-bottom:4px;">
+                <select id="hon-sel-carta" size="5" style="width:100%;border-radius:7px;padding:4px;">
                   <option value="">Cargando cartas...</option>
                 </select>
+                <div style="font-size:10px;color:var(--muted);margin-top:3px;" id="hon-carta-count"></div>
               </div>
               <div class="dropzone" id="hon-dropzone" onclick="document.getElementById('hon-fileInput').click()" style="margin-bottom:14px;">
                 <i class="ti ti-files"></i>
@@ -2199,16 +2124,33 @@ Respondé ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markd
   "confidence": "Tu confianza del 0 al 100"
 }`;
 
+let _todasLasCartas = [];
+
 async function honCargarCartas() {
   const sel = document.getElementById('hon-sel-carta');
   if (!sel) return;
   try {
     const cartas = await odooCall('account.analytic.account', 'search_read',
-      [[['active','=',true]]], {fields:['id','name'], limit:100, order:'name asc'});
-    sel.innerHTML = cartas.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      [[['active','=',true]]], {fields:['id','name'], limit:500, order:'name asc'});
+    _todasLasCartas = cartas;
+    honRenderCartas(cartas);
   } catch(e) {
     sel.innerHTML = '<option value="">Error cargando cartas</option>';
   }
+}
+
+function honRenderCartas(cartas) {
+  const sel = document.getElementById('hon-sel-carta');
+  const count = document.getElementById('hon-carta-count');
+  if (!sel) return;
+  sel.innerHTML = cartas.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  if (count) count.textContent = `${cartas.length} cartas`;
+}
+
+function honFiltrarCartas() {
+  const q = document.getElementById('hon-carta-search').value.toLowerCase();
+  const filtradas = q ? _todasLasCartas.filter(c => c.name.toLowerCase().includes(q)) : _todasLasCartas;
+  honRenderCartas(filtradas);
 }
 
 // Load cartas when honorarios page is shown
@@ -2261,16 +2203,15 @@ async function honExtractWithClaude(file) {
       }
     })
   });
-  const rawText = await resp.text();
-  const data = JSON.parse(rawText);
-  if (data.error) throw new Error(String(data.error));
-  if (!data.content?.[0]?.text) throw new Error('Sin contenido: ' + rawText.substring(0, 200));
+  if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || `Error ${resp.status}`); }
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error);
+  if (!data.content || !data.content[0]) throw new Error('Respuesta vacía de Claude');
   const text = data.content[0].text.replace(/```json|```/g,'').trim();
   return JSON.parse(text);
 }
 
 async function honCrearFactura(datos, cartaId) {
-  _odooUid = null; // forzar re-auth
   const parseNum = v => parseFloat((v||'0').toString().replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
   const neto = parseNum(datos.neto) || parseNum(datos.total);
   const iva = parseNum(datos.iva);
