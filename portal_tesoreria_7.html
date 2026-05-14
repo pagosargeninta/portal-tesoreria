@@ -1,0 +1,2771 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal de Tesorería — Fundación ArgenINTA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+:root {
+  --verde: #1a5c38;
+  --verde-claro: #e8f5ee;
+  --verde-mid: #2d8a58;
+  --sidebar-bg: #0f2419;
+  --sidebar-text: rgba(255,255,255,0.7);
+  --sidebar-active: #ffffff;
+  --sidebar-hover: rgba(255,255,255,0.08);
+  --bg: #f4f6f4;
+  --surface: #ffffff;
+  --border: #e0e8e2;
+  --text: #1a2e1f;
+  --muted: #5a7a64;
+  --danger: #c0392b;
+  --danger-bg: #fdf2f1;
+  --warn: #b7600a;
+  --warn-bg: #fef8f0;
+  --success: #1a5c38;
+  --success-bg: #e8f5ee;
+  --info: #155fa0;
+  --info-bg: #eaf2fb;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  min-height: 100vh;
+  display: flex;
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 100;
+}
+
+.sidebar-brand {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.brand-icon {
+  width: 32px; height: 32px;
+  background: var(--verde-mid);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.brand-icon i { color: #fff; font-size: 17px; }
+
+.brand-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.2px;
+}
+
+.brand-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-section {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  padding: 14px 18px 5px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 18px;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+  font-size: 13px;
+  font-weight: 400;
+  user-select: none;
+}
+
+.nav-item:hover { background: var(--sidebar-hover); color: #fff; }
+
+.nav-item.active {
+  color: var(--sidebar-active);
+  background: rgba(255,255,255,0.1);
+  border-left-color: #4ade80;
+  font-weight: 500;
+}
+
+.nav-item i { font-size: 16px; opacity: 0.8; flex-shrink: 0; }
+.nav-item.active i { opacity: 1; }
+
+.nav-badge {
+  margin-left: auto;
+  background: #c0392b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  line-height: 1.5;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  font-size: 10px;
+  color: rgba(255,255,255,0.25);
+  line-height: 1.5;
+}
+
+/* ── MAIN ── */
+.main {
+  margin-left: 220px;
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: var(--shadow);
+}
+
+.topbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.topbar-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.odoo-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 99px;
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid rgba(26,92,56,0.2);
+}
+
+.odoo-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.content {
+  padding: 24px;
+  flex: 1;
+}
+
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.card-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.card-title i { font-size: 15px; color: var(--muted); }
+.card-body { padding: 16px 18px; }
+
+/* ── METRICS ── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+
+.metric-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-value {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.metric-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.metric-card.success .metric-value { color: var(--success); }
+.metric-card.danger .metric-value { color: var(--danger); }
+.metric-card.warn .metric-value { color: var(--warn); }
+.metric-card.info .metric-value { color: var(--info); }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.badge-ok { background: var(--success-bg); color: var(--success); }
+.badge-warn { background: var(--warn-bg); color: var(--warn); }
+.badge-danger { background: var(--danger-bg); color: var(--danger); }
+.badge-info { background: var(--info-bg); color: var(--info); }
+.badge-muted { background: #f0f0f0; color: var(--muted); }
+
+/* ── ALERTS ── */
+.alert {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.alert i { font-size: 15px; margin-top: 0.5px; flex-shrink: 0; }
+.alert.danger { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(192,57,43,0.2); }
+.alert.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid rgba(183,96,10,0.2); }
+.alert.success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(26,92,56,0.2); }
+.alert.info { background: var(--info-bg); color: var(--info); border: 1px solid rgba(21,95,160,0.2); }
+
+/* ── TABLES ── */
+.table-wrap {
+  overflow: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+thead th {
+  background: #f8faf9;
+  padding: 9px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f0f4f1;
+  color: var(--text);
+  vertical-align: middle;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #f8faf9; }
+
+/* ── BTNS ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s;
+}
+
+.btn:hover { background: #f4f6f4; }
+.btn i { font-size: 14px; }
+
+.btn-primary {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: #fff;
+}
+
+.btn-primary:hover { background: var(--verde-mid); border-color: var(--verde-mid); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-danger { background: var(--danger-bg); border-color: rgba(192,57,43,0.3); color: var(--danger); }
+
+/* ── GRID ── */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+/* ── PROGRESS ── */
+.progress {
+  background: #e8f0ea;
+  border-radius: 99px;
+  height: 5px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s;
+}
+
+.progress-fill.ok { background: var(--verde); }
+.progress-fill.warn { background: #e0820a; }
+.progress-fill.danger { background: var(--danger); }
+
+/* ── SUBCONV ROW ── */
+.subconv-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--border);
+}
+
+.subconv-row.ok { border-left-color: var(--verde); }
+.subconv-row.warn { border-left-color: #e0820a; background: #fffdf8; }
+.subconv-row.danger { border-left-color: var(--danger); background: #fffafa; }
+
+.subconv-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.subconv-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.subconv-frigorifico { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.subconv-nums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.num-item .num-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+.num-item .num-value { font-size: 13px; font-weight: 600; color: var(--text); font-family: 'JetBrains Mono', monospace; }
+.num-item .num-value.ok { color: var(--success); }
+.num-item .num-value.warn { color: var(--warn); }
+.num-item .num-value.danger { color: var(--danger); }
+
+/* ── PROGRESS ROW ── */
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.progress-label { font-size: 12px; color: var(--text); min-width: 130px; }
+.progress-count { font-size: 11px; color: var(--muted); min-width: 55px; text-align: right; font-family: 'JetBrains Mono', monospace; }
+
+/* ── FORM ── */
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
+.field input, .field select, .field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field input:focus, .field select:focus { border-color: var(--verde); }
+
+/* ── DROPZONE ── */
+.dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fafbfa;
+}
+
+.dropzone:hover, .dropzone.drag-over {
+  border-color: var(--verde);
+  background: var(--verde-claro);
+}
+
+.dropzone i { font-size: 32px; color: var(--muted); display: block; margin-bottom: 8px; }
+.dropzone p { font-size: 13px; color: var(--muted); }
+.dropzone span { color: var(--verde); font-weight: 500; }
+
+/* ── SECTION TITLE ── */
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 20px 0 10px;
+}
+
+.section-title:first-child { margin-top: 0; }
+
+/* ── TABS ── */
+.tab-row { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab-btn {
+  padding: 5px 14px;
+  border-radius: 99px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.tab-btn.active { background: var(--verde); border-color: var(--verde); color: #fff; }
+.tab-btn:hover:not(.active) { background: var(--verde-claro); border-color: var(--verde); color: var(--verde); }
+
+/* ── IFRAME TOOL ── */
+.tool-iframe-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.tool-iframe-wrap iframe {
+  width: 100%;
+  border: none;
+  min-height: 700px;
+  display: block;
+}
+
+/* ── HISTORY DOT ── */
+.hdot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.hdot.ok { background: var(--verde); }
+.hdot.warn { background: #e0820a; }
+.hdot.danger { background: var(--danger); }
+.hdot.muted { background: #ccc; }
+
+/* ── SEPARATOR ── */
+.sep { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* ── EMPTY STATE ── */
+.empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+}
+.empty i { font-size: 36px; opacity: 0.3; display: block; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay" style="display:none;position:fixed;inset:0;background:var(--sidebar-bg);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <div style="text-align:center;margin-bottom:8px;">
+    <div style="width:48px;height:48px;background:var(--verde-mid);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+      <i class="ti ti-building-community" style="color:#fff;font-size:24px;"></i>
+    </div>
+    <div style="color:#fff;font-size:18px;font-weight:600;">ArgenINTA</div>
+    <div style="color:rgba(255,255,255,0.4);font-size:12px;margin-top:2px;">Portal de Tesorería</div>
+  </div>
+  <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;width:320px;">
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;">Contraseña de acceso</div>
+    <input id="login-input" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"
+      style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;outline:none;margin-bottom:10px;font-family:'Inter',sans-serif;">
+    <div id="login-error" style="display:none;color:#e05252;font-size:12px;margin-bottom:10px;">Contraseña incorrecta</div>
+    <button onclick="doLogin()" style="width:100%;padding:10px;background:var(--verde-mid);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">
+      Ingresar
+    </button>
+  </div>
+</div>
+
+<!-- ════════════════════════ SIDEBAR ════════════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-logo">
+      <div class="brand-icon"><i class="ti ti-building-community"></i></div>
+      <div>
+        <div class="brand-name">ArgenINTA</div>
+        <div class="brand-sub">Fundación</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">Principal</div>
+  <div class="nav-item active" onclick="showPage('dashboard',this)">
+    <i class="ti ti-layout-dashboard"></i> Dashboard
+    <span class="nav-badge" id="badge-alertas">5</span>
+  </div>
+
+  <div class="sidebar-section">Herramientas</div>
+  <div class="nav-item" onclick="showPage('honorarios',this)">
+    <i class="ti ti-file-invoice"></i> Honorarios
+  </div>
+  <div class="nav-item" onclick="showPage('comprobantes',this)">
+    <i class="ti ti-receipt-2"></i> Comprobantes
+  </div>
+  <div class="nav-item" onclick="showPage('interbanking',this)">
+    <i class="ti ti-building-bank"></i> Interbanking
+  </div>
+  <div class="nav-item" onclick="showPage('carta29',this)">
+    <i class="ti ti-cash"></i> Carta 29
+    <span class="nav-badge" id="badge-carta29">3</span>
+  </div>
+
+  <div class="sidebar-section">Reportes</div>
+  <div class="nav-item" onclick="showPage('reportes',this)">
+    <i class="ti ti-chart-bar"></i> Saldos
+  </div>
+
+  <div class="sidebar-section">Config</div>
+  <div class="nav-item" onclick="showPage('config',this)">
+    <i class="ti ti-settings"></i> Configuración
+  </div>
+
+  <div class="sidebar-footer">
+    Portal de Tesorería v1.0<br>
+    Fundación ArgenINTA · 2026
+  </div>
+</nav>
+
+<!-- ════════════════════════ MAIN ════════════════════════ -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-sub" id="topbar-sub">Mayo 2026 · Actualizado hace 2 horas</div>
+    </div>
+    <div class="topbar-right">
+      <div class="odoo-status">
+        <div class="odoo-dot"></div>
+        Odoo conectado
+      </div>
+      <button class="btn" onclick="showPage('config', document.querySelector('.nav-item:last-of-type'))">
+        <i class="ti ti-settings"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══════════ DASHBOARD ══════════ -->
+    <div id="page-dashboard" class="page active">
+
+      <div class="metrics-grid">
+        <div class="metric-card success">
+          <div class="metric-label">Honorarios cargados</div>
+          <div class="metric-value">312</div>
+          <div class="metric-sub">de 380 esperados este mes</div>
+        </div>
+        <div class="metric-card danger">
+          <div class="metric-label">Faltantes</div>
+          <div class="metric-value">68</div>
+          <div class="metric-sub">en 4 cartas · mayo 2026</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Sin depósito Carta 29</div>
+          <div class="metric-value">3</div>
+          <div class="metric-sub">subconvenios sin ingresar</div>
+        </div>
+        <div class="metric-card info">
+          <div class="metric-label">Monto total cargado</div>
+          <div class="metric-value">$284M</div>
+          <div class="metric-sub">ARS honorarios este mes</div>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-bottom:16px;">
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-alert-triangle"></i> Alertas activas</div>
+              <span class="badge badge-danger">5 urgentes</span>
+            </div>
+            <div class="card-body">
+              <div class="alert danger">
+                <i class="ti ti-x"></i>
+                <div><strong>29.8 — Frigorífico del Norte</strong> sin depósito en mayo ni abril. 8 honorarios sin saldo.</div>
+              </div>
+              <div class="alert danger">
+                <i class="ti ti-x"></i>
+                <div><strong>29.4 — Riosma</strong> sin COGAYT descontado. Saldo sobreestimado $831.420.</div>
+              </div>
+              <div class="alert warn">
+                <i class="ti ti-alert-circle"></i>
+                <div><strong>INIDEP.28</strong> — 34 faltantes. Consultores que estuvieron los últimos 4 meses no enviaron factura.</div>
+              </div>
+              <div class="alert warn">
+                <i class="ti ti-alert-circle"></i>
+                <div><strong>3 proveedores sin CBU</strong> registrado en Odoo. No se pueden incluir en Interbanking.</div>
+              </div>
+              <div class="alert info">
+                <i class="ti ti-clock"></i>
+                <div><strong>CONICET.7</strong> — saldo crítico $0.3M. Solo alcanza para 4 de 20 honorarios.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-chart-bar"></i> Avance por carta</div>
+            </div>
+            <div class="card-body">
+              <div class="progress-row">
+                <div class="progress-label">SENASA.28.1</div>
+                <div class="progress"><div class="progress-fill ok" style="width:92%"></div></div>
+                <div class="progress-count">46/50</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">INIDEP.28</div>
+                <div class="progress"><div class="progress-fill danger" style="width:53%"></div></div>
+                <div class="progress-count">38/72</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">MAGyP.14</div>
+                <div class="progress"><div class="progress-fill ok" style="width:100%"></div></div>
+                <div class="progress-count">28/28</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">CONICET.7</div>
+                <div class="progress"><div class="progress-fill warn" style="width:67%"></div></div>
+                <div class="progress-count">40/60</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">SENASA.29</div>
+                <div class="progress"><div class="progress-fill warn" style="width:78%"></div></div>
+                <div class="progress-count">78/100</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-wallet"></i> Saldos críticos</div>
+            </div>
+            <div class="card-body">
+              <table>
+                <thead><tr><th>Carta</th><th>Saldo</th><th>Estado</th></tr></thead>
+                <tbody>
+                  <tr><td>SENASA.28.1</td><td style="font-family:'JetBrains Mono',monospace;">$12.4M</td><td><span class="badge badge-ok">OK</span></td></tr>
+                  <tr><td>INIDEP.28</td><td style="font-family:'JetBrains Mono',monospace;">$1.2M</td><td><span class="badge badge-warn">Bajo</span></td></tr>
+                  <tr><td>MAGyP.14</td><td style="font-family:'JetBrains Mono',monospace;">$8.7M</td><td><span class="badge badge-ok">OK</span></td></tr>
+                  <tr><td>CONICET.7</td><td style="font-family:'JetBrains Mono',monospace;">$0.3M</td><td><span class="badge badge-danger">Crítico</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-clock"></i> Actividad reciente</div>
+        </div>
+        <div class="card-body">
+          <table>
+            <thead><tr><th>Hora</th><th>Acción</th><th>Usuario</th><th>Resultado</th></tr></thead>
+            <tbody>
+              <tr><td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">09:42</td><td>Carga honorarios SENASA.28.1 — 5 PDFs</td><td>R. Flores</td><td><span class="badge badge-ok">5 cargadas</span></td></tr>
+              <tr><td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">09:15</td><td>Separador comprobantes — 47 páginas</td><td>R. Flores</td><td><span class="badge badge-ok">47 separados</span></td></tr>
+              <tr><td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">08:50</td><td>Export Interbanking — 312 proveedores</td><td>Sistema</td><td><span class="badge badge-ok">Enviado</span></td></tr>
+              <tr><td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">ayer</td><td>Reporte saldos diario — 18 organismos</td><td>Sistema</td><td><span class="badge badge-ok">Enviado</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ HONORARIOS ══════════ -->
+    <div id="page-honorarios" class="page">
+
+      <!-- Sub-tabs -->
+      <div class="tab-row" style="margin-bottom:20px;">
+        <button class="tab-btn active" onclick="showHonTab('resumen',this)">Resumen general</button>
+        <button class="tab-btn" onclick="showHonTab('cartas',this)">Por carta</button>
+        <button class="tab-btn" onclick="showHonTab('carga',this)">Cargar PDFs</button>
+        <button class="tab-btn" onclick="showHonTab('planilla',this)">Comparar planilla</button>
+        <button class="tab-btn" onclick="showHonTab('detalle',this)">Detalle de facturas</button>
+      </div>
+
+      <!-- ── RESUMEN GENERAL ── -->
+      <div id="hon-resumen" class="hon-tab">
+        <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));">
+          <div class="metric-card success">
+            <div class="metric-label">Cargadas</div>
+            <div class="metric-value">312</div>
+            <div class="metric-sub">de 380 esperadas</div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-label">Faltantes</div>
+            <div class="metric-value">68</div>
+            <div class="metric-sub">vs mes anterior</div>
+          </div>
+          <div class="metric-card warn">
+            <div class="metric-label">A revisar</div>
+            <div class="metric-value">8</div>
+            <div class="metric-sub">confianza IA &lt;75%</div>
+          </div>
+          <div class="metric-card info">
+            <div class="metric-label">En borrador</div>
+            <div class="metric-value">24</div>
+            <div class="metric-sub">pendientes confirmar</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Monto total</div>
+            <div class="metric-value" style="font-size:20px;">$284M</div>
+            <div class="metric-sub" style="color:var(--warn);">↑ 8% vs abril</div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-label">Sin CBU en Odoo</div>
+            <div class="metric-value">3</div>
+            <div class="metric-sub">no se pueden pagar</div>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-bottom:16px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-chart-bar"></i> Avance por carta — Mayo 2026</div>
+              <button class="btn" style="font-size:11px;" onclick="showHonTab('cartas', document.querySelectorAll('.tab-btn')[1])">
+                Ver detalle <i class="ti ti-arrow-right"></i>
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="progress-row">
+                <div class="progress-label" style="cursor:pointer;color:var(--info);" onclick="showHonTab('cartas', document.querySelectorAll('.tab-btn')[1])">SENASA.28.1</div>
+                <div class="progress"><div class="progress-fill ok" style="width:92%"></div></div>
+                <div class="progress-count">46/50</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label" style="cursor:pointer;color:var(--danger);">INIDEP.28</div>
+                <div class="progress"><div class="progress-fill danger" style="width:53%"></div></div>
+                <div class="progress-count">38/72</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">MAGyP.14</div>
+                <div class="progress"><div class="progress-fill ok" style="width:100%"></div></div>
+                <div class="progress-count">28/28</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label" style="color:var(--warn);">CONICET.7</div>
+                <div class="progress"><div class="progress-fill warn" style="width:67%"></div></div>
+                <div class="progress-count">40/60</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">SENASA.29</div>
+                <div class="progress"><div class="progress-fill warn" style="width:78%"></div></div>
+                <div class="progress-count">78/100</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">MAGyP.31</div>
+                <div class="progress"><div class="progress-fill ok" style="width:100%"></div></div>
+                <div class="progress-count">42/42</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">INA.7</div>
+                <div class="progress"><div class="progress-fill ok" style="width:88%"></div></div>
+                <div class="progress-count">38/43</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-header">
+                <div class="card-title"><i class="ti ti-users-group"></i> Faltantes por patrón</div>
+                <span class="badge badge-danger">68</span>
+              </div>
+              <div class="card-body">
+                <div class="alert warn" style="margin-bottom:10px;">
+                  <i class="ti ti-robot"></i>
+                  <div>Personas que enviaron los últimos 3+ meses y no aparecen en mayo.</div>
+                </div>
+                <table>
+                  <thead><tr><th>Proveedor</th><th>Carta</th><th>Meses</th><th>Último monto</th></tr></thead>
+                  <tbody>
+                    <tr><td>Pérez Juan M.</td><td><span class="badge badge-muted" style="font-size:10px;">INIDEP.28</span></td><td style="color:var(--muted);font-size:11px;">4 meses</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$920.000</td></tr>
+                    <tr><td>García Ana L.</td><td><span class="badge badge-muted" style="font-size:10px;">INIDEP.28</span></td><td style="color:var(--muted);font-size:11px;">6 meses</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td></tr>
+                    <tr><td>López María E.</td><td><span class="badge badge-muted" style="font-size:10px;">CONICET.7</span></td><td style="color:var(--muted);font-size:11px;">3 meses</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$750.000</td></tr>
+                    <tr><td colspan="4" style="text-align:center;color:var(--muted);font-size:11px;padding:8px;">+ 65 más · <span style="color:var(--info);cursor:pointer;" onclick="showHonTab('detalle',document.querySelectorAll('.tab-btn')[4])">ver todos</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i class="ti ti-trending-up"></i> Variaciones de monto</div>
+                <span class="badge badge-warn">4 alertas</span>
+              </div>
+              <div class="card-body">
+                <table>
+                  <thead><tr><th>Proveedor</th><th>Abril</th><th>Mayo</th><th>Var.</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td>Alvarez Tamara</td>
+                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$857.000</td>
+                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.218.000</td>
+                      <td><span class="badge badge-danger">↑ 42%</span></td>
+                    </tr>
+                    <tr>
+                      <td>Rodríguez C.</td>
+                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.200.000</td>
+                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.573.000</td>
+                      <td><span class="badge badge-warn">↑ 31%</span></td>
+                    </tr>
+                    <tr>
+                      <td>Suárez Pablo</td>
+                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td>
+                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$580.000</td>
+                      <td><span class="badge badge-info">↓ 41%</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-calendar-stats"></i> Histórico mensual</div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrap" style="border:none;border-radius:0;">
+              <table>
+                <thead><tr><th>Carta</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Tendencia</th></tr></thead>
+                <tbody>
+                  <tr><td><strong>SENASA.28.1</strong></td><td><span class="hdot ok"></span>50/50</td><td><span class="hdot ok"></span>50/50</td><td><span class="hdot ok"></span>50/50</td><td><span class="hdot ok"></span>50/50</td><td><span class="hdot warn"></span>46/50</td><td><span class="badge badge-warn">↓ 4 faltantes</span></td></tr>
+                  <tr><td><strong>INIDEP.28</strong></td><td><span class="hdot ok"></span>72/72</td><td><span class="hdot ok"></span>71/72</td><td><span class="hdot warn"></span>65/72</td><td><span class="hdot warn"></span>60/72</td><td><span class="hdot danger"></span>38/72</td><td><span class="badge badge-danger">↓ tendencia baja</span></td></tr>
+                  <tr><td><strong>MAGyP.14</strong></td><td><span class="hdot ok"></span>28/28</td><td><span class="hdot ok"></span>28/28</td><td><span class="hdot ok"></span>28/28</td><td><span class="hdot ok"></span>28/28</td><td><span class="hdot ok"></span>28/28</td><td><span class="badge badge-ok">✓ estable</span></td></tr>
+                  <tr><td><strong>CONICET.7</strong></td><td><span class="hdot ok"></span>60/60</td><td><span class="hdot ok"></span>58/60</td><td><span class="hdot warn"></span>55/60</td><td><span class="hdot warn"></span>52/60</td><td><span class="hdot warn"></span>40/60</td><td><span class="badge badge-danger">↓ tendencia baja</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── POR CARTA ── -->
+      <div id="hon-cartas" class="hon-tab" style="display:none;">
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+          <select id="sel-carta" style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;" onchange="filterCarta()">
+            <option value="all">Todas las cartas</option>
+            <option value="senasa28">SENASA.28.1</option>
+            <option value="inidep28">INIDEP.28</option>
+            <option value="magyp14">MAGyP.14</option>
+            <option value="conicet7">CONICET.7</option>
+          </select>
+          <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;">
+            <option>Mayo 2026</option>
+            <option>Abril 2026</option>
+            <option>Marzo 2026</option>
+          </select>
+        </div>
+
+        <div id="carta-cards">
+          <div class="card" style="margin-bottom:14px;">
+            <div class="card-header" style="background:#f8faf9;">
+              <div class="card-title" style="font-size:14px;">
+                <i class="ti ti-folder" style="color:var(--verde);"></i>
+                SENASA.28.1 — Honorarios
+                <span class="badge badge-ok" style="margin-left:4px;">92% completa</span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <span style="font-size:12px;color:var(--muted);">$89.2M total</span>
+                <button class="btn" style="font-size:11px;" onclick="showHonTab('planilla',document.querySelectorAll('.tab-btn')[3])">
+                  <i class="ti ti-upload"></i> Subir planilla
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-bottom:14px;">
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Cargadas</div><div style="font-size:20px;font-weight:600;color:var(--success);">46</div></div>
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Faltantes</div><div style="font-size:20px;font-weight:600;color:var(--danger);">4</div></div>
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Borrador</div><div style="font-size:20px;font-weight:600;color:var(--warn);">8</div></div>
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Confirmadas</div><div style="font-size:20px;font-weight:600;color:var(--success);">38</div></div>
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Sin CBU</div><div style="font-size:20px;font-weight:600;color:var(--danger);">1</div></div>
+              </div>
+              <div class="progress" style="height:8px;margin-bottom:8px;"><div class="progress-fill ok" style="width:92%"></div></div>
+              <div class="alert danger" style="margin-bottom:0;">
+                <i class="ti ti-alert-circle"></i>
+                <div>Faltantes: Rodríguez C., Suárez P., Martínez R., Gómez L. — estuvieron los meses anteriores.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:14px;">
+            <div class="card-header" style="background:#fffafa;">
+              <div class="card-title" style="font-size:14px;">
+                <i class="ti ti-folder" style="color:var(--danger);"></i>
+                INIDEP.28 — Honorarios
+                <span class="badge badge-danger" style="margin-left:4px;">53% completa</span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <span style="font-size:12px;color:var(--muted);">$74.1M total</span>
+                <button class="btn" style="font-size:11px;" onclick="showHonTab('planilla',document.querySelectorAll('.tab-btn')[3])">
+                  <i class="ti ti-upload"></i> Subir planilla
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-bottom:14px;">
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Cargadas</div><div style="font-size:20px;font-weight:600;color:var(--warn);">38</div></div>
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Faltantes</div><div style="font-size:20px;font-weight:600;color:var(--danger);">34</div></div>
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Borrador</div><div style="font-size:20px;font-weight:600;color:var(--warn);">12</div></div>
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Confirmadas</div><div style="font-size:20px;font-weight:600;color:var(--success);">26</div></div>
+                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Sin CBU</div><div style="font-size:20px;font-weight:600;color:var(--danger);">2</div></div>
+              </div>
+              <div class="progress" style="height:8px;margin-bottom:8px;"><div class="progress-fill danger" style="width:53%"></div></div>
+              <div class="alert danger" style="margin-bottom:0;">
+                <i class="ti ti-alert-triangle"></i>
+                <div><strong>34 faltantes</strong> — tendencia bajando desde marzo. Recomendado: subir planilla del organismo para cruzar datos.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── CARGA DE PDFs ── -->
+      <div id="hon-carga" class="hon-tab" style="display:none;">
+        <div class="grid2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-upload"></i> Carga masiva de PDFs</div>
+            </div>
+            <div class="card-body">
+              <div class="field">
+                <label>Carta / Convenio</label>
+                <select id="hon-sel-carta">
+                  <option value="">Cargando cartas...</option>
+                </select>
+              </div>
+              <div class="dropzone" id="hon-dropzone" onclick="document.getElementById('hon-fileInput').click()" style="margin-bottom:14px;">
+                <i class="ti ti-files"></i>
+                <p>Arrastrá los PDFs o hacé <span>clic para seleccionar</span></p>
+                <p style="font-size:11px;margin-top:4px;">Hasta 400 archivos — extracción automática con IA</p>
+              </div>
+              <input type="file" id="hon-fileInput" accept=".pdf" multiple style="display:none">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                <div style="background:var(--bg);border-radius:7px;padding:10px;text-align:center;">
+                  <div style="font-size:22px;font-weight:600;color:var(--text);" id="hon-count-sel">0</div>
+                  <div style="font-size:10px;color:var(--muted);">PDFs seleccionados</div>
+                </div>
+                <div style="background:var(--bg);border-radius:7px;padding:10px;text-align:center;">
+                  <div style="font-size:22px;font-weight:600;color:var(--success);" id="hon-count-ok">0</div>
+                  <div style="font-size:10px;color:var(--muted);">cargados en Odoo</div>
+                </div>
+              </div>
+              <div id="hon-progress-wrap" style="display:none;margin-bottom:10px;">
+                <div style="background:#e8f0ea;border-radius:99px;height:6px;overflow:hidden;margin-bottom:6px;">
+                  <div id="hon-progress-fill" style="height:100%;background:var(--verde);border-radius:99px;transition:width 0.3s;width:0%;"></div>
+                </div>
+                <div id="hon-progress-text" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;"></div>
+              </div>
+              <button class="btn btn-primary" id="hon-btn-process" disabled onclick="honProcesar()" style="width:100%;justify-content:center;padding:10px;">
+                <i class="ti ti-bolt"></i> Extraer con IA y cargar en Odoo
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-list"></i> Resultado de la carga</div>
+              <span id="hon-res-badge" class="badge badge-muted" style="display:none;"></span>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div id="hon-res-empty" style="padding:32px;text-align:center;color:var(--muted);">
+                <i class="ti ti-inbox" style="font-size:28px;opacity:0.3;display:block;margin-bottom:8px;"></i>
+                Subí PDFs para comenzar
+              </div>
+              <div class="table-wrap" id="hon-res-wrap" style="border:none;border-radius:0;display:none;max-height:400px;overflow-y:auto;">
+                <table>
+                  <thead><tr><th>Archivo</th><th>Proveedor</th><th>Total</th><th>Conf.</th><th>Estado</th></tr></thead>
+                  <tbody id="hon-res-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── COMPARAR PLANILLA ── -->
+      <div id="hon-planilla" class="hon-tab" style="display:none;">
+        <div class="alert info" style="margin-bottom:16px;">
+          <i class="ti ti-robot"></i>
+          <div><strong>Comparador inteligente con IA.</strong> Subí la planilla del organismo en cualquier formato (Excel, CSV). La IA interpreta las columnas automáticamente y cruza los nombres contra las facturas ya cargadas en Odoo. No importa el formato — funciona con cualquier planilla.</div>
+        </div>
+
+        <div class="grid2" style="margin-bottom:16px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-file-spreadsheet"></i> Paso 1 — Subir planilla del organismo</div>
+            </div>
+            <div class="card-body">
+              <div class="field">
+                <label>Carta a comparar</label>
+                <select>
+                  <option>SENASA.28.1 — Honorarios</option>
+                  <option>INIDEP.28 — Honorarios</option>
+                  <option>MAGyP.14 — Honorarios</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Mes</label>
+                <select><option>Mayo 2026</option><option>Abril 2026</option></select>
+              </div>
+              <div class="dropzone" style="margin-bottom:14px;">
+                <i class="ti ti-table-import"></i>
+                <p>Arrastrá el Excel o CSV del organismo</p>
+                <p style="font-size:11px;margin-top:4px;">Cualquier formato — la IA interpreta las columnas</p>
+              </div>
+              <button class="btn btn-primary" style="width:100%;justify-content:center;">
+                <i class="ti ti-robot"></i> Analizar y comparar
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-info-circle"></i> ¿Cómo funciona?</div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;gap:10px;align-items:flex-start;">
+                  <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">1</div>
+                  <div><div style="font-size:12px;font-weight:500;">Subís la planilla</div><div style="font-size:11px;color:var(--muted);">Excel, CSV, cualquier formato del organismo</div></div>
+                </div>
+                <div style="display:flex;gap:10px;align-items:flex-start;">
+                  <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">2</div>
+                  <div><div style="font-size:12px;font-weight:500;">La IA la interpreta</div><div style="font-size:11px;color:var(--muted);">Detecta columnas de nombre, CUIT y monto sin importar el formato</div></div>
+                </div>
+                <div style="display:flex;gap:10px;align-items:flex-start;">
+                  <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">3</div>
+                  <div><div style="font-size:12px;font-weight:500;">Cruce con Odoo</div><div style="font-size:11px;color:var(--muted);">Compara contra facturas ya cargadas en la carta seleccionada</div></div>
+                </div>
+                <div style="display:flex;gap:10px;align-items:flex-start;">
+                  <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">4</div>
+                  <div><div style="font-size:12px;font-weight:500;">Resultado visual</div><div style="font-size:11px;color:var(--muted);">✓ llegó / ✗ no llegó / ⚠ monto diferente</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resultado demo -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-git-compare"></i> Resultado de comparación — SENASA.28.1 Mayo 2026</div>
+            <div style="display:flex;gap:6px;">
+              <span class="badge badge-ok">42 OK</span>
+              <span class="badge badge-danger">4 faltantes</span>
+              <span class="badge badge-warn">2 diferencias de monto</span>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrap" style="border:none;border-radius:0;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nombre (planilla)</th>
+                    <th>CUIT planilla</th>
+                    <th>Monto planilla</th>
+                    <th>Monto factura</th>
+                    <th>Diferencia</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Alvarez Tamara D.</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-41089224-9</td>
+                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
+                    <td style="font-family:'JetBrains Mono',monospace;">$1.218.000</td>
+                    <td style="font-family:'JetBrains Mono',monospace;color:var(--danger);">+$237.500</td>
+                    <td><span class="badge badge-warn">⚠ Monto distinto</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Bianchi Sebastián</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-25974059-3</td>
+                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
+                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
+                    <td style="color:var(--muted);">—</td>
+                    <td><span class="badge badge-ok">✓ OK</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Rodríguez Carlos</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-31456789-0</td>
+                    <td style="font-family:'JetBrains Mono',monospace;">$1.200.000</td>
+                    <td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">—</td>
+                    <td style="color:var(--muted);">—</td>
+                    <td><span class="badge badge-danger">✗ No llegó</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Martínez Roberto</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-28765432-1</td>
+                    <td style="font-family:'JetBrains Mono',monospace;">$850.000</td>
+                    <td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">—</td>
+                    <td style="color:var(--muted);">—</td>
+                    <td><span class="badge badge-danger">✗ No llegó</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Fuentes Aldana</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-43103445-5</td>
+                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
+                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
+                    <td style="color:var(--muted);">—</td>
+                    <td><span class="badge badge-ok">✓ OK</span></td>
+                  </tr>
+                  <tr>
+                    <td style="color:var(--muted);font-style:italic;">De Marco (sin CUIT en planilla)</td>
+                    <td style="color:var(--muted);">—</td>
+                    <td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">—</td>
+                    <td style="font-family:'JetBrains Mono',monospace;">$1.573.000</td>
+                    <td style="color:var(--muted);">—</td>
+                    <td><span class="badge badge-info">Extra (no en planilla)</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── DETALLE DE FACTURAS ── -->
+      <div id="hon-detalle" class="hon-tab" style="display:none;">
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+          <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"><option>Todas las cartas</option><option>SENASA.28.1</option><option>INIDEP.28</option><option>MAGyP.14</option></select>
+          <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"><option>Todos los estados</option><option>Borrador</option><option>Confirmada</option><option>A revisar</option></select>
+          <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"><option>Mayo 2026</option><option>Abril 2026</option><option>Marzo 2026</option></select>
+          <input type="text" placeholder="Buscar nombre o CUIT..." style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;flex:1;min-width:160px;outline:none;">
+          <button class="btn"><i class="ti ti-download"></i> Exportar</button>
+        </div>
+
+        <div class="card">
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrap" style="border:none;border-radius:0;max-height:500px;overflow-y:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Proveedor</th>
+                    <th>CUIT</th>
+                    <th>Nro Factura</th>
+                    <th>Período</th>
+                    <th>Neto</th>
+                    <th>IVA</th>
+                    <th>Total</th>
+                    <th>CAE</th>
+                    <th>Carta</th>
+                    <th>Conf. IA</th>
+                    <th>Estado Odoo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Alvarez Tamara D.</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-41089224-9</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0001-00000892</td>
+                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.218.000</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$1.218.000</td>
+                    <td><span class="badge badge-ok" style="font-size:10px;">✓</span></td>
+                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
+                    <td><span class="badge badge-ok" style="font-size:10px;">100%</span></td>
+                    <td><span class="badge badge-warn">Borrador</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Bianchi Sebastián</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-25974059-3</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0001-00000341</td>
+                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$980.500</td>
+                    <td><span class="badge badge-ok" style="font-size:10px;">✓</span></td>
+                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
+                    <td><span class="badge badge-ok" style="font-size:10px;">100%</span></td>
+                    <td><span class="badge badge-ok">Confirmada</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>De Marco —</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-38338221-7</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0001-00000567</td>
+                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.573.000</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$1.573.000</td>
+                    <td><span class="badge badge-warn" style="font-size:10px;">⚠</span></td>
+                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
+                    <td><span class="badge badge-warn" style="font-size:10px;">95%</span></td>
+                    <td><span class="badge badge-warn">Borrador</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Dellagiovanna —</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-42095827-8</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0001-00000103</td>
+                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$980.500</td>
+                    <td><span class="badge badge-ok" style="font-size:10px;">✓</span></td>
+                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
+                    <td><span class="badge badge-ok" style="font-size:10px;">100%</span></td>
+                    <td><span class="badge badge-ok">Confirmada</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Fuentes Aldana</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-43103445-5</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0002-00001204</td>
+                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$980.500</td>
+                    <td><span class="badge badge-ok" style="font-size:10px;">✓</span></td>
+                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
+                    <td><span class="badge badge-ok" style="font-size:10px;">100%</span></td>
+                    <td><span class="badge badge-ok">Confirmada</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════════ COMPROBANTES ══════════ -->
+    <div id="page-comprobantes" class="page">
+      <div class="metrics-grid" style="margin-bottom:16px;">
+        <div class="metric-card success">
+          <div class="metric-label">Procesados hoy</div>
+          <div class="metric-value" id="comp-count">0</div>
+          <div class="metric-sub">comprobantes separados</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Subidos a Odoo</div>
+          <div class="metric-value success" id="comp-odoo" style="color:var(--success);">0</div>
+          <div class="metric-sub">Documents</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Con advertencias</div>
+          <div class="metric-value" id="comp-warn" style="color:var(--warn);">0</div>
+          <div class="metric-sub">datos incompletos</div>
+        </div>
+        <div class="metric-card danger">
+          <div class="metric-label">Errores</div>
+          <div class="metric-value" id="comp-err" style="color:var(--danger);">0</div>
+          <div class="metric-sub">revisar manualmente</div>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-bottom:16px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-file-upload"></i> Sábana PDF</div>
+          </div>
+          <div class="card-body">
+            <div class="section-title" style="margin-top:0;">Tipo de comprobante</div>
+            <div style="display:flex;gap:8px;margin-bottom:14px;">
+              <button class="tab-btn active" id="banco-ib" onclick="selectBancoPortal('interbanking',this)"><i class="ti ti-building-bank"></i> Interbanking</button>
+              <button class="tab-btn" id="banco-nac" onclick="selectBancoPortal('nacion',this)"><i class="ti ti-building"></i> Banco Nación</button>
+              <button class="tab-btn" id="banco-auto" onclick="selectBancoPortal('auto',this)"><i class="ti ti-scan"></i> Auto-detectar</button>
+            </div>
+            <div class="dropzone" id="comp-dropzone" onclick="document.getElementById('comp-fileInput').click()">
+              <i class="ti ti-file-type-pdf"></i>
+              <p>Arrastrá la sábana PDF acá</p>
+              <p style="font-size:11px;margin-top:4px;">o hacé <span>clic para seleccionar</span></p>
+            </div>
+            <input type="file" id="comp-fileInput" accept=".pdf" style="display:none">
+            <div id="comp-fileInfo" style="display:none;margin-top:10px;padding:10px 14px;background:var(--success-bg);border:1px solid rgba(26,92,56,0.2);border-radius:7px;display:none;">
+              <div style="font-size:12px;font-weight:500;color:var(--success);" id="comp-fileName"></div>
+              <div style="font-size:11px;color:var(--muted);" id="comp-fileSize"></div>
+            </div>
+            <div style="height:12px;"></div>
+            <button class="btn btn-primary" id="comp-btnProcess" disabled onclick="procesarComprobantes()" style="width:100%;justify-content:center;padding:10px;">
+              <i class="ti ti-bolt"></i> Procesar y subir a Odoo
+            </button>
+            <div id="comp-progressWrap" style="display:none;margin-top:12px;">
+              <div style="background:#e8f0ea;border-radius:99px;height:6px;overflow:hidden;margin-bottom:6px;">
+                <div id="comp-progressFill" style="height:100%;background:var(--verde);border-radius:99px;transition:width 0.3s;width:0%;"></div>
+              </div>
+              <div id="comp-progressText" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-info-circle"></i> Cómo funciona</div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;gap:10px;">
+                <div style="width:26px;height:26px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">1</div>
+                <div><div style="font-size:12px;font-weight:500;margin-bottom:2px;">Subís la sábana PDF</div><div style="font-size:11px;color:var(--muted);">El archivo con todos los comprobantes del día</div></div>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <div style="width:26px;height:26px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">2</div>
+                <div><div style="font-size:12px;font-weight:500;margin-bottom:2px;">Separa automáticamente</div><div style="font-size:11px;color:var(--muted);">Un PDF por comprobante, renombrado con CUIT__MONTO__FECHA</div></div>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <div style="width:26px;height:26px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">3</div>
+                <div><div style="font-size:12px;font-weight:500;margin-bottom:2px;">Sube a Odoo Documents</div><div style="font-size:11px;color:var(--muted);">Cada comprobante queda archivado automáticamente</div></div>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <div style="width:26px;height:26px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">4</div>
+                <div><div style="font-size:12px;font-weight:500;margin-bottom:2px;">Descargás el ZIP</div><div style="font-size:11px;color:var(--muted);">Todos los archivos separados en un solo ZIP</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="comp-resultsCard" style="display:none;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-checks"></i> Comprobantes procesados</div>
+          <div style="display:flex;gap:8px;">
+            <span class="badge badge-ok" id="comp-statOk"></span>
+            <button class="btn btn-primary" id="comp-btnDownload" style="font-size:11px;">
+              <i class="ti ti-download"></i> Descargar ZIP
+            </button>
+          </div>
+        </div>
+        <div id="comp-alertSuccess" style="display:none;" class="alert success" style="margin:12px 18px 0;"></div>
+        <div id="comp-alertError" style="display:none;" class="alert warn" style="margin:12px 18px 0;"></div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap" style="border:none;border-radius:0;max-height:400px;overflow-y:auto;">
+            <table>
+              <thead><tr><th>#</th><th>Archivo generado</th><th>Lectura</th><th>Odoo</th></tr></thead>
+              <tbody id="comp-resultsBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="comp-errorsSection" style="display:none;padding:12px 18px;background:var(--danger-bg);border-top:1px solid rgba(192,57,43,0.15);">
+          <div style="font-size:11px;font-weight:600;color:var(--danger);margin-bottom:6px;">Páginas con datos incompletos</div>
+          <div id="comp-errorsList" style="font-size:11px;color:var(--danger);font-family:'JetBrains Mono',monospace;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ INTERBANKING ══════════ -->
+    <div id="page-interbanking" class="page">
+
+      <div id="ib-phase1">
+        <div class="metrics-grid" style="margin-bottom:16px;">
+          <div class="metric-card info">
+            <div class="metric-label">Último archivo generado</div>
+            <div class="metric-value" style="font-size:18px;">—</div>
+            <div class="metric-sub">sin datos aún</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Proveedores seleccionados</div>
+            <div class="metric-value" id="ib-stat-sel">0</div>
+            <div class="metric-sub">para este lote</div>
+          </div>
+          <div class="metric-card warn">
+            <div class="metric-label">Sin nombre</div>
+            <div class="metric-value" id="ib-stat-fb" style="color:var(--warn);">0</div>
+            <div class="metric-sub">usa CUIT como denominación</div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-label">Con errores</div>
+            <div class="metric-value" id="ib-stat-err" style="color:var(--danger);">0</div>
+            <div class="metric-sub">CUIT o CBU inválido</div>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-bottom:16px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-settings-2"></i> Paso 1 — Configuración</div>
+            </div>
+            <div class="card-body">
+              <div class="field">
+                <label>Código de cliente Interbanking</label>
+                <input type="text" id="ib-codigoCliente" placeholder="A12345A" maxlength="7" oninput="this.value=this.value.toUpperCase()" style="font-family:'JetBrains Mono',monospace;letter-spacing:0.1em;">
+                <div style="font-size:11px;color:var(--muted);margin-top:3px;">7 caracteres — identificador de tu empresa</div>
+              </div>
+              <div class="field">
+                <label>Uso de cuenta</label>
+                <select id="ib-usoCuenta">
+                  <option value="S">Proveedores</option>
+                  <option value="SN">Sueldos</option>
+                  <option value="SS">Proveedores + Sueldos</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:4px;">
+                <button class="btn btn-primary" onclick="ibGoStep2()" style="flex:1;justify-content:center;">
+                  <i class="ti ti-arrow-right"></i> Continuar
+                </button>
+                <button class="btn" onclick="ibLoadDemo()" style="font-size:11px;">
+                  <i class="ti ti-player-play"></i> Demo
+                </button>
+              </div>
+              <div id="ib-errCodigo" style="display:none;margin-top:8px;" class="alert warn">
+                <i class="ti ti-alert-triangle"></i> Ingresá el código de cliente
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-info-circle"></i> Instrucciones</div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;gap:10px;">
+                  <div style="width:22px;height:22px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0;">1</div>
+                  <div style="font-size:12px;color:var(--muted);">Ingresá el código de cliente Interbanking</div>
+                </div>
+                <div style="display:flex;gap:10px;">
+                  <div style="width:22px;height:22px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0;">2</div>
+                  <div style="font-size:12px;color:var(--muted);">Subí el CSV de proveedores exportado desde Odoo</div>
+                </div>
+                <div style="display:flex;gap:10px;">
+                  <div style="width:22px;height:22px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0;">3</div>
+                  <div style="font-size:12px;color:var(--muted);">Seleccioná los proveedores a incluir</div>
+                </div>
+                <div style="display:flex;gap:10px;">
+                  <div style="width:22px;height:22px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0;">4</div>
+                  <div style="font-size:12px;color:var(--muted);">Descargá el .txt de ancho fijo para Interbanking</div>
+                </div>
+              </div>
+              <div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:7px;font-size:11px;color:var(--muted);line-height:1.6;">
+                En Interbanking: <strong>Administración → Cuentas → Upload de cuentas</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ib-phase2" style="display:none;">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-file-spreadsheet"></i> Paso 2 — Cargar CSV de Odoo</div>
+            <button class="btn" onclick="ibBack()" style="font-size:11px;"><i class="ti ti-arrow-left"></i> Volver</button>
+          </div>
+          <div class="card-body">
+            <div class="dropzone" id="ib-dropZone" onclick="document.getElementById('ib-fileInput').click()">
+              <i class="ti ti-file-spreadsheet"></i>
+              <p>Arrastrá el CSV de Odoo o hacé <span>clic</span></p>
+              <p style="font-size:11px;margin-top:4px;">Separado por comas o punto y coma</p>
+            </div>
+            <input type="file" id="ib-fileInput" accept=".csv,.txt" style="display:none">
+            <div id="ib-rawPreviewSection" style="display:none;margin-top:12px;">
+              <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px;">Primeras filas detectadas:</div>
+              <div id="ib-rawPreview" style="font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px;white-space:pre-wrap;word-break:break-all;color:var(--muted);line-height:1.7;"></div>
+            </div>
+            <div id="ib-mapSection" style="display:none;margin-top:14px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Nombre / Razón social</label><select id="ib-colNombre" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></select></div>
+                <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">CUIT <span style="color:var(--danger);">*</span></label><select id="ib-colCuit" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></select></div>
+                <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">CBU <span style="color:var(--danger);">*</span></label><select id="ib-colCbu" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></select></div>
+                <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Referencia (opcional)</label><select id="ib-colRef" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></select></div>
+              </div>
+              <button class="btn btn-primary" onclick="ibProcessTable()" style="width:100%;justify-content:center;">
+                <i class="ti ti-arrow-right"></i> Ver proveedores
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ib-phase3" style="display:none;">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-users"></i> Paso 3 — Seleccionar y exportar</div>
+            <button class="btn" onclick="ibBackTo2()" style="font-size:11px;"><i class="ti ti-arrow-left"></i> Volver</button>
+          </div>
+          <div class="card-body">
+            <div id="ib-fallbackAlert" style="display:none;margin-bottom:10px;" class="alert warn">
+              <i class="ti ti-alert-triangle"></i> Los amarillos no tienen nombre — se usa el CUIT como denominación.
+            </div>
+            <div id="ib-errAlert" style="display:none;margin-bottom:10px;" class="alert danger">
+              <i class="ti ti-x"></i> Los rojos tienen CUIT o CBU inválido y no se incluyen en el archivo.
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+              <input type="text" id="ib-searchBox" placeholder="Buscar nombre o CUIT..." oninput="ibFilterTable()" style="flex:1;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;outline:none;">
+              <button class="btn" onclick="ibSelAll()"><i class="ti ti-checks"></i> Todos</button>
+              <button class="btn" onclick="ibClearAll()"><i class="ti ti-square"></i> Ninguno</button>
+            </div>
+            <div class="table-wrap" style="max-height:360px;overflow-y:auto;margin-bottom:14px;">
+              <table>
+                <thead><tr>
+                  <th style="width:36px;"></th>
+                  <th>Denominación</th>
+                  <th>CUIT</th>
+                  <th>CBU</th>
+                  <th style="text-align:center;">Estado</th>
+                </tr></thead>
+                <tbody id="ib-tableBody"></tbody>
+              </table>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:6px;">Vista previa del archivo:</div>
+              <div id="ib-previewBox" style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px;overflow-x:auto;white-space:pre;color:var(--muted);line-height:1.8;">—</div>
+            </div>
+            <button class="btn btn-primary" onclick="ibExportFile()" style="width:100%;justify-content:center;padding:10px;">
+              <i class="ti ti-file-download"></i> Descargar archivo para Interbanking
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="ib-phaseDone" style="display:none;">
+        <div class="card">
+          <div class="card-body" style="text-align:center;padding:32px;">
+            <i class="ti ti-circle-check" style="font-size:48px;color:var(--success);display:block;margin-bottom:12px;"></i>
+            <div style="font-size:16px;font-weight:600;margin-bottom:6px;">Archivo generado correctamente</div>
+            <div id="ib-doneMsg" style="font-size:13px;color:var(--muted);margin-bottom:20px;"></div>
+            <div style="background:var(--bg);border-radius:8px;padding:12px 16px;text-align:left;font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.7;">
+              <strong style="color:var(--text);">Cómo subir en Interbanking:</strong><br>
+              Administración → Cuentas → Upload de cuentas → seleccioná el archivo .txt → elegí tipo de procesamiento → Confirmar
+            </div>
+            <div style="display:flex;gap:8px;justify-content:center;">
+              <button class="btn btn-primary" id="ib-dlBtn"><i class="ti ti-download"></i> Descargar de nuevo</button>
+              <button class="btn" onclick="ibRestart()"><i class="ti ti-refresh"></i> Nuevo archivo</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════════ CARTA 29 ══════════ -->
+    <div id="page-carta29" class="page">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div class="tab-row" style="margin-bottom:0;">
+          <button class="tab-btn active" onclick="setTab29(this,'mayo')">Mayo 2026</button>
+          <button class="tab-btn" onclick="setTab29(this,'abril')">Abril 2026</button>
+          <button class="tab-btn" onclick="setTab29(this,'marzo')">Marzo 2026</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="showPage('config',document.querySelectorAll('.nav-item')[8])">
+            <i class="ti ti-upload"></i> Subir eChecq CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="metrics-grid" style="margin-bottom:16px;">
+        <div class="metric-card success">
+          <div class="metric-label">Depósitos recibidos</div>
+          <div class="metric-value">8/12</div>
+          <div class="metric-sub">4 subconvenios pendientes</div>
+        </div>
+        <div class="metric-card danger">
+          <div class="metric-label">Sin COGAYT</div>
+          <div class="metric-value">2</div>
+          <div class="metric-sub">saldo sobreestimado</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Depósitos tardíos</div>
+          <div class="metric-value">3</div>
+          <div class="metric-sub">honorarios pagados tarde</div>
+        </div>
+        <div class="metric-card info">
+          <div class="metric-label">Total ingresado neto</div>
+          <div class="metric-value">$142M</div>
+          <div class="metric-sub">después de COGAYT 6%</div>
+        </div>
+      </div>
+
+      <div class="alert danger" style="margin-bottom:12px;">
+        <i class="ti ti-x"></i>
+        <div><strong>29.8 — Frigorífico del Norte:</strong> sin depósito en mayo ni abril. 2 meses consecutivos sin ingreso. 8 honorarios sin saldo para pagar.</div>
+      </div>
+      <div class="alert warn" style="margin-bottom:16px;">
+        <i class="ti ti-alert-circle"></i>
+        <div><strong>29.4 — Riosma:</strong> depósito registrado pero COGAYT no descontado. El saldo en Odoo está sobreestimado en $831.420. Corregir antes de pagar honorarios.</div>
+      </div>
+
+      <div class="section-title">Estado por subconvenio</div>
+
+      <div class="subconv-row danger">
+        <div class="subconv-header">
+          <div>
+            <div class="subconv-name">29.8 — Frigorífico del Norte</div>
+            <div class="subconv-frigorifico">Sin depósito — 2 meses consecutivos</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge badge-danger"><i class="ti ti-x"></i> Sin depósito</span>
+            <span class="badge badge-danger">Sin COGAYT</span>
+            <span class="badge badge-danger">0/8 honorarios</span>
+          </div>
+        </div>
+        <div class="subconv-nums">
+          <div class="num-item"><div class="num-label">Esperado</div><div class="num-value">$9.240.000</div></div>
+          <div class="num-item"><div class="num-label">Ingresado</div><div class="num-value danger">$0</div></div>
+          <div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value danger">No descontado</div></div>
+          <div class="num-item"><div class="num-label">Disponible</div><div class="num-value danger">$0</div></div>
+          <div class="num-item"><div class="num-label">Honorarios</div><div class="num-value danger">0/8</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="progress" style="flex:1;"><div class="progress-fill danger" style="width:0%"></div></div>
+          <span style="font-size:11px;color:var(--danger);font-weight:600;">0%</span>
+        </div>
+      </div>
+
+      <div class="subconv-row warn">
+        <div class="subconv-header">
+          <div>
+            <div class="subconv-name">29.4 — Frigorífico Riosma</div>
+            <div class="subconv-frigorifico">Depósito OK · COGAYT pendiente</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge badge-ok"><i class="ti ti-check"></i> Depósito OK</span>
+            <span class="badge badge-danger">Sin COGAYT</span>
+            <span class="badge badge-warn">9/12 honorarios</span>
+          </div>
+        </div>
+        <div class="subconv-nums">
+          <div class="num-item"><div class="num-label">Esperado</div><div class="num-value">$13.857.000</div></div>
+          <div class="num-item"><div class="num-label">Ingresado</div><div class="num-value ok">$13.857.000</div></div>
+          <div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value danger">Falta $831.420</div></div>
+          <div class="num-item"><div class="num-label">Disponible real</div><div class="num-value warn">$13.025.580</div></div>
+          <div class="num-item"><div class="num-label">Honorarios</div><div class="num-value warn">9/12</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="progress" style="flex:1;"><div class="progress-fill warn" style="width:75%"></div></div>
+          <span style="font-size:11px;color:var(--warn);font-weight:600;">75%</span>
+        </div>
+      </div>
+
+      <div class="subconv-row warn">
+        <div class="subconv-header">
+          <div>
+            <div class="subconv-name">29.35 — Jorge Luis Tolosa SA</div>
+            <div class="subconv-frigorifico">Depósito con 12 días de demora · COGAYT OK</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge badge-warn"><i class="ti ti-clock"></i> Tardío 12 días</span>
+            <span class="badge badge-ok">COGAYT OK</span>
+            <span class="badge badge-warn">10/12 honorarios</span>
+          </div>
+        </div>
+        <div class="subconv-nums">
+          <div class="num-item"><div class="num-label">Esperado</div><div class="num-value">$13.857.570</div></div>
+          <div class="num-item"><div class="num-label">Ingresado</div><div class="num-value ok">$13.857.570</div></div>
+          <div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value ok">$831.454 ✓</div></div>
+          <div class="num-item"><div class="num-label">Disponible</div><div class="num-value ok">$13.026.116</div></div>
+          <div class="num-item"><div class="num-label">Honorarios</div><div class="num-value warn">10/12</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="progress" style="flex:1;"><div class="progress-fill warn" style="width:83%"></div></div>
+          <span style="font-size:11px;color:var(--warn);font-weight:600;">83%</span>
+        </div>
+      </div>
+
+      <div class="subconv-row ok">
+        <div class="subconv-header">
+          <div>
+            <div class="subconv-name">29.1 — Mattievich SA</div>
+            <div class="subconv-frigorifico">Todo al día ✓</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge badge-ok"><i class="ti ti-check"></i> Depósito OK</span>
+            <span class="badge badge-ok">COGAYT OK</span>
+            <span class="badge badge-ok">14/14 honorarios</span>
+          </div>
+        </div>
+        <div class="subconv-nums">
+          <div class="num-item"><div class="num-label">Esperado</div><div class="num-value">$6.928.785</div></div>
+          <div class="num-item"><div class="num-label">Ingresado</div><div class="num-value ok">$6.928.785</div></div>
+          <div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value ok">$415.727 ✓</div></div>
+          <div class="num-item"><div class="num-label">Disponible</div><div class="num-value ok">$6.513.058</div></div>
+          <div class="num-item"><div class="num-label">Honorarios</div><div class="num-value ok">14/14</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="progress" style="flex:1;"><div class="progress-fill ok" style="width:100%"></div></div>
+          <span style="font-size:11px;color:var(--success);font-weight:600;">100%</span>
+        </div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-history"></i> Historial últimos 3 meses</div>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap" style="border:none;border-radius:0;">
+            <table>
+              <thead><tr><th>Subconv.</th><th>Frigorífico</th><th>Marzo</th><th>Abril</th><th>Mayo</th><th>COGAYT</th></tr></thead>
+              <tbody>
+                <tr><td><strong>29.1</strong></td><td>Mattievich SA</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="badge badge-ok">Al día</span></td></tr>
+                <tr><td><strong>29.4</strong></td><td>Riosma</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot warn"></span>Sin COGAYT</td><td><span class="badge badge-danger">Falta mayo</span></td></tr>
+                <tr><td><strong>29.8</strong></td><td>Del Norte</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot danger"></span>Sin dep.</td><td><span class="hdot danger"></span>Sin dep.</td><td><span class="badge badge-danger">2 meses</span></td></tr>
+                <tr><td><strong>29.35</strong></td><td>Tolosa J.L.</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot warn"></span>Tardío</td><td><span class="hdot warn"></span>Tardío</td><td><span class="badge badge-ok">Al día</span></td></tr>
+                <tr><td><strong>29.10</strong></td><td>Alberdi SA</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="badge badge-ok">Al día</span></td></tr>
+                <tr><td><strong>29.29</strong></td><td>Pampa Cía. Carnes</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="badge badge-ok">Al día</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ REPORTES ══════════ -->
+    <div id="page-reportes" class="page">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div class="tab-row" style="margin-bottom:0;">
+          <button class="tab-btn active">Mayo 2026</button>
+          <button class="tab-btn">Abril 2026</button>
+          <button class="tab-btn">Marzo 2026</button>
+          <button class="tab-btn">Febrero 2026</button>
+        </div>
+        <button class="btn btn-primary"><i class="ti ti-mail"></i> Enviar reporte por mail</button>
+      </div>
+
+      <div class="metrics-grid" style="margin-bottom:16px;">
+        <div class="metric-card">
+          <div class="metric-label">Total honorarios</div>
+          <div class="metric-value">$284M</div>
+          <div class="metric-sub" style="color:var(--warn);">↑ 8% vs abril</div>
+        </div>
+        <div class="metric-card success">
+          <div class="metric-label">Cartas al día</div>
+          <div class="metric-value">3/7</div>
+          <div class="metric-sub">4 con faltantes</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Proveedores pagados</div>
+          <div class="metric-value">312</div>
+          <div class="metric-sub">de 380 esperados</div>
+        </div>
+        <div class="metric-card info">
+          <div class="metric-label">Ingresos Carta 29</div>
+          <div class="metric-value">$142M</div>
+          <div class="metric-sub">neto post-COGAYT</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-table"></i> Detalle por carta — Mayo 2026</div>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap" style="border:none;border-radius:0;">
+            <table>
+              <thead><tr><th>Carta</th><th>Organismo</th><th>Facturas</th><th>Monto</th><th>Var. mes ant.</th><th>Saldo disp.</th><th>Estado</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>SENASA.28.1</strong></td><td>SENASA</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">46/50</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">$89.2M</td>
+                  <td style="color:var(--warn);font-size:11px;">↑ 12%</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">$12.4M</td>
+                  <td><span class="badge badge-ok">Completa</span></td>
+                </tr>
+                <tr>
+                  <td><strong>INIDEP.28</strong></td><td>INIDEP</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">38/72</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">$74.1M</td>
+                  <td style="color:var(--success);font-size:11px;">↓ 3%</td>
+                  <td style="font-family:'JetBrains Mono',monospace;color:var(--warn);">$1.2M</td>
+                  <td><span class="badge badge-warn">Faltantes</span></td>
+                </tr>
+                <tr>
+                  <td><strong>MAGyP.14</strong></td><td>MAGyP</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">28/28</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">$42.8M</td>
+                  <td style="color:var(--warn);font-size:11px;">↑ 5%</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">$8.7M</td>
+                  <td><span class="badge badge-ok">Completa</span></td>
+                </tr>
+                <tr>
+                  <td><strong>CONICET.7</strong></td><td>CONICET</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">40/60</td>
+                  <td style="font-family:'JetBrains Mono',monospace;">$78.0M</td>
+                  <td style="color:var(--success);font-size:11px;">↓ 1%</td>
+                  <td style="font-family:'JetBrains Mono',monospace;color:var(--danger);">$0.3M</td>
+                  <td><span class="badge badge-danger">Saldo crítico</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ CONFIG ══════════ -->
+    <div id="page-config" class="page">
+      <div class="grid2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-building"></i> Conexión Odoo</div>
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <label>URL de instancia</label>
+              <input type="text" id="cfg-url" placeholder="https://argeninta.odoo.com" />
+            </div>
+            <div class="field">
+              <label>Base de datos</label>
+              <input type="text" id="cfg-db" placeholder="nombre de la base" />
+            </div>
+            <div class="field">
+              <label>Usuario (email)</label>
+              <input type="email" id="cfg-user" placeholder="usuario@argeninta.org.ar" />
+            </div>
+            <div class="field">
+              <label>API Key</label>
+              <input type="password" id="cfg-apikey" placeholder="••••••••••••••••" />
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" id="cfg-test-btn" onclick="testOdooConnection()"><i class="ti ti-plug"></i> Probar conexión</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-robot"></i> API de IA y acceso</div>
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <label>Anthropic API Key (Claude)</label>
+              <input type="password" id="cfg-claude" placeholder="sk-ant-••••••••" />
+            </div>
+            <div class="field">
+              <label>Confianza mínima para auto-carga (%)</label>
+              <input type="number" value="75" min="0" max="100" />
+            </div>
+            <div class="sep"></div>
+            <div class="field">
+              <label>Contraseña del portal</label>
+              <input type="password" id="cfg-pass" placeholder="contraseña para el equipo" />
+              <div style="font-size:11px;color:var(--muted);margin-top:3px;">Todos los usuarios usan la misma contraseña</div>
+            </div>
+            <div class="field">
+              <label>Producto honorarios en Odoo</label>
+              <input type="text" placeholder="ej: Consultores y Especialistas" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="grid-column:1/-1;">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-device-floppy"></i> Guardar todo</div>
+          </div>
+          <div class="card-body">
+            <div class="alert info" style="margin-bottom:14px;">
+              <i class="ti ti-info-circle"></i>
+              <div>Las credenciales se guardan en tu navegador (localStorage). Cada usuario del equipo las configura una sola vez en su computadora.</div>
+            </div>
+            <button class="btn btn-primary" onclick="saveConfig()" style="padding:10px 24px;">
+              <i class="ti ti-device-floppy"></i> Guardar configuración
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIGURACIÓN CENTRAL — Railway Proxy
+// ═══════════════════════════════════════════════════════
+const PROXY_URL = 'https://argeninta-reportes-saldo-production.up.railway.app/proxy';
+let _odooUid = null;
+
+async function odooPost(path, body) {
+  const r = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, body })
+  });
+  return await r.json();
+}
+
+async function odooAuth() {
+  if (_odooUid) return _odooUid;
+  const cfg = getConfig();
+  const portalPass = sessionStorage.getItem('portal_pass_session') || '';
+  const r = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'auth',
+      db: cfg.db,
+      user: cfg.user,
+      password: cfg.apiKey,
+      portal_password: portalPass
+    })
+  });
+  const d = await r.json();
+  if (d.uid) { _odooUid = d.uid; return _odooUid; }
+  throw new Error('Auth fallida — verificá las credenciales en Configuración');
+}
+
+async function odooCall(model, method, args, kwargs={}) {
+  const uid = await odooAuth();
+  const cfg = getConfig();
+  const portalPass = sessionStorage.getItem('portal_pass_session') || '';
+  const r = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'call',
+      db: cfg.db,
+      uid: uid,
+      password: cfg.apiKey,
+      portal_password: portalPass,
+      model, method, args, kwargs
+    })
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(typeof d.error === 'string' ? d.error : (d.error.faultString || d.error.message || JSON.stringify(d.error)));
+  return d.result;
+}
+
+function getConfig() {
+  return {
+    url:    localStorage.getItem('odoo_url')    || 'https://argeninta.odoo.com',
+    db:     localStorage.getItem('odoo_db')     || '',
+    user:   localStorage.getItem('odoo_user')   || '',
+    apiKey: localStorage.getItem('odoo_apikey') || '',
+  };
+}
+
+function saveConfig() {
+  localStorage.setItem('odoo_url',    document.getElementById('cfg-url').value.trim());
+  localStorage.setItem('odoo_db',     document.getElementById('cfg-db').value.trim());
+  localStorage.setItem('odoo_user',   document.getElementById('cfg-user').value.trim());
+  localStorage.setItem('odoo_apikey', document.getElementById('cfg-apikey').value.trim());
+  localStorage.setItem('claude_key',  document.getElementById('cfg-claude').value.trim());
+  localStorage.setItem('portal_pass', document.getElementById('cfg-pass').value.trim());
+  _odooUid = null;
+  showToast('Configuración guardada ✓', 'ok');
+}
+
+async function testOdooConnection() {
+  const btn = document.getElementById('cfg-test-btn');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Probando...';
+  try {
+    _odooUid = null;
+    await odooAuth();
+    showToast('✓ Conexión exitosa a Odoo', 'ok');
+    btn.innerHTML = '<i class="ti ti-plug"></i> ✓ Conectado';
+    btn.style.background = 'var(--verde)'; btn.style.color = '#fff';
+  } catch(e) {
+    showToast('✗ ' + e.message, 'err');
+    btn.innerHTML = '<i class="ti ti-plug"></i> Probar conexión';
+  }
+  btn.disabled = false;
+}
+
+function loadConfigUI() {
+  const cfg = getConfig();
+  const el = id => document.getElementById(id);
+  if(el('cfg-url')) el('cfg-url').value = cfg.url;
+  if(el('cfg-db')) el('cfg-db').value = cfg.db;
+  if(el('cfg-user')) el('cfg-user').value = cfg.user;
+  if(el('cfg-apikey')) el('cfg-apikey').value = cfg.apiKey;
+  if(el('cfg-claude')) el('cfg-claude').value = localStorage.getItem('claude_key')||'';
+  if(el('cfg-pass')) el('cfg-pass').value = localStorage.getItem('portal_pass')||'';
+}
+
+// ── LOGIN ──
+function checkLogin() {
+  const auth = sessionStorage.getItem('portal_auth');
+  if (auth === 'ok') return;
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.querySelector('.main').style.display = 'none';
+  document.querySelector('.sidebar').style.display = 'none';
+}
+
+async function doLogin() {
+  const input = document.getElementById('login-input').value;
+  const btn = document.querySelector('#login-overlay button');
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  btn.textContent = 'Verificando...'; btn.disabled = true;
+  try {
+    const r = await fetch(PROXY_URL.replace('/proxy', '/auth'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portal_password: input })
+    });
+    if (r.ok) {
+      sessionStorage.setItem('portal_auth', 'ok');
+      sessionStorage.setItem('portal_pass_session', input);
+      document.getElementById('login-overlay').style.display = 'none';
+      document.querySelector('.main').style.display = 'flex';
+      document.querySelector('.sidebar').style.display = 'flex';
+      loadConfigUI();
+    } else {
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    err.textContent = 'Error de conexión — intentá de nuevo';
+    err.style.display = 'block';
+  }
+  btn.textContent = 'Ingresar'; btn.disabled = false;
+}
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg, type='ok') {
+  let t = document.getElementById('portal-toast');
+  if (!t) { t = document.createElement('div'); t.id='portal-toast'; t.style.cssText='position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.2s;pointer-events:none;'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.style.background = type==='ok' ? 'var(--verde)' : '#c0392b';
+  t.style.color = '#fff';
+  t.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.style.opacity='0', 3000);
+}
+
+// ── INIT ──
+window.addEventListener('DOMContentLoaded', () => {
+  checkLogin();
+  loadConfigUI();
+});
+
+const pageTitles = {
+  dashboard: ['Dashboard', 'Mayo 2026 · Actualizado hace 2 horas'],
+  honorarios: ['Honorarios', 'Carga masiva y control de faltantes'],
+  comprobantes: ['Separador de comprobantes', 'Interbanking · Banco Nación'],
+  interbanking: ['Upload Interbanking', 'Generador de archivo de alta de cuentas'],
+  carta29: ['Carta 29 — Control de ingresos', 'SENASA · Frigoríficos · COGAYT 6%'],
+  reportes: ['Reportes de saldo', 'Historial por carta y organismo'],
+  config: ['Configuración', 'Conexión Odoo, IA y notificaciones'],
+};
+
+function showHonTab(id, el) {
+  document.querySelectorAll('.hon-tab').forEach(t => t.style.display = 'none');
+  const tab = document.getElementById('hon-' + id);
+  if (tab) tab.style.display = 'block';
+  document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+
+function filterCarta() {}
+
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const page = document.getElementById('page-' + id);
+  if (page) page.classList.add('active');
+  if (el) el.classList.add('active');
+  const t = pageTitles[id] || [id, ''];
+  document.getElementById('topbar-title').textContent = t[0];
+  document.getElementById('topbar-sub').textContent = t[1];
+}
+
+function setTab29(el, month) {
+  document.querySelectorAll('#page-carta29 .tab-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════
+// HONORARIOS — CARGA CON IA
+// ═══════════════════════════════════════════════════════
+let honFiles = [];
+let honCartaId = null;
+
+const HON_PROMPT = `Sos un asistente especializado en extracción de datos de facturas argentinas de honorarios.
+Analizá la factura en el PDF adjunto y extraé los campos indicados.
+Respondé ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin backticks.
+{
+  "cuit": "CUIT del emisor, solo números sin guiones",
+  "razon_social": "Razón social o nombre completo del proveedor",
+  "nro_factura": "Número de factura completo (ej: 0001-00012345)",
+  "fecha": "Fecha de emisión en formato YYYY-MM-DD",
+  "neto": "Importe neto gravado como número sin símbolo $",
+  "iva": "Importe IVA como número (0 si no tiene)",
+  "total": "Importe total de la factura como número",
+  "cae": "Código CAE, solo números",
+  "periodo_desde": "Inicio del período facturado en formato DD/MM/YYYY",
+  "periodo_hasta": "Fin del período facturado en formato DD/MM/YYYY",
+  "confidence": "Tu confianza del 0 al 100"
+}`;
+
+async function honCargarCartas() {
+  const sel = document.getElementById('hon-sel-carta');
+  if (!sel) return;
+  try {
+    const cartas = await odooCall('account.analytic.account', 'search_read',
+      [[['active','=',true]]], {fields:['id','name'], limit:100, order:'name asc'});
+    sel.innerHTML = cartas.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error cargando cartas</option>';
+  }
+}
+
+// Load cartas when honorarios page is shown
+const origShowPage = window.showPage;
+
+const honDz = document.getElementById('hon-dropzone');
+if (honDz) {
+  honDz.addEventListener('dragover', e => { e.preventDefault(); honDz.classList.add('drag-over'); });
+  honDz.addEventListener('dragleave', () => honDz.classList.remove('drag-over'));
+  honDz.addEventListener('drop', e => { e.preventDefault(); honDz.classList.remove('drag-over'); honAddFiles([...e.dataTransfer.files].filter(f=>f.type==='application/pdf')); });
+}
+document.getElementById('hon-fileInput').addEventListener('change', e => honAddFiles([...e.target.files]));
+
+function honAddFiles(files) {
+  honFiles = [...honFiles, ...files.filter(f => !honFiles.find(x=>x.name===f.name))];
+  document.getElementById('hon-count-sel').textContent = honFiles.length;
+  document.getElementById('hon-btn-process').disabled = honFiles.length === 0;
+  if (honFiles.length > 0) {
+    const dz = document.getElementById('hon-dropzone');
+    dz.querySelector('p').textContent = `${honFiles.length} PDF${honFiles.length!==1?'s':''} seleccionado${honFiles.length!==1?'s':''}`;
+  }
+}
+
+async function honExtractWithClaude(file) {
+  const claudeKey = localStorage.getItem('claude_key');
+  if (!claudeKey) throw new Error('API key de Claude no configurada');
+  const portalPass = sessionStorage.getItem('portal_pass_session') || '';
+  const b64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = () => rej(new Error('Error leyendo archivo'));
+    r.readAsDataURL(file);
+  });
+  const resp = await fetch(PROXY_URL.replace('/proxy', '/claude'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      portal_password: portalPass,
+      claude_key: claudeKey,
+      payload: {
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+            { type: 'text', text: HON_PROMPT }
+          ]
+        }]
+      }
+    })
+  });
+  if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || `Error ${resp.status}`); }
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error);
+  if (!data.content || !data.content[0]) throw new Error('Respuesta vacía de Claude');
+  const text = data.content[0].text.replace(/```json|```/g,'').trim();
+  return JSON.parse(text);
+}
+
+async function honCrearFactura(datos, cartaId) {
+  const parseNum = v => parseFloat((v||'0').toString().replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+  const neto = parseNum(datos.neto) || parseNum(datos.total);
+  const iva = parseNum(datos.iva);
+  const nombre = datos.razon_social || datos.cuit || 'Sin nombre';
+  const periodoDesde = datos.periodo_desde || '';
+  const periodoHasta = datos.periodo_hasta || '';
+  const ref = periodoDesde && periodoHasta
+    ? `Honorarios - ${nombre} - Período ${periodoDesde} al ${periodoHasta}`
+    : `Honorarios - ${nombre}`;
+  const hoy = new Date().toISOString().split('T')[0];
+  const lineas = [];
+  if (neto > 0) {
+    const l = { name: ref, quantity: 1, price_unit: neto };
+    if (cartaId) l.analytic_distribution = { [cartaId]: 100 };
+    lineas.push([0, 0, l]);
+  }
+  if (iva > 0) {
+    const l = { name: 'IVA', quantity: 1, price_unit: iva };
+    if (cartaId) l.analytic_distribution = { [cartaId]: 100 };
+    lineas.push([0, 0, l]);
+  }
+  const vals = {
+    move_type: 'in_invoice',
+    name: datos.nro_factura || '/',
+    date: hoy,
+    invoice_date: datos.fecha || hoy,
+    ref: ref,
+    invoice_line_ids: lineas,
+  };
+  if (datos.cae) { vals.l10n_ar_afip_auth_mode = 'CAE'; vals.l10n_ar_afip_auth_code = datos.cae.replace(/\D/g,''); }
+  // Buscar partner por CUIT
+  if (datos.cuit) {
+    const cuitClean = datos.cuit.replace(/\D/g,'');
+    const partners = await odooCall('res.partner','search_read',[[['vat','like',cuitClean]]],{fields:['id'],limit:1});
+    if (partners?.length) vals.partner_id = partners[0].id;
+  }
+  return await odooCall('account.move','create',[vals]);
+}
+
+async function honProcesar() {
+  const cartaId = parseInt(document.getElementById('hon-sel-carta').value);
+  if (!cartaId) return showToast('Seleccioná una carta', 'err');
+  if (!honFiles.length) return showToast('Subí al menos un PDF', 'err');
+  const claudeKey = localStorage.getItem('claude_key');
+  if (!claudeKey) return showToast('Configurá la API key de Claude en Configuración', 'err');
+
+  const btn = document.getElementById('hon-btn-process');
+  const pw = document.getElementById('hon-progress-wrap');
+  const pf = document.getElementById('hon-progress-fill');
+  const pt = document.getElementById('hon-progress-text');
+  const tbody = document.getElementById('hon-res-body');
+
+  btn.disabled = true; pw.style.display = 'block';
+  document.getElementById('hon-res-empty').style.display = 'none';
+  document.getElementById('hon-res-wrap').style.display = 'block';
+  tbody.innerHTML = '';
+
+  let okCount = 0, errCount = 0;
+
+  for (let i = 0; i < honFiles.length; i++) {
+    const file = honFiles[i];
+    pf.style.width = Math.round((i / honFiles.length) * 100) + '%';
+    pt.textContent = `[${i+1}/${honFiles.length}] ${file.name}`;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</td><td>—</td><td>—</td><td>—</td><td><span class="badge badge-muted">Procesando...</span></td>`;
+    tbody.appendChild(tr);
+
+    try {
+      const datos = await honExtractWithClaude(file);
+      const conf = datos.confidence || 0;
+      const fmt = n => n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—';
+      const odooId = await honCrearFactura(datos, cartaId);
+      okCount++;
+      document.getElementById('hon-count-ok').textContent = okCount;
+      const confBadge = conf >= 75 ? 'badge-ok' : 'badge-warn';
+      tr.innerHTML = `<td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</td>
+        <td style="font-size:12px;">${datos.razon_social||datos.cuit||'—'}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${fmt(datos.total)}</td>
+        <td><span class="badge ${confBadge}" style="font-size:10px;">${conf}%</span></td>
+        <td><span class="badge badge-ok">✓ ID ${odooId}</span></td>`;
+    } catch(e) {
+      errCount++;
+      const msg = e?.faultString || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
+      tr.innerHTML = `<td style="font-size:11px;color:var(--muted);" title="${file.name}">${file.name}</td>
+        <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
+        <td><span class="badge badge-danger">✗ Error</span></td>`;
+    }
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  pf.style.width = '100%';
+  pt.textContent = `Completado: ${okCount} OK · ${errCount} errores`;
+  btn.disabled = false;
+
+  const badge = document.getElementById('hon-res-badge');
+  badge.style.display = 'inline-flex';
+  badge.className = errCount > 0 ? 'badge badge-warn' : 'badge badge-ok';
+  badge.textContent = `${okCount} OK · ${errCount} errores`;
+
+  showToast(`${okCount} facturas cargadas en Odoo`, okCount > 0 ? 'ok' : 'err');
+  honFiles = [];
+  document.getElementById('hon-count-sel').textContent = '0';
+  document.getElementById('hon-fileInput').value = '';
+}
+
+// Cargar cartas cuando se muestra el módulo honorarios
+document.querySelector('.nav-item[onclick*="honorarios"]')?.addEventListener('click', honCargarCartas);
+let compSelectedFile = null;
+let compBanco = 'interbanking';
+let compZipBlob = null;
+
+function selectBancoPortal(b, el) {
+  compBanco = b;
+  document.querySelectorAll('#page-comprobantes .tab-btn').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+const compDz = document.getElementById('comp-dropzone');
+if (compDz) {
+  compDz.addEventListener('dragover', e => { e.preventDefault(); compDz.classList.add('drag-over'); });
+  compDz.addEventListener('dragleave', () => compDz.classList.remove('drag-over'));
+  compDz.addEventListener('drop', e => { e.preventDefault(); compDz.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f && f.type === 'application/pdf') compSetFile(f); });
+}
+document.getElementById('comp-fileInput').addEventListener('change', e => { if (e.target.files[0]) compSetFile(e.target.files[0]); });
+
+function compSetFile(f) {
+  compSelectedFile = f;
+  const fi = document.getElementById('comp-fileInfo');
+  fi.style.display = 'flex';
+  document.getElementById('comp-fileName').textContent = f.name;
+  document.getElementById('comp-fileSize').textContent = (f.size/1024/1024).toFixed(2) + ' MB · PDF';
+  document.getElementById('comp-btnProcess').disabled = false;
+  document.getElementById('comp-resultsCard').style.display = 'none';
+  compZipBlob = null; compOdooUid = null;
+}
+
+async function compGetFolderId() {
+  if (_compFolderId) return _compFolderId;
+  const folders = await odooCall('document.folder', 'search_read',
+    [[['name', 'ilike', 'comprobantes de pago']]],
+    { fields: ['id', 'name'], limit: 5 }
+  );
+  if (!folders?.length) throw new Error('No se encontró carpeta "comprobantes de pago"');
+  _compFolderId = folders[0].id;
+  return _compFolderId;
+}
+
+async function compSubirOdoo(filename, pdfBytes) {
+  const folderId = await compGetFolderId();
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
+  const docId = await odooCall('document.document', 'create', [{
+    name: filename,
+    folder_id: folderId,
+    datas: b64,
+    mimetype: 'application/pdf',
+  }]);
+  return docId;
+}
+
+function compParseInterbanking(text) {
+  const dm = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  let fecha = dm ? `${dm[3].slice(2)}-${dm[2]}-${dm[1]}` : null;
+  let cuit = null;
+  const cs = text.match(/Datos de la cuenta cr[eé]dito[\s\S]*?Cuit:\s*(\d{11})/i);
+  if (cs) cuit = cs[1]; else { const all=[...text.matchAll(/Cuit:\s*(\d{11})/gi)]; if(all.length) cuit=all[all.length-1][1]; }
+  let monto = null;
+  const im = text.match(/Importe:[^\d]*?([\d.,]+)/);
+  if (im) { let r=im[1].trim(); if(r.includes(',')) r=r.replace(/\./g,'').replace(',','.'); monto=r.replace(/\.$/,''); }
+  return {cuit, monto, fecha};
+}
+
+function compParseNacion(text) {
+  let cuit = null;
+  const cm = text.match(/C\.?U\.?I\.?T\.?:?\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})/i);
+  if (cm) cuit=cm[1].replace(/[-\s]/g,''); else { const all=[...text.matchAll(/\b(\d{11})\b/g)]; if(all.length) cuit=all[0][1]; }
+  const dm = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  let fecha = dm ? `${dm[3].slice(2)}-${dm[2]}-${dm[1]}` : null;
+  let monto = null;
+  for (const pat of [/(?:Importe|Total|Monto|Acreditado)[^\d]*?([\d.,]+)/i, /\$\s*([\d.,]+)/]) {
+    const m=text.match(pat);
+    if (m) { let r=m[1].trim(); if(r.includes(',')) r=r.replace(/\./g,'').replace(',','.'); monto=r.replace(/\.$/,''); break; }
+  }
+  return {cuit, monto, fecha};
+}
+
+async function procesarComprobantes() {
+  if (!compSelectedFile) return;
+  const btn = document.getElementById('comp-btnProcess');
+  const pw = document.getElementById('comp-progressWrap');
+  const pf = document.getElementById('comp-progressFill');
+  const pt = document.getElementById('comp-progressText');
+  btn.disabled = true; pw.style.display = 'block';
+  document.getElementById('comp-resultsCard').style.display = 'none';
+
+  const results = [], errors = [], nameCounts = {};
+  let JSZipLib, PDFLibLib, pdfjsLibLoad;
+
+  try {
+    pt.textContent = 'Conectando a Odoo...'; pf.style.width = '3%';
+    try { await compOdooAuth(); pt.textContent = '✓ Odoo conectado. Cargando PDF...'; }
+    catch(e) { pt.textContent = '⚠ Sin conexión Odoo — procesando igual...'; }
+
+    const ab = await compSelectedFile.arrayBuffer();
+    const u8 = new Uint8Array(ab);
+    pf.style.width = '8%';
+
+    const pdfjsDoc = await pdfjsLib.getDocument({data: u8.slice()}).promise;
+    const total = pdfjsDoc.numPages;
+    const pdfLibDoc = await PDFLib.PDFDocument.load(u8);
+    const zip = new JSZip();
+    pt.textContent = `${total} páginas detectadas. Procesando...`;
+
+    for (let i = 0; i < total; i++) {
+      pf.style.width = Math.round(8 + ((i+1)/total)*85) + '%';
+      pt.textContent = `Página ${i+1} de ${total}...`;
+      const page = await pdfjsDoc.getPage(i+1);
+      const content = await page.getTextContent();
+      const text = content.items.map(x=>x.str).join(' ');
+      let parsed = compBanco==='interbanking' ? compParseInterbanking(text) : compBanco==='nacion' ? compParseNacion(text) : (text.includes('Interbanking')?compParseInterbanking(text):compParseNacion(text));
+      const hasError = !parsed.cuit || !parsed.monto || !parsed.fecha;
+      if (hasError) errors.push({page:i+1,...parsed});
+      const c=parsed.cuit||'CUIT_FALTANTE', m=parsed.monto||'MONTO_FALTANTE', f=parsed.fecha||'FECHA_FALTANTE';
+      let fn = `${c}__${m}__${f}.pdf`;
+      const base = fn.replace('.pdf','');
+      nameCounts[base] = (nameCounts[base]||0)+1;
+      if (nameCounts[base]>1) fn=`${base}_${nameCounts[base]}.pdf`;
+      const sd = await PDFLib.PDFDocument.create();
+      const [cp] = await sd.copyPages(pdfLibDoc,[i]);
+      sd.addPage(cp);
+      const pb = await sd.save();
+      zip.file(fn, pb);
+      let odooStatus = 'pendiente', odooId = null;
+      try { odooId=await compSubirOdoo(fn,pb); odooStatus='ok'; } catch(e) { odooStatus='error'; }
+      results.push({page:i+1, filename:fn, hasError, odooStatus, odooId});
+      await new Promise(r=>setTimeout(r,0));
+    }
+
+    pt.textContent = 'Generando ZIP...'; pf.style.width='98%';
+    compZipBlob = await zip.generateAsync({type:'blob',compression:'DEFLATE'});
+    pf.style.width='100%';
+    const okCount = results.filter(r=>r.odooStatus==='ok').length;
+    compMostrarResultados(results, errors, total, okCount);
+  } catch(e) { pt.textContent = '✗ Error: ' + e.message; }
+  btn.disabled = false;
+}
+
+function compMostrarResultados(results, errors, total, okCount) {
+  const card = document.getElementById('comp-resultsCard');
+  card.style.display = 'block';
+  document.getElementById('comp-count').textContent = total;
+  document.getElementById('comp-odoo').textContent = okCount;
+  document.getElementById('comp-warn').textContent = errors.length;
+  document.getElementById('comp-err').textContent = results.filter(r=>r.odooStatus==='error').length;
+  document.getElementById('comp-statOk').textContent = `${total} archivos`;
+  const as = document.getElementById('comp-alertSuccess');
+  const ae = document.getElementById('comp-alertError');
+  if (okCount>0) { as.style.display='flex'; as.innerHTML=`<i class="ti ti-check"></i><div>${okCount} comprobante(s) subidos a Odoo Documents.</div>`; }
+  if (errors.length>0) { ae.style.display='flex'; ae.innerHTML=`<i class="ti ti-alert-triangle"></i><div>${errors.length} comprobante(s) con datos incompletos. Están en el ZIP.</div>`; }
+  const tbody = document.getElementById('comp-resultsBody');
+  tbody.innerHTML = results.map(r => {
+    const pc = r.hasError?'badge-warn':'badge-ok', pt2=r.hasError?'⚠ Incompleto':'✓ OK';
+    const oc = r.odooStatus==='ok'?'badge-ok':r.odooStatus==='pendiente'?'badge-muted':'badge-danger';
+    const ot = r.odooStatus==='ok'?'✓ Subido':r.odooStatus==='pendiente'?'— Sin conexión':'✗ Error';
+    return `<tr><td style="color:var(--muted);">${r.page}</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.filename}">${r.filename}</td><td><span class="badge ${pc}">${pt2}</span></td><td><span class="badge ${oc}">${ot}</span></td></tr>`;
+  }).join('');
+  const es = document.getElementById('comp-errorsSection');
+  if (errors.length>0) { es.style.display='block'; document.getElementById('comp-errorsList').innerHTML = errors.map(e=>`· Pág ${e.page}: CUIT=${e.cuit||'?'} | Monto=${e.monto||'?'} | Fecha=${e.fecha||'?'}`).join('<br>'); }
+  document.getElementById('comp-btnDownload').onclick = () => {
+    const url = URL.createObjectURL(compZipBlob);
+    const a = document.createElement('a'); a.href=url; a.download=compSelectedFile.name.replace('.pdf','')+'_separados.zip'; a.click(); URL.revokeObjectURL(url);
+  };
+  card.scrollIntoView({behavior:'smooth'});
+}
+
+// ═══════════════════════════════════════════════════════
+// INTERBANKING UPLOAD
+// ═══════════════════════════════════════════════════════
+let ibRows=[], ibHeaders=[], ibFiltered=[], ibCodigoCliente='', ibUsoConfig='S', ibBlobUrl='';
+
+const IB_DEMO = [
+  {Nombre:'Acosta, Axel Andres',CUIT:'"20439820838"',CBU:'"0140310503632852985399 - Banco De La Provincia De Buenos Aires (confiable)"'},
+  {Nombre:'Aguirre Campos, Yanina',CUIT:'"27325253091"',CBU:'"0140093903700253002660 - Banco De La Provincia De Buenos Aires (confiable)"'},
+  {Nombre:'Distribuidora Norte SRL',CUIT:'30-68901234-5',CBU:'0110056830056001234562 (no confiable)'},
+  {Nombre:'',CUIT:'30-70123456-9',CBU:'0140037130014001234563 (confiable)'},
+  {Nombre:'Imprenta Rápida SRL',CUIT:'20-25432198-4',CBU:''},
+];
+
+function ibShow(id){document.getElementById(id).style.display='block';}
+function ibHide(id){document.getElementById(id).style.display='none';}
+
+function ibGoStep2() {
+  const c=document.getElementById('ib-codigoCliente').value.trim();
+  if (!c) { ibShow('ib-errCodigo'); return; }
+  ibHide('ib-errCodigo');
+  ibCodigoCliente=c.padEnd(7,' ').substring(0,7);
+  ibUsoConfig=document.getElementById('ib-usoCuenta').value;
+  ibHide('ib-phase1'); ibShow('ib-phase2');
+}
+
+function ibBack() { ibHide('ib-phase2'); ibShow('ib-phase1'); }
+function ibBackTo2() { ibHide('ib-phase3'); ibShow('ib-phase2'); }
+
+function ibExtractDigits(s,max){const d=(s||'').replace(/[^0-9]/g,'');return max?d.substring(0,max):d;}
+function ibCleanCuit(s){return ibExtractDigits(s,11);}
+function ibCleanCbu(s){return ibExtractDigits(s,22);}
+
+function ibGetDenom(row) {
+  const n=ibGetField(row,'ib-colNombre').replace(/^"|"$/g,'').trim();
+  return n||ibCleanCuit(ibGetField(row,'ib-colCuit'))||'SIN NOMBRE';
+}
+
+function ibGetField(r,colId){const c=document.getElementById(colId)?.value;return c?(r[c]||''):'';}
+
+function ibParseCSV(text) {
+  const lines=text.trim().split(/\r?\n/);
+  if(!lines.length) return {hdrs:[],result:[]};
+  const first=lines[0]; let commas=0,semis=0,inQ=false;
+  for(let ch of first){if(ch==='"')inQ=!inQ;else if(!inQ){if(ch===',')commas++;else if(ch===';')semis++;}}
+  const sep=semis>commas?';':',';
+  function parseLine(line){const f=[];let cur='',iq=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(iq&&line[i+1]==='"'){cur+='"';i++;}else iq=!iq;}else if(ch===sep&&!iq){f.push(cur);cur='';}else cur+=ch;}f.push(cur);return f.map(x=>x.trim());}
+  const ff=parseLine(lines[0]);
+  const ld=ff.some(f=>/^\d{8,}$/.test(f.replace(/\D/g,'')));
+  let hdrs,dl;
+  if(!ld){hdrs=ff;dl=lines.slice(1);}else{hdrs=ff.map((_,i)=>`Col${i+1}`);dl=lines;}
+  const result=[];
+  for(let line of dl){if(!line.trim())continue;const vals=parseLine(line);const obj={_sel:true};hdrs.forEach((h,i)=>obj[h]=vals[i]!==undefined?vals[i]:'');result.push(obj);}
+  return{hdrs,result};
+}
+
+function ibPopulateSelects(hdrs) {
+  ['ib-colNombre','ib-colCuit','ib-colCbu','ib-colRef'].forEach(id=>{
+    const s=document.getElementById(id);
+    s.innerHTML='<option value="">— no mapear —</option>'+hdrs.map(h=>`<option value="${h}">${h}</option>`).join('');
+  });
+  const guess=kws=>hdrs.find(h=>kws.some(k=>h.toLowerCase().includes(k)))||'';
+  const sv=(id,v)=>{if(v)document.getElementById(id).value=v;};
+  sv('ib-colNombre',guess(['nombre','name','razon','company','empresa','partner','denominacion','proveedor']));
+  sv('ib-colCuit',guess(['cuit','cuil','vat','nit','tax']));
+  sv('ib-colCbu',guess(['cbu','cuenta','account','bank']));
+  sv('ib-colRef',guess(['ref','referencia','descripcion']));
+}
+
+function ibHandleFile(file) {
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    const{hdrs,result}=ibParseCSV(text);
+    ibHeaders=hdrs; ibRows=result;
+    const dz=document.getElementById('ib-dropZone');
+    dz.classList.add('drag-over');
+    dz.querySelector('p').textContent=`✓ ${file.name} — ${ibRows.length} registros`;
+    const rawLines=text.trim().split(/\r?\n/).slice(0,3).join('\n');
+    document.getElementById('ib-rawPreview').textContent=rawLines;
+    ibShow('ib-rawPreviewSection'); ibShow('ib-mapSection');
+    ibPopulateSelects(ibHeaders);
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+document.getElementById('ib-fileInput').addEventListener('change',e=>{if(e.target.files[0])ibHandleFile(e.target.files[0]);});
+const ibDzEl=document.getElementById('ib-dropZone');
+if(ibDzEl){
+  ibDzEl.addEventListener('dragover',e=>{e.preventDefault();ibDzEl.style.background='var(--verde-claro)';});
+  ibDzEl.addEventListener('dragleave',()=>ibDzEl.style.background='');
+  ibDzEl.addEventListener('drop',e=>{e.preventDefault();ibDzEl.style.background='';if(e.dataTransfer.files[0])ibHandleFile(e.dataTransfer.files[0]);});
+}
+
+function ibLoadDemo() {
+  const c=document.getElementById('ib-codigoCliente').value.trim()||'DEMO01';
+  ibCodigoCliente=c.padEnd(7,' ').substring(0,7);
+  ibUsoConfig=document.getElementById('ib-usoCuenta').value;
+  ibHeaders=['Nombre','CUIT','CBU'];
+  ibRows=IB_DEMO.map(r=>({Nombre:r.Nombre,CUIT:r.CUIT,CBU:r.CBU,_sel:true}));
+  document.getElementById('ib-dropZone').querySelector('p').textContent=`✓ Demo — ${ibRows.length} proveedores`;
+  document.getElementById('ib-rawPreview').textContent='Acosta, Axel Andres,"20439820838","0140310503632852985399..."\nAguirre Campos, Yanina,"27325253091","0140093903700253002660..."';
+  ibShow('ib-rawPreviewSection'); ibShow('ib-mapSection');
+  ibPopulateSelects(ibHeaders); ibHide('ib-phase1'); ibShow('ib-phase2');
+  setTimeout(ibProcessTable,50);
+}
+
+function ibValidateRow(r) {
+  const cuit=ibCleanCuit(ibGetField(r,'ib-colCuit'));
+  const cbu=ibCleanCbu(ibGetField(r,'ib-colCbu'));
+  const errors=[];
+  if(!cuit)errors.push('CUIT vacío');else if(cuit.length!==11)errors.push(`CUIT: ${cuit.length} díg.`);
+  if(!cbu)errors.push('CBU vacío');else if(cbu.length!==22)errors.push(`CBU: ${cbu.length} díg.`);
+  return errors;
+}
+
+function ibProcessTable() {
+  ibRows.forEach(r=>{r._sel=true;r._errors=ibValidateRow(r);r._fallback=!ibGetField(r,'ib-colNombre').replace(/^"|"$/g,'').trim()&&r._errors.length===0;});
+  ibFiltered=[...ibRows];
+  ibHide('ib-phase2'); ibShow('ib-phase3');
+  ibUpdateStats(); ibRenderTable(); ibUpdatePreview();
+}
+
+function ibRenderTable() {
+  const tbody=document.getElementById('ib-tableBody');
+  tbody.innerHTML=ibFiltered.map(r=>{
+    const idx=ibRows.indexOf(r);
+    const hasErr=r._errors&&r._errors.length>0;
+    const denom=ibGetDenom(r);
+    const cuit=ibCleanCuit(ibGetField(r,'ib-colCuit'))||'—';
+    const cbu=ibCleanCbu(ibGetField(r,'ib-colCbu'));
+    const cbuD=cbu?cbu.substring(0,6)+'...'+cbu.substring(cbu.length-4):'—';
+    let badge;
+    if(hasErr)badge=`<span class="badge badge-danger" title="${r._errors.join(', ')}">✗ Error</span>`;
+    else if(r._fallback)badge=`<span class="badge badge-warn">⚠ Sin nombre</span>`;
+    else badge=`<span class="badge badge-ok">✓ OK</span>`;
+    const bg=hasErr?'background:var(--danger-bg);':r._fallback?'background:var(--warn-bg);':r._sel?'background:var(--info-bg);':'';
+    return `<tr style="${bg}cursor:pointer;" onclick="${hasErr?'':('ibToggle('+idx+')')}">
+      <td><input type="checkbox" style="accent-color:var(--verde);width:14px;height:14px;cursor:pointer;" ${r._sel&&!hasErr?'checked':''} ${hasErr?'disabled':''} onclick="event.stopPropagation();ibToggle(${idx})"></td>
+      <td style="font-size:12px;">${denom}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${cuit}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${cbuD}</td>
+      <td style="text-align:center;">${badge}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">Sin resultados</td></tr>';
+}
+
+function ibToggle(idx){ibRows[idx]._sel=!ibRows[idx]._sel;ibUpdateStats();ibFilterTable();ibUpdatePreview();}
+function ibSelAll(){ibRows.forEach(r=>{if(!r._errors||!r._errors.length)r._sel=true;});ibUpdateStats();ibFilterTable();ibUpdatePreview();}
+function ibClearAll(){ibRows.forEach(r=>r._sel=false);ibUpdateStats();ibFilterTable();ibUpdatePreview();}
+
+function ibUpdateStats() {
+  const val=ibRows.filter(r=>!r._errors||!r._errors.length);
+  const fb=val.filter(r=>r._fallback);
+  const err=ibRows.filter(r=>r._errors&&r._errors.length);
+  document.getElementById('ib-stat-sel').textContent=ibRows.filter(r=>r._sel&&(!r._errors||!r._errors.length)).length;
+  document.getElementById('ib-stat-fb').textContent=fb.length;
+  document.getElementById('ib-stat-err').textContent=err.length;
+  document.getElementById('ib-fallbackAlert').style.display=fb.length?'flex':'none';
+  document.getElementById('ib-errAlert').style.display=err.length?'flex':'none';
+}
+
+function ibFilterTable() {
+  const q=document.getElementById('ib-searchBox').value.toLowerCase();
+  ibFiltered=ibRows.filter(r=>!q||ibGetDenom(r).toLowerCase().includes(q)||ibCleanCuit(ibGetField(r,'ib-colCuit')).includes(q));
+  ibRenderTable();
+}
+
+function ibPadR(s,len){return String(s||'').substring(0,len).padEnd(len,' ');}
+function ibPadL(s,len){return String(s||'').substring(0,len).padStart(len,'0');}
+
+function ibBuildFile(sel) {
+  const rec1='1'+ibPadR(ibCodigoCliente,7)+' '.repeat(152);
+  const recs=sel.map(r=>{
+    const up=(ibUsoConfig==='S'||ibUsoConfig==='SS')?'S':'N';
+    const us=(ibUsoConfig==='SN'||ibUsoConfig==='SS')?'S':'N';
+    return ('2'+' '.repeat(22)+ibPadR(ibGetDenom(r),29)+up+us+'N'+ibPadL(ibCleanCuit(ibGetField(r,'ib-colCuit')),11)+ibPadR(ibCleanCbu(ibGetField(r,'ib-colCbu')),22)+ibPadR(ibGetField(r,'ib-colRef'),50)+' '.repeat(22)).substring(0,160);
+  });
+  const rec3='3'+ibPadR(ibCodigoCliente,7)+ibPadL(sel.length,6)+' '.repeat(146);
+  return [rec1,...recs,rec3].join('\r\n');
+}
+
+function ibUpdatePreview() {
+  const sel=ibRows.filter(r=>r._sel&&(!r._errors||!r._errors.length));
+  const pb=document.getElementById('ib-previewBox');
+  if(!sel.length){pb.textContent='(seleccioná al menos un proveedor válido)';return;}
+  const file=ibBuildFile(sel);
+  const lines=file.split('\r\n');
+  pb.textContent=[`[Reg 1 - cabecera]\n${lines[0]}`,`[Reg 2 - ${ibGetDenom(sel[0]).substring(0,20)}]\n${lines[1]}`,sel.length>1?`[Reg 2 - ${ibGetDenom(sel[1]).substring(0,20)}]\n${lines[2]}`:null,`[Reg 3 - cierre: ${sel.length} cuentas]\n${lines[lines.length-1]}`].filter(Boolean).join('\n\n');
+}
+
+function ibExportFile() {
+  const sel=ibRows.filter(r=>r._sel&&(!r._errors||!r._errors.length));
+  if(!sel.length){alert('Seleccioná al menos un proveedor válido');return;}
+  const content=ibBuildFile(sel);
+  const blob=new Blob([content],{type:'text/plain;charset=utf-8;'});
+  ibBlobUrl=URL.createObjectURL(blob);
+  const hoy=new Date();
+  const fecha=hoy.getFullYear()+String(hoy.getMonth()+1).padStart(2,'0')+String(hoy.getDate()).padStart(2,'0');
+  const filename=`alta_cuentas_${fecha}.txt`;
+  document.getElementById('ib-dlBtn').onclick=()=>{const a=document.createElement('a');a.href=ibBlobUrl;a.download=filename;a.click();};
+  document.getElementById('ib-dlBtn').click();
+  document.getElementById('ib-doneMsg').textContent=`${sel.length} proveedor${sel.length!==1?'es':''} — ${filename}`;
+  ibHide('ib-phase3'); ibShow('ib-phaseDone');
+}
+
+function ibRestart() {
+  ibRows=[]; ibHeaders=[]; ibFiltered=[];
+  const dz=document.getElementById('ib-dropZone');
+  dz.classList.remove('drag-over');
+  dz.querySelector('p').textContent='Arrastrá el CSV de Odoo o hacé clic';
+  ibHide('ib-mapSection'); ibHide('ib-rawPreviewSection'); ibHide('ib-phaseDone'); ibHide('ib-phase2'); ibHide('ib-phase3'); ibShow('ib-phase1');
+}
+
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+</script>
+
+</body>
+</html>
