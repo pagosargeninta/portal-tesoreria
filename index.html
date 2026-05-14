@@ -774,68 +774,7 @@ tbody tr:hover td { background: #f8faf9; }
           </select>
         </div>
 
-        <div id="carta-cards">
-          <div class="card" style="margin-bottom:14px;">
-            <div class="card-header" style="background:#f8faf9;">
-              <div class="card-title" style="font-size:14px;">
-                <i class="ti ti-folder" style="color:var(--verde);"></i>
-                SENASA.28.1 — Honorarios
-                <span class="badge badge-ok" style="margin-left:4px;">92% completa</span>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <span style="font-size:12px;color:var(--muted);">$89.2M total</span>
-                <button class="btn" style="font-size:11px;" onclick="showHonTab('planilla',document.querySelectorAll('.tab-btn')[3])">
-                  <i class="ti ti-upload"></i> Subir planilla
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-bottom:14px;">
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Cargadas</div><div style="font-size:20px;font-weight:600;color:var(--success);">46</div></div>
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Faltantes</div><div style="font-size:20px;font-weight:600;color:var(--danger);">4</div></div>
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Borrador</div><div style="font-size:20px;font-weight:600;color:var(--warn);">8</div></div>
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Confirmadas</div><div style="font-size:20px;font-weight:600;color:var(--success);">38</div></div>
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Sin CBU</div><div style="font-size:20px;font-weight:600;color:var(--danger);">1</div></div>
-              </div>
-              <div class="progress" style="height:8px;margin-bottom:8px;"><div class="progress-fill ok" style="width:92%"></div></div>
-              <div class="alert danger" style="margin-bottom:0;">
-                <i class="ti ti-alert-circle"></i>
-                <div>Faltantes: Rodríguez C., Suárez P., Martínez R., Gómez L. — estuvieron los meses anteriores.</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card" style="margin-bottom:14px;">
-            <div class="card-header" style="background:#fffafa;">
-              <div class="card-title" style="font-size:14px;">
-                <i class="ti ti-folder" style="color:var(--danger);"></i>
-                INIDEP.28 — Honorarios
-                <span class="badge badge-danger" style="margin-left:4px;">53% completa</span>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <span style="font-size:12px;color:var(--muted);">$74.1M total</span>
-                <button class="btn" style="font-size:11px;" onclick="showHonTab('planilla',document.querySelectorAll('.tab-btn')[3])">
-                  <i class="ti ti-upload"></i> Subir planilla
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-bottom:14px;">
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Cargadas</div><div style="font-size:20px;font-weight:600;color:var(--warn);">38</div></div>
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Faltantes</div><div style="font-size:20px;font-weight:600;color:var(--danger);">34</div></div>
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Borrador</div><div style="font-size:20px;font-weight:600;color:var(--warn);">12</div></div>
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Confirmadas</div><div style="font-size:20px;font-weight:600;color:var(--success);">26</div></div>
-                <div><div class="num-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Sin CBU</div><div style="font-size:20px;font-weight:600;color:var(--danger);">2</div></div>
-              </div>
-              <div class="progress" style="height:8px;margin-bottom:8px;"><div class="progress-fill danger" style="width:53%"></div></div>
-              <div class="alert danger" style="margin-bottom:0;">
-                <i class="ti ti-alert-triangle"></i>
-                <div><strong>34 faltantes</strong> — tendencia bajando desde marzo. Recomendado: subir planilla del organismo para cruzar datos.</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+        <div class="card"><div class="card-body" style="text-align:center;padding:32px;color:var(--muted);"><i class="ti ti-folder" style="font-size:36px;opacity:0.3;display:block;margin-bottom:10px;"></i><div>Próximamente — datos reales de Odoo</div></div></div>      </div>
 
       <!-- ── CARGA DE PDFs ── -->
       <div id="hon-carga" class="hon-tab" style="display:none;">
@@ -965,181 +904,21 @@ tbody tr:hover td { background: #f8faf9; }
           </div>
         </div>
 
-        <!-- Resultado demo -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-git-compare"></i> Resultado de comparación — SENASA.28.1 Mayo 2026</div>
-            <div style="display:flex;gap:6px;">
-              <span class="badge badge-ok">42 OK</span>
-              <span class="badge badge-danger">4 faltantes</span>
-              <span class="badge badge-warn">2 diferencias de monto</span>
-            </div>
-          </div>
-          <div class="card-body" style="padding:0;">
-            <div class="table-wrap" style="border:none;border-radius:0;">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Nombre (planilla)</th>
-                    <th>CUIT planilla</th>
-                    <th>Monto planilla</th>
-                    <th>Monto factura</th>
-                    <th>Diferencia</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>Alvarez Tamara D.</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-41089224-9</td>
-                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
-                    <td style="font-family:'JetBrains Mono',monospace;">$1.218.000</td>
-                    <td style="font-family:'JetBrains Mono',monospace;color:var(--danger);">+$237.500</td>
-                    <td><span class="badge badge-warn">⚠ Monto distinto</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Bianchi Sebastián</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-25974059-3</td>
-                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
-                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
-                    <td style="color:var(--muted);">—</td>
-                    <td><span class="badge badge-ok">✓ OK</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Rodríguez Carlos</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-31456789-0</td>
-                    <td style="font-family:'JetBrains Mono',monospace;">$1.200.000</td>
-                    <td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">—</td>
-                    <td style="color:var(--muted);">—</td>
-                    <td><span class="badge badge-danger">✗ No llegó</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Martínez Roberto</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-28765432-1</td>
-                    <td style="font-family:'JetBrains Mono',monospace;">$850.000</td>
-                    <td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">—</td>
-                    <td style="color:var(--muted);">—</td>
-                    <td><span class="badge badge-danger">✗ No llegó</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Fuentes Aldana</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-43103445-5</td>
-                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
-                    <td style="font-family:'JetBrains Mono',monospace;">$980.500</td>
-                    <td style="color:var(--muted);">—</td>
-                    <td><span class="badge badge-ok">✓ OK</span></td>
-                  </tr>
-                  <tr>
-                    <td style="color:var(--muted);font-style:italic;">De Marco (sin CUIT en planilla)</td>
-                    <td style="color:var(--muted);">—</td>
-                    <td style="font-family:'JetBrains Mono',monospace;color:var(--muted);">—</td>
-                    <td style="font-family:'JetBrains Mono',monospace;">$1.573.000</td>
-                    <td style="color:var(--muted);">—</td>
-                    <td><span class="badge badge-info">Extra (no en planilla)</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       <!-- ── DETALLE DE FACTURAS ── -->
       <div id="hon-detalle" class="hon-tab" style="display:none;">
-        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
-          <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"><option>Todas las cartas</option><option>SENASA.28.1</option><option>INIDEP.28</option><option>MAGyP.14</option></select>
-          <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"><option>Todos los estados</option><option>Borrador</option><option>Confirmada</option><option>A revisar</option></select>
-          <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"><option>Mayo 2026</option><option>Abril 2026</option><option>Marzo 2026</option></select>
-          <input type="text" placeholder="Buscar nombre o CUIT..." style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;flex:1;min-width:160px;outline:none;">
-          <button class="btn"><i class="ti ti-download"></i> Exportar</button>
-        </div>
-
         <div class="card">
           <div class="card-body" style="padding:0;">
-            <div class="table-wrap" style="border:none;border-radius:0;max-height:500px;overflow-y:auto;">
+            <div id="hon-detalle-empty" style="text-align:center;padding:40px;color:var(--muted);">
+              <i class="ti ti-inbox" style="font-size:36px;opacity:0.3;display:block;margin-bottom:10px;"></i>
+              <div style="font-size:14px;margin-bottom:6px;">Sin facturas cargadas en esta sesión</div>
+              <div style="font-size:12px;">Las facturas aparecen acá después de cargarlas desde Cargar PDFs</div>
+            </div>
+            <div class="table-wrap" id="hon-detalle-wrap" style="border:none;border-radius:0;display:none;max-height:500px;overflow-y:auto;">
               <table>
-                <thead>
-                  <tr>
-                    <th>Proveedor</th>
-                    <th>CUIT</th>
-                    <th>Nro Factura</th>
-                    <th>Período</th>
-                    <th>Neto</th>
-                    <th>IVA</th>
-                    <th>Total</th>
-                    <th>CAE</th>
-                    <th>Carta</th>
-                    <th>Conf. IA</th>
-                    <th>Estado Odoo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>Alvarez Tamara D.</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-41089224-9</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0001-00000892</td>
-                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.218.000</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$1.218.000</td>
-                    <td><span class="badge badge-ok" style="font-size:10px;">✓</span></td>
-                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
-                    <td><span class="badge badge-ok" style="font-size:10px;">100%</span></td>
-                    <td><span class="badge badge-warn">Borrador</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Bianchi Sebastián</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-25974059-3</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0001-00000341</td>
-                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$980.500</td>
-                    <td><span class="badge badge-ok" style="font-size:10px;">✓</span></td>
-                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
-                    <td><span class="badge badge-ok" style="font-size:10px;">100%</span></td>
-                    <td><span class="badge badge-ok">Confirmada</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>De Marco —</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-38338221-7</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0001-00000567</td>
-                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.573.000</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$1.573.000</td>
-                    <td><span class="badge badge-warn" style="font-size:10px;">⚠</span></td>
-                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
-                    <td><span class="badge badge-warn" style="font-size:10px;">95%</span></td>
-                    <td><span class="badge badge-warn">Borrador</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Dellagiovanna —</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">20-42095827-8</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0001-00000103</td>
-                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$980.500</td>
-                    <td><span class="badge badge-ok" style="font-size:10px;">✓</span></td>
-                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
-                    <td><span class="badge badge-ok" style="font-size:10px;">100%</span></td>
-                    <td><span class="badge badge-ok">Confirmada</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Fuentes Aldana</strong></td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">27-43103445-5</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">0002-00001204</td>
-                    <td style="font-size:11px;color:var(--muted);">01/05–31/05</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">$0</td>
-                    <td style="font-family:'JetBrains Mono',monospace;font-weight:600;">$980.500</td>
-                    <td><span class="badge badge-ok" style="font-size:10px;">✓</span></td>
-                    <td><span class="badge badge-muted" style="font-size:10px;">SENASA.28.1</span></td>
-                    <td><span class="badge badge-ok" style="font-size:10px;">100%</span></td>
-                    <td><span class="badge badge-ok">Confirmada</span></td>
-                  </tr>
-                </tbody>
+                <thead><tr><th>Proveedor</th><th>CUIT</th><th>Nro Factura</th><th>Total</th><th>CAE</th><th>Conf.</th><th>Odoo ID</th></tr></thead>
+                <tbody id="hon-detalle-body"></tbody>
               </table>
             </div>
           </div>
@@ -2007,7 +1786,7 @@ async function honCargarCartas() {
   if (!sel) return;
   try {
     const cartas = await odooCall('account.analytic.account', 'search_read',
-      [[['active','=',true]]], {fields:['id','name'], limit:2000, order:'name asc'});
+      [[['active','=',true]]], {fields:['id','name'], order:'name asc'});
     _todasLasCartas = cartas;
     honRenderCartas(cartas);
   } catch(e) {
@@ -2169,6 +1948,17 @@ async function honProcesar() {
         <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${fmt(datos.total)}</td>
         <td><span class="badge ${confBadge}" style="font-size:10px;">${conf}%</span></td>
         <td><span class="badge badge-ok">✓ ID ${odooId}</span></td>`;
+      // Add to detalle tab
+      const detBody = document.getElementById('hon-detalle-body');
+      const detWrap = document.getElementById('hon-detalle-wrap');
+      const detEmpty = document.getElementById('hon-detalle-empty');
+      if (detBody) {
+        const dtr = document.createElement('tr');
+        dtr.innerHTML = `<td>${datos.razon_social||'—'}</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${datos.cuit||'—'}</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${datos.nro_factura||'—'}</td><td style="font-family:'JetBrains Mono',monospace;">${fmt(datos.total)}</td><td><span class="badge ${datos.cae?'badge-ok':'badge-muted'}">${datos.cae?'✓':'—'}</span></td><td><span class="badge ${confBadge}">${conf}%</span></td><td style="font-family:'JetBrains Mono',monospace;">${odooId}</td>`;
+        detBody.appendChild(dtr);
+        if (detEmpty) detEmpty.style.display = 'none';
+        if (detWrap) detWrap.style.display = 'block';
+      }
     } catch(e) {
       errCount++;
       const msg = e?.faultString || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
