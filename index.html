@@ -2270,6 +2270,7 @@ async function honExtractWithClaude(file) {
 }
 
 async function honCrearFactura(datos, cartaId) {
+  _odooUid = null; // forzar re-auth
   const parseNum = v => parseFloat((v||'0').toString().replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
   const neto = parseNum(datos.neto) || parseNum(datos.total);
   const iva = parseNum(datos.iva);
