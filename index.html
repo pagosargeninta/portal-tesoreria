@@ -726,157 +726,33 @@ tbody tr:hover td { background: #f8faf9; }
       <div id="hon-resumen" class="hon-tab">
         <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));">
           <div class="metric-card success">
-            <div class="metric-label">Cargadas</div>
-            <div class="metric-value">312</div>
-            <div class="metric-sub">de 380 esperadas</div>
-          </div>
-          <div class="metric-card danger">
-            <div class="metric-label">Faltantes</div>
-            <div class="metric-value">68</div>
-            <div class="metric-sub">vs mes anterior</div>
+            <div class="metric-label">Cargadas esta sesión</div>
+            <div class="metric-value" id="hon-total-ok">0</div>
+            <div class="metric-sub">facturas en Odoo</div>
           </div>
           <div class="metric-card warn">
             <div class="metric-label">A revisar</div>
-            <div class="metric-value">8</div>
+            <div class="metric-value" id="hon-total-rev">0</div>
             <div class="metric-sub">confianza IA &lt;75%</div>
           </div>
-          <div class="metric-card info">
-            <div class="metric-label">En borrador</div>
-            <div class="metric-value">24</div>
-            <div class="metric-sub">pendientes confirmar</div>
+          <div class="metric-card danger">
+            <div class="metric-label">Errores</div>
+            <div class="metric-value" id="hon-total-err">0</div>
+            <div class="metric-sub">no cargadas</div>
           </div>
           <div class="metric-card">
-            <div class="metric-label">Monto total</div>
-            <div class="metric-value" style="font-size:20px;">$284M</div>
-            <div class="metric-sub" style="color:var(--warn);">↑ 8% vs abril</div>
-          </div>
-          <div class="metric-card danger">
-            <div class="metric-label">Sin CBU en Odoo</div>
-            <div class="metric-value">3</div>
-            <div class="metric-sub">no se pueden pagar</div>
+            <div class="metric-label">Monto cargado</div>
+            <div class="metric-value" id="hon-total-monto" style="font-size:18px;">$0</div>
+            <div class="metric-sub">esta sesión</div>
           </div>
         </div>
-
-        <div class="grid2" style="margin-bottom:16px;">
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title"><i class="ti ti-chart-bar"></i> Avance por carta — Mayo 2026</div>
-              <button class="btn" style="font-size:11px;" onclick="showHonTab('cartas', document.querySelectorAll('.tab-btn')[1])">
-                Ver detalle <i class="ti ti-arrow-right"></i>
-              </button>
-            </div>
-            <div class="card-body">
-              <div class="progress-row">
-                <div class="progress-label" style="cursor:pointer;color:var(--info);" onclick="showHonTab('cartas', document.querySelectorAll('.tab-btn')[1])">SENASA.28.1</div>
-                <div class="progress"><div class="progress-fill ok" style="width:92%"></div></div>
-                <div class="progress-count">46/50</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label" style="cursor:pointer;color:var(--danger);">INIDEP.28</div>
-                <div class="progress"><div class="progress-fill danger" style="width:53%"></div></div>
-                <div class="progress-count">38/72</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label">MAGyP.14</div>
-                <div class="progress"><div class="progress-fill ok" style="width:100%"></div></div>
-                <div class="progress-count">28/28</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label" style="color:var(--warn);">CONICET.7</div>
-                <div class="progress"><div class="progress-fill warn" style="width:67%"></div></div>
-                <div class="progress-count">40/60</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label">SENASA.29</div>
-                <div class="progress"><div class="progress-fill warn" style="width:78%"></div></div>
-                <div class="progress-count">78/100</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label">MAGyP.31</div>
-                <div class="progress"><div class="progress-fill ok" style="width:100%"></div></div>
-                <div class="progress-count">42/42</div>
-              </div>
-              <div class="progress-row">
-                <div class="progress-label">INA.7</div>
-                <div class="progress"><div class="progress-fill ok" style="width:88%"></div></div>
-                <div class="progress-count">38/43</div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div class="card" style="margin-bottom:16px;">
-              <div class="card-header">
-                <div class="card-title"><i class="ti ti-users-group"></i> Faltantes por patrón</div>
-                <span class="badge badge-danger">68</span>
-              </div>
-              <div class="card-body">
-                <div class="alert warn" style="margin-bottom:10px;">
-                  <i class="ti ti-robot"></i>
-                  <div>Personas que enviaron los últimos 3+ meses y no aparecen en mayo.</div>
-                </div>
-                <table>
-                  <thead><tr><th>Proveedor</th><th>Carta</th><th>Meses</th><th>Último monto</th></tr></thead>
-                  <tbody>
-                    <tr><td>Pérez Juan M.</td><td><span class="badge badge-muted" style="font-size:10px;">INIDEP.28</span></td><td style="color:var(--muted);font-size:11px;">4 meses</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$920.000</td></tr>
-                    <tr><td>García Ana L.</td><td><span class="badge badge-muted" style="font-size:10px;">INIDEP.28</span></td><td style="color:var(--muted);font-size:11px;">6 meses</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td></tr>
-                    <tr><td>López María E.</td><td><span class="badge badge-muted" style="font-size:10px;">CONICET.7</span></td><td style="color:var(--muted);font-size:11px;">3 meses</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$750.000</td></tr>
-                    <tr><td colspan="4" style="text-align:center;color:var(--muted);font-size:11px;padding:8px;">+ 65 más · <span style="color:var(--info);cursor:pointer;" onclick="showHonTab('detalle',document.querySelectorAll('.tab-btn')[4])">ver todos</span></td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title"><i class="ti ti-trending-up"></i> Variaciones de monto</div>
-                <span class="badge badge-warn">4 alertas</span>
-              </div>
-              <div class="card-body">
-                <table>
-                  <thead><tr><th>Proveedor</th><th>Abril</th><th>Mayo</th><th>Var.</th></tr></thead>
-                  <tbody>
-                    <tr>
-                      <td>Alvarez Tamara</td>
-                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$857.000</td>
-                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.218.000</td>
-                      <td><span class="badge badge-danger">↑ 42%</span></td>
-                    </tr>
-                    <tr>
-                      <td>Rodríguez C.</td>
-                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.200.000</td>
-                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$1.573.000</td>
-                      <td><span class="badge badge-warn">↑ 31%</span></td>
-                    </tr>
-                    <tr>
-                      <td>Suárez Pablo</td>
-                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$980.500</td>
-                      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">$580.000</td>
-                      <td><span class="badge badge-info">↓ 41%</span></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div class="card">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-calendar-stats"></i> Histórico mensual</div>
-          </div>
-          <div class="card-body" style="padding:0;">
-            <div class="table-wrap" style="border:none;border-radius:0;">
-              <table>
-                <thead><tr><th>Carta</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Tendencia</th></tr></thead>
-                <tbody>
-                  <tr><td><strong>SENASA.28.1</strong></td><td><span class="hdot ok"></span>50/50</td><td><span class="hdot ok"></span>50/50</td><td><span class="hdot ok"></span>50/50</td><td><span class="hdot ok"></span>50/50</td><td><span class="hdot warn"></span>46/50</td><td><span class="badge badge-warn">↓ 4 faltantes</span></td></tr>
-                  <tr><td><strong>INIDEP.28</strong></td><td><span class="hdot ok"></span>72/72</td><td><span class="hdot ok"></span>71/72</td><td><span class="hdot warn"></span>65/72</td><td><span class="hdot warn"></span>60/72</td><td><span class="hdot danger"></span>38/72</td><td><span class="badge badge-danger">↓ tendencia baja</span></td></tr>
-                  <tr><td><strong>MAGyP.14</strong></td><td><span class="hdot ok"></span>28/28</td><td><span class="hdot ok"></span>28/28</td><td><span class="hdot ok"></span>28/28</td><td><span class="hdot ok"></span>28/28</td><td><span class="hdot ok"></span>28/28</td><td><span class="badge badge-ok">✓ estable</span></td></tr>
-                  <tr><td><strong>CONICET.7</strong></td><td><span class="hdot ok"></span>60/60</td><td><span class="hdot ok"></span>58/60</td><td><span class="hdot warn"></span>55/60</td><td><span class="hdot warn"></span>52/60</td><td><span class="hdot warn"></span>40/60</td><td><span class="badge badge-danger">↓ tendencia baja</span></td></tr>
-                </tbody>
-              </table>
-            </div>
+          <div class="card-body" style="text-align:center;padding:32px;">
+            <i class="ti ti-file-invoice" style="font-size:40px;color:var(--muted);opacity:0.3;display:block;margin-bottom:12px;"></i>
+            <div style="font-size:14px;color:var(--muted);margin-bottom:16px;">Para cargar honorarios, usá el sub-tab <strong>Cargar PDFs</strong></div>
+            <button class="btn btn-primary" onclick="showHonTab('carga', document.querySelectorAll('#page-honorarios .tab-btn')[2])">
+              <i class="ti ti-upload"></i> Ir a Cargar PDFs
+            </button>
           </div>
         </div>
       </div>
@@ -1770,8 +1646,8 @@ tbody tr:hover td { background: #f8faf9; }
         </div>
         <div class="metric-card">
           <div class="metric-label">Proveedores pagados</div>
-          <div class="metric-value">312</div>
-          <div class="metric-sub">de 380 esperados</div>
+          <div class="metric-value">—</div>
+          <div class="metric-sub">sin datos aún</div>
         </div>
         <div class="metric-card info">
           <div class="metric-label">Ingresos Carta 29</div>
@@ -2131,7 +2007,7 @@ async function honCargarCartas() {
   if (!sel) return;
   try {
     const cartas = await odooCall('account.analytic.account', 'search_read',
-      [[['active','=',true]]], {fields:['id','name'], limit:500, order:'name asc'});
+      [[['active','=',true]]], {fields:['id','name'], limit:2000, order:'name asc'});
     _todasLasCartas = cartas;
     honRenderCartas(cartas);
   } catch(e) {
@@ -2313,6 +2189,13 @@ async function honProcesar() {
   badge.textContent = `${okCount} OK · ${errCount} errores`;
 
   showToast(`${okCount} facturas cargadas en Odoo`, okCount > 0 ? 'ok' : 'err');
+
+  // Update resumen tab
+  const prevOk = parseInt(document.getElementById('hon-total-ok')?.textContent) || 0;
+  const prevErr = parseInt(document.getElementById('hon-total-err')?.textContent) || 0;
+  if (document.getElementById('hon-total-ok')) document.getElementById('hon-total-ok').textContent = prevOk + okCount;
+  if (document.getElementById('hon-total-err')) document.getElementById('hon-total-err').textContent = prevErr + errCount;
+
   honFiles = [];
   document.getElementById('hon-count-sel').textContent = '0';
   document.getElementById('hon-fileInput').value = '';
