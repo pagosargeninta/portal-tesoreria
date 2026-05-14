@@ -2261,11 +2261,11 @@ async function honExtractWithClaude(file) {
       }
     })
   });
-  if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || `Error ${resp.status}`); }
-  const data = await resp.json();
-  if (data.error) throw new Error(data.error);
-  if (!data.content || !data.content[0]) throw new Error('Respuesta vacía de Claude');
-  console.log('Claude response:', JSON.stringify(data));
+  const rawText = await resp.text();
+  alert('Respuesta Claude: ' + rawText.substring(0, 300));
+  const data = JSON.parse(rawText);
+  if (data.error) throw new Error(String(data.error));
+  if (!data.content?.[0]?.text) throw new Error('Sin contenido: ' + rawText.substring(0, 200));
   const text = data.content[0].text.replace(/```json|```/g,'').trim();
   return JSON.parse(text);
 }
