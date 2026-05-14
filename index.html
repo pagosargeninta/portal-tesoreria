@@ -1887,6 +1887,7 @@ async function honExtractWithClaude(file) {
 }
 
 async function honCrearFactura(datos, cartaId) {
+  _odooUid = null; // forzar re-auth en cada factura
   const parseNum = v => parseFloat((v||'0').toString().replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
   const neto = parseNum(datos.neto) || parseNum(datos.total);
   const iva = parseNum(datos.iva);
@@ -1917,7 +1918,6 @@ async function honCrearFactura(datos, cartaId) {
     invoice_line_ids: lineas,
   };
   if (datos.cae) { vals.l10n_ar_afip_auth_mode = 'CAE'; vals.l10n_ar_afip_auth_code = datos.cae.replace(/\D/g,''); }
-  // Buscar partner por CUIT
   if (datos.cuit) {
     const cuitClean = datos.cuit.replace(/\D/g,'');
     const partners = await odooCall('res.partner','search_read',[[['vat','like',cuitClean]]],{fields:['id'],limit:1});
@@ -1986,7 +1986,7 @@ async function honProcesar() {
         <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
         <td><span class="badge badge-danger">✗ Error</span></td>`;
     }
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 1500));
   }
 
   pf.style.width = '100%';
