@@ -2262,7 +2262,6 @@ async function honExtractWithClaude(file) {
     })
   });
   const rawText = await resp.text();
-  alert('Respuesta Claude: ' + rawText.substring(0, 300));
   const data = JSON.parse(rawText);
   if (data.error) throw new Error(String(data.error));
   if (!data.content?.[0]?.text) throw new Error('Sin contenido: ' + rawText.substring(0, 200));
