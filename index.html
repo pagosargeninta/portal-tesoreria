@@ -786,8 +786,8 @@ tbody tr:hover td { background: #f8faf9; }
             <div class="card-body">
               <div class="field">
                 <label>Carta / Convenio</label>
-                <input type="text" id="hon-carta-search" placeholder="Escribí para buscar..." oninput="honFiltrarCartas()" autocomplete="off" style="margin-bottom:4px;">
-                <select id="hon-sel-carta" size="5" style="width:100%;border-radius:7px;padding:4px;">
+                <input type="text" id="hon-carta-search" placeholder="Escribí para buscar..." oninput="honFiltrarCartas()" autocomplete="off" style="margin-bottom:6px;">
+                <select id="hon-sel-carta" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;max-height:200px;">
                   <option value="">Cargando cartas...</option>
                 </select>
                 <div style="font-size:10px;color:var(--muted);margin-top:3px;" id="hon-carta-count"></div>
@@ -1817,7 +1817,7 @@ if (honDz) {
   honDz.addEventListener('dragleave', () => honDz.classList.remove('drag-over'));
   honDz.addEventListener('drop', e => { e.preventDefault(); honDz.classList.remove('drag-over'); honAddFiles([...e.dataTransfer.files].filter(f=>f.type==='application/pdf')); });
 }
-document.getElementById('hon-fileInput').addEventListener('change', e => honAddFiles([...e.target.files]));
+document.getElementById('hon-fileInput')?.addEventListener('change', e => honAddFiles([...e.target.files]));
 
 function honAddFiles(files) {
   honFiles = [...honFiles, ...files.filter(f => !honFiles.find(x=>x.name===f.name))];
@@ -2009,7 +2009,7 @@ if (compDz) {
   compDz.addEventListener('dragleave', () => compDz.classList.remove('drag-over'));
   compDz.addEventListener('drop', e => { e.preventDefault(); compDz.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f && f.type === 'application/pdf') compSetFile(f); });
 }
-document.getElementById('comp-fileInput').addEventListener('change', e => { if (e.target.files[0]) compSetFile(e.target.files[0]); });
+document.getElementById('comp-fileInput')?.addEventListener('change', e => { if (e.target.files[0]) compSetFile(e.target.files[0]); });
 
 function compSetFile(f) {
   compSelectedFile = f;
@@ -2035,14 +2035,11 @@ async function compGetFolderId() {
 
 async function compSubirOdoo(filename, pdfBytes) {
   const folderId = await compGetFolderId();
-  // Create document record first (without binary data)
   const docId = await odooCall('documents.document', 'create', [{
     name: filename,
     folder_id: folderId,
     mimetype: 'application/pdf',
   }]);
-  // Then write the binary data separately to avoid XML-RPC size limits
-  const chunkSize = 500000; // 500KB chunks in base64
   const b64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
   await odooCall('documents.document', 'write', [[docId], { datas: b64 }]);
   return docId;
@@ -2248,7 +2245,7 @@ function ibHandleFile(file) {
   reader.readAsText(file,'UTF-8');
 }
 
-document.getElementById('ib-fileInput').addEventListener('change',e=>{if(e.target.files[0])ibHandleFile(e.target.files[0]);});
+document.getElementById('ib-fileInput')?.addEventListener('change',e=>{if(e.target.files[0])ibHandleFile(e.target.files[0]);});
 const ibDzEl=document.getElementById('ib-dropZone');
 if(ibDzEl){
   ibDzEl.addEventListener('dragover',e=>{e.preventDefault();ibDzEl.style.background='var(--verde-claro)';});
