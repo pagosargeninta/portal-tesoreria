@@ -2024,7 +2024,7 @@ function compSetFile(f) {
 
 async function compGetFolderId() {
   if (_compFolderId) return _compFolderId;
-  const folders = await odooCall('document.folder', 'search_read',
+  const folders = await odooCall('documents.folder', 'search_read',
     [[['name', 'ilike', 'comprobantes de pago']]],
     { fields: ['id', 'name'], limit: 5 }
   );
@@ -2035,13 +2035,16 @@ async function compGetFolderId() {
 
 async function compSubirOdoo(filename, pdfBytes) {
   const folderId = await compGetFolderId();
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
-  const docId = await odooCall('document.document', 'create', [{
+  // Create document record first (without binary data)
+  const docId = await odooCall('documents.document', 'create', [{
     name: filename,
     folder_id: folderId,
-    datas: b64,
     mimetype: 'application/pdf',
   }]);
+  // Then write the binary data separately to avoid XML-RPC size limits
+  const chunkSize = 500000; // 500KB chunks in base64
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
+  await odooCall('documents.document', 'write', [[docId], { datas: b64 }]);
   return docId;
 }
 
