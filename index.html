@@ -1890,14 +1890,18 @@ async function honExtractWithClaude(file, intentos = 3) {
       if (!resp.ok) {
         const e = await resp.json().catch(() => ({}));
         const msg = e.error?.message || `HTTP ${resp.status}`;
-        if (intento < intentos) { await new Promise(r => setTimeout(r, 3000 * intento)); continue; }
+        const isRateLimit = resp.status === 429 || msg.includes('rate limit');
+        const waitMs = isRateLimit ? 60000 : 3000 * intento;
+        if (intento < intentos) { await new Promise(r => setTimeout(r, waitMs)); continue; }
         throw new Error(msg);
       }
 
       const data = await resp.json();
       if (data.error) {
         const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
-        if (intento < intentos) { await new Promise(r => setTimeout(r, 3000 * intento)); continue; }
+        const isRateLimit = msg.includes('rate limit') || msg.includes('rate_limit');
+        const waitMs = isRateLimit ? 60000 : 3000 * intento;
+        if (intento < intentos) { await new Promise(r => setTimeout(r, waitMs)); continue; }
         throw new Error(msg);
       }
       if (!data.content?.[0]?.text) {
@@ -2022,7 +2026,7 @@ async function honProcesar() {
         <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
         <td><span class="badge badge-danger">✗ Error</span></td>`;
     }
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, 2000));
   }
 
   pf.style.width = '100%';
