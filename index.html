@@ -2034,7 +2034,7 @@ function compSetFile(f) {
   document.getElementById('comp-fileSize').textContent = (f.size/1024/1024).toFixed(2) + ' MB · PDF';
   document.getElementById('comp-btnProcess').disabled = false;
   document.getElementById('comp-resultsCard').style.display = 'none';
-  compZipBlob = null; compOdooUid = null;
+  compZipBlob = null;
 }
 
 async function compGetFolderId() {
@@ -2259,9 +2259,6 @@ function ibHandleFile(file) {
   };
   reader.readAsText(file,'UTF-8');
 }
-
-document.getElementById('ib-fileInput')?.addEventListener('change',e=>{if(e.target.files[0])ibHandleFile(e.target.files[0]);});
-
 
 function ibLoadDemo() {
   const c=document.getElementById('ib-codigoCliente').value.trim()||'DEMO01';
