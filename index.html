@@ -2194,94 +2194,73 @@ async function honProcesar() {
 
   let okCount = 0, errCount = 0;
 
-  for (let i = 0; i < honFiles.length; i++) {
-    const file = honFiles[i];
-    pf.style.width  = Math.round((i / honFiles.length) * 100) + '%';
-    pt.textContent  = `[${i + 1}/${honFiles.length}] ${file.name}`;
+  const BATCH_SIZE = 3;
+  const BATCH_DELAY = 4000; // 4s between batches = ~45 PDFs/min within 40K token limit
 
-    // Fila provisional mientras se procesa
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</td>
-      <td>—</td><td>—</td><td>—</td>
-      <td><span class="badge badge-muted">Procesando...</span></td>`;
-    tbody.appendChild(tr);
+  for (let i = 0; i < honFiles.length; i += BATCH_SIZE) {
+    const batch = honFiles.slice(i, i + BATCH_SIZE);
+    pf.style.width = Math.round((i / honFiles.length) * 100) + '%';
+    pt.textContent = `[${i + 1}-${Math.min(i + BATCH_SIZE, honFiles.length)}/${honFiles.length}] Procesando lote...`;
 
-    try {
-      // 1. Extracción con IA
-      pt.textContent = `[${i + 1}/${honFiles.length}] Extrayendo datos — ${file.name}`;
-      const datos = await honExtractWithClaude(file);
-      const conf  = datos.confidence || 0;
-      const fmt   = n => n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—';
-
-      // 2. Crear factura en Odoo
-      pt.textContent = `[${i + 1}/${honFiles.length}] Creando factura en Odoo — ${file.name}`;
-      const odooId = await honCrearFactura(datos, cartaId);
-
-      // 3. Adjuntar PDF original a la factura
-      pt.textContent = `[${i + 1}/${honFiles.length}] Adjuntando PDF — ${file.name}`;
-      let adjuntado = false;
-      let adjError  = '';
-      try {
-        await honAdjuntarPDF(file, odooId);
-        adjuntado = true;
-      } catch(adjErr) {
-        adjError = adjErr.message || String(adjErr);
-        console.warn('PDF no adjuntado:', adjError);
-      }
-
-      okCount++;
-      document.getElementById('hon-count-ok').textContent = okCount;
-
-      const confBadge = conf >= 75 ? 'badge-ok' : 'badge-warn';
-      // Badge de adjunto: verde si OK, amarillo si falló (la factura igual se creó)
-      const adjBadge = adjuntado
-        ? '<span class="badge badge-ok" title="PDF adjunto en Odoo">📎 PDF</span>'
-        : `<span class="badge badge-warn" title="${adjError}">⚠ Sin PDF</span>`;
-
+    // Add placeholder rows for the batch
+    const batchRows = batch.map((file, bi) => {
+      const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</td>
-        <td style="font-size:12px;">${datos.razon_social || datos.cuit || '—'}</td>
-        <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${fmt(datos.total)}</td>
-        <td><span class="badge ${confBadge}" style="font-size:10px;">${conf}%</span></td>
-        <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
-          <span class="badge badge-ok">✓ ID ${odooId}</span>
-          ${adjBadge}
-        </td>`;
+        <td>—</td><td>—</td><td>—</td>
+        <td><span class="badge badge-muted">Procesando...</span></td>`;
+      tbody.appendChild(tr);
+      return tr;
+    });
 
-      // Agregar al tab Detalle
-      const detBody  = document.getElementById('hon-detalle-body');
-      const detWrap  = document.getElementById('hon-detalle-wrap');
-      const detEmpty = document.getElementById('hon-detalle-empty');
-      if (detBody) {
-        const dtr = document.createElement('tr');
-        dtr.innerHTML = `
-          <td>${datos.razon_social || '—'}</td>
-          <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${datos.cuit || '—'}</td>
-          <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${datos.nro_factura || '—'}</td>
-          <td style="font-family:'JetBrains Mono',monospace;">${fmt(datos.total)}</td>
-          <td><span class="badge ${datos.cae ? 'badge-ok' : 'badge-muted'}">${datos.cae ? '✓' : '—'}</span></td>
-          <td><span class="badge ${confBadge}">${conf}%</span></td>
-          <td style="font-family:'JetBrains Mono',monospace;">${odooId}</td>`;
-        detBody.appendChild(dtr);
-        if (detEmpty) detEmpty.style.display = 'none';
-        if (detWrap)  detWrap.style.display  = 'block';
+    // Process batch in parallel
+    const results = await Promise.allSettled(batch.map(async (file, bi) => {
+      const tr = batchRows[bi];
+      try {
+        const datos = await honExtractWithClaude(file);
+        const conf  = datos.confidence || 0;
+        const fmt   = n => n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—';
+        const odooId = await honCrearFactura(datos, cartaId);
+
+        let adjuntado = false;
+        try { await honAdjuntarPDF(file, odooId); adjuntado = true; } catch(e) {}
+
+        const confBadge = conf >= 75 ? 'badge-ok' : 'badge-warn';
+        const adjBadge = adjuntado
+          ? '<span class="badge badge-ok" title="PDF adjunto">📎 PDF</span>'
+          : '<span class="badge badge-warn">⚠ Sin PDF</span>';
+
+        tr.innerHTML = `
+          <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</td>
+          <td style="font-size:12px;">${datos.razon_social || datos.cuit || '—'}</td>
+          <td class="mono" style="font-size:11px;">${fmt(datos.total)}</td>
+          <td><span class="badge ${confBadge}" style="font-size:10px;">${conf}%</span></td>
+          <td style="display:flex;gap:4px;align-items:center;"><span class="badge badge-ok">✓ ID ${odooId}</span>${adjBadge}</td>`;
+
+        okCount++;
+        document.getElementById('hon-count-ok').textContent = okCount;
+        return { ok: true, datos, odooId };
+      } catch(e) {
+        const msg = e?.message || String(e);
+        tr.innerHTML = `
+          <td style="font-size:11px;color:var(--muted);" title="${file.name}">${file.name}</td>
+          <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
+          <td><span class="badge badge-danger">✗ Error</span></td>`;
+        errCount++;
+        return { ok: false, error: msg };
       }
+    }));
 
-    } catch(e) {
-      errCount++;
-      const msg = e?.faultString || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
-      tr.innerHTML = `
-        <td style="font-size:11px;color:var(--muted);" title="${file.name}">${file.name}</td>
-        <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
-        <td><span class="badge badge-danger">✗ Error</span></td>`;
+    pf.style.width = Math.round(((i + batch.length) / honFiles.length) * 100) + '%';
+    pt.textContent = `Lote ${Math.floor(i/BATCH_SIZE)+1} completado — ${okCount} OK · ${errCount} errores`;
+
+    // Pause between batches (not after last batch)
+    if (i + BATCH_SIZE < honFiles.length) {
+      await new Promise(r => setTimeout(r, BATCH_DELAY));
     }
-
-    // Pausa entre archivos para no saturar la API
-    await new Promise(r => setTimeout(r, 5000));
   }
 
-  pf.style.width = '100%';
+  pf.stylepf.style.width = '100%';
   pt.textContent = `Completado: ${okCount} OK · ${errCount} errores`;
   btn.disabled   = false;
 
