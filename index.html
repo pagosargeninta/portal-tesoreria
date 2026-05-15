@@ -1830,54 +1830,57 @@ async function honDashCargar() {
       return;
     }
 
-    // 2. Facturas ciclo anterior (esperado)
-    const antFacturas = await odooCall('account.move', 'search_read', [[
-      ['move_type','=','in_invoice'],
-      ['invoice_date','>=',CICLO_ANT_DESDE],
-      ['invoice_date','<=',CICLO_ANT_HASTA],
-      ['state','in',['posted','paid']]
-    ]], {fields:['id','partner_id','invoice_line_ids','amount_total','analytic_distribution','invoice_date'], limit:2000});
+    // 2. Buscar líneas de factura con distribución analítica en ciclo anterior
+    const antLineas = await odooCall('account.move.line', 'search_read', [[
+      ['move_id.move_type','=','in_invoice'],
+      ['move_id.invoice_date','>=',CICLO_ANT_DESDE],
+      ['move_id.invoice_date','<=',CICLO_ANT_HASTA],
+      ['move_id.state','in',['posted','paid']],
+      ['analytic_distribution','!=',false]
+    ]], {fields:['move_id','analytic_distribution','price_subtotal'], limit:5000});
 
-    // 3. Facturas ciclo actual
-    const actFacturas = await odooCall('account.move', 'search_read', [[
-      ['move_type','=','in_invoice'],
-      ['invoice_date','>=',CICLO_ACT_DESDE],
-      ['state','in',['draft','posted','paid']]
-    ]], {fields:['id','partner_id','amount_total','analytic_distribution','invoice_date','state'], limit:2000});
+    // 3. Buscar líneas ciclo actual
+    const actLineas = await odooCall('account.move.line', 'search_read', [[
+      ['move_id.move_type','=','in_invoice'],
+      ['move_id.invoice_date','>=',CICLO_ACT_DESDE],
+      ['move_id.state','in',['draft','posted','paid']],
+      ['analytic_distribution','!=',false]
+    ]], {fields:['move_id','analytic_distribution','price_subtotal'], limit:5000});
 
-    // Filtrar por cartas de honorarios
-    function esDeHon(f) {
-      if (!f.analytic_distribution) return false;
-      return Object.keys(f.analytic_distribution).some(id => cartaIds.includes(parseInt(id)));
+    // Agrupar por carta — una factura puede tener múltiples líneas, contar facturas únicas
+    function agruparPorCarta(lineas, cartaIds) {
+      const movesVistas = new Set();
+      const resultado = {};
+      cartaIds.forEach(id => resultado[id] = { moves: new Set(), monto: 0 });
+
+      lineas.forEach(l => {
+        if (!l.analytic_distribution) return;
+        Object.keys(l.analytic_distribution).forEach(cidStr => {
+          const cid = parseInt(cidStr);
+          if (resultado[cid] && !movesVistas.has(`${cid}-${l.move_id[0]}`)) {
+            resultado[cid].moves.add(l.move_id[0]);
+            resultado[cid].monto += l.price_subtotal || 0;
+            movesVistas.add(`${cid}-${l.move_id[0]}`);
+          }
+        });
+      });
+      return resultado;
     }
-    function getCartaId(f) {
-      if (!f.analytic_distribution) return null;
-      return Object.keys(f.analytic_distribution).map(id => parseInt(id)).find(id => cartaIds.includes(id));
-    }
 
-    const antHon = antFacturas.filter(esDeHon);
-    const actHon = actFacturas.filter(esDeHon);
+    const antAgrupado = agruparPorCarta(antLineas, cartaIds);
+    const actAgrupado = agruparPorCarta(actLineas, cartaIds);
 
-    // Agrupar por carta
+    // Construir resumen
     const resumen = {};
     cartasHon.forEach(c => {
-      resumen[c.id] = { id: c.id, name: c.name, esperado: 0, montoAnt: 0, actual: 0, montoAct: 0 };
-    });
-
-    antHon.forEach(f => {
-      const cid = getCartaId(f);
-      if (cid && resumen[cid]) {
-        resumen[cid].esperado++;
-        resumen[cid].montoAnt += f.amount_total || 0;
-      }
-    });
-
-    actHon.forEach(f => {
-      const cid = getCartaId(f);
-      if (cid && resumen[cid]) {
-        resumen[cid].actual++;
-        resumen[cid].montoAct += f.amount_total || 0;
-      }
+      resumen[c.id] = {
+        id: c.id,
+        name: c.name,
+        esperado: antAgrupado[c.id]?.moves.size || 0,
+        montoAnt: antAgrupado[c.id]?.monto || 0,
+        actual: actAgrupado[c.id]?.moves.size || 0,
+        montoAct: actAgrupado[c.id]?.monto || 0
+      };
     });
 
     // Totales globales
@@ -1899,58 +1902,53 @@ async function honDashCargar() {
     const varPct = totalMontoAnt > 0 ? ((totalMontoAct - totalMontoAnt) / totalMontoAnt * 100).toFixed(0) : 0;
     const varEl = document.getElementById('hon-dash-var');
     varEl.textContent = varPct >= 0 ? `↑ ${varPct}% vs ciclo ant.` : `↓ ${Math.abs(varPct)}% vs ciclo ant.`;
-    varEl.style.color = varPct > 10 ? 'var(--warn)' : 'var(--muted)';
+    varEl.style.color = Math.abs(varPct) > 10 ? 'var(--warn)' : 'var(--muted)';
 
     // Alertas
     const alertas = document.getElementById('hon-dash-alertas');
     alertas.innerHTML = '';
     if (faltantes > 0) {
-      alertas.innerHTML += `<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-alert-circle"></i><div><strong>${faltantes} facturas faltantes</strong> respecto al ciclo anterior. Revisá las cartas marcadas en naranja.</div></div>`;
+      alertas.innerHTML = `<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-alert-circle"></i><div><strong>${faltantes} facturas faltantes</strong> respecto al ciclo anterior.</div></div>`;
     } else if (totalActual > 0) {
-      alertas.innerHTML += `<div class="alert success" style="margin-bottom:8px;"><i class="ti ti-circle-check"></i><div><strong>Todo completo.</strong> Se recibieron todas las facturas esperadas.</div></div>`;
+      alertas.innerHTML = `<div class="alert success" style="margin-bottom:8px;"><i class="ti ti-circle-check"></i><div><strong>Todo completo.</strong> Se recibieron todas las facturas esperadas.</div></div>`;
     } else {
-      alertas.innerHTML += `<div class="alert info" style="margin-bottom:8px;"><i class="ti ti-info-circle"></i><div>El ciclo actual todavía no tiene facturas cargadas. El esperado es ${totalEsperado} basado en el ciclo anterior.</div></div>`;
+      alertas.innerHTML = `<div class="alert info" style="margin-bottom:8px;"><i class="ti ti-info-circle"></i><div>Ciclo actual sin facturas aún. Esperado: ${totalEsperado} basado en ciclo anterior.</div></div>`;
     }
 
     // Renderizar cartas
     const fmt = n => '$' + (n/1000000).toFixed(2) + 'M';
     const cartasOrdenadas = Object.values(resumen).sort((a,b) => b.esperado - a.esperado);
 
-    body.innerHTML = cartasOrdenadas.map(c => {
-      if (c.esperado === 0 && c.actual === 0) return '';
+    body.innerHTML = cartasOrdenadas.filter(c => c.esperado > 0 || c.actual > 0).map(c => {
       const pct = c.esperado > 0 ? Math.min(100, Math.round(c.actual/c.esperado*100)) : (c.actual > 0 ? 100 : 0);
-      const estado = c.esperado === 0 ? 'nuevo' : (c.actual >= c.esperado ? 'lista' : (c.actual > 0 ? 'parcial' : 'inicio'));
-      const colorBorde = estado === 'lista' ? 'var(--verde)' : estado === 'parcial' ? '#e0820a' : estado === 'nuevo' ? 'var(--info)' : '#ccc';
+      const estado = c.actual >= c.esperado && c.esperado > 0 ? 'lista' : c.actual > 0 ? 'parcial' : 'inicio';
+      const colorBorde = estado === 'lista' ? 'var(--verde)' : estado === 'parcial' ? '#e0820a' : '#ccc';
       const badgeHtml = estado === 'lista'
         ? '<span class="badge badge-ok">✓ Completa</span>'
         : estado === 'parcial'
         ? `<span class="badge badge-warn">⚠ ${c.esperado - c.actual} faltantes</span>`
-        : estado === 'nuevo'
-        ? '<span class="badge badge-info">Nuevo ciclo</span>'
         : '<span class="badge badge-muted">Sin recibir</span>';
-
       const fillColor = pct >= 100 ? 'var(--verde)' : pct > 50 ? '#e0820a' : 'var(--danger)';
 
-      return `
-      <div style="border:1px solid var(--border);border-left:4px solid ${colorBorde};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;background:${estado==='parcial'?'#fffdf8':estado==='inicio'?'#fafafa':'var(--surface)'}">
+      return `<div style="border:1px solid var(--border);border-left:4px solid ${colorBorde};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;background:${estado==='parcial'?'#fffdf8':'var(--surface)'}">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <div style="font-size:13px;font-weight:600;">${c.name}</div>
-          <div style="display:flex;gap:6px;">${badgeHtml}<span class="badge badge-muted">${c.actual}/${c.esperado > 0 ? c.esperado : '?'}</span></div>
+          <div style="display:flex;gap:6px;">${badgeHtml}<span class="badge badge-muted">${c.actual}/${c.esperado}</span></div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:8px;">
-          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Recibidas</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${c.actual>=c.esperado&&c.esperado>0?'var(--success)':'var(--warn)'};">${c.actual}</div></div>
-          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Esperadas</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;">${c.esperado > 0 ? c.esperado : '—'}</div></div>
-          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Monto actual</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;">${fmt(c.montoAct)}</div></div>
-          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Monto ant.</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--muted);">${c.montoAnt > 0 ? fmt(c.montoAnt) : '—'}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px;">Recibidas</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${c.actual>=c.esperado?'var(--success)':'var(--warn)'};">${c.actual}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px;">Esperadas</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;">${c.esperado}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px;">Monto actual</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;">${fmt(c.montoAct)}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px;">Monto ant.</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--muted);">${fmt(c.montoAnt)}</div></div>
         </div>
         <div style="background:#e8f0ea;border-radius:99px;height:6px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:${fillColor};border-radius:99px;transition:width .3s;"></div>
+          <div style="height:100%;width:${pct}%;background:${fillColor};border-radius:99px;"></div>
         </div>
       </div>`;
-    }).join('');
+    }).join('') || '<div style="text-align:center;padding:32px;color:var(--muted);">Sin datos para mostrar.</div>';
 
   } catch(e) {
-    body.innerHTML = `<div class="alert danger"><i class="ti ti-x"></i><div>Error cargando datos: ${e.message}</div></div>`;
+    body.innerHTML = `<div class="alert danger"><i class="ti ti-x"></i><div>Error: ${e.message}</div></div>`;
   }
 }
 
