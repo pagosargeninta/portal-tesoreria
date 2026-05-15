@@ -1956,11 +1956,6 @@ async function honDashCargar() {
   }
 }
 
-// Auto-cargar dashboard al mostrar resumen — se llama desde showHonTab
-function honDashAutoLoad(id) {
-  if (id === 'resumen') honDashCargar();
-}
-
 // ═══════════════════════════════════════════════════════
 // HONORARIOS — CARGA CON IA
 // ═══════════════════════════════════════════════════════
@@ -2014,10 +2009,6 @@ function honFiltrarCartas() {
 }
 
 // Load cartas when honorarios page is shown
-const origShowPage = window.showPage;
-
-
-
 function honAddFiles(files) {
   honFiles = [...honFiles, ...files.filter(f => !honFiles.find(x=>x.name===f.name))];
   document.getElementById('hon-count-sel').textContent = honFiles.length;
