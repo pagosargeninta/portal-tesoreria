@@ -716,7 +716,9 @@ tbody tr:hover td { background: #f8faf9; }
       <!-- Sub-tabs -->
       <div class="tab-row" style="margin-bottom:20px;">
         <button class="tab-btn active" onclick="showHonTab('resumen',this)">Resumen general</button>
-        <button class="tab-btn" onclick="showHonTab('cartas',this)">Por carta</button>
+        <button class="tab-btn" onclick="showHonTab('recepcion',this)">📥 Recepción</button>
+        <button class="tab-btn" onclick="showHonTab('prepago',this)">✅ Pre-pago</button>
+        <button class="tab-btn" onclick="showHonTab('postpago',this)">💰 Post-pago</button>
         <button class="tab-btn" onclick="showHonTab('carga',this)">Cargar PDFs</button>
         <button class="tab-btn" onclick="showHonTab('planilla',this)">Comparar planilla</button>
         <button class="tab-btn" onclick="showHonTab('detalle',this)">Detalle de facturas</button>
@@ -765,7 +767,155 @@ tbody tr:hover td { background: #f8faf9; }
         </div>
       </div>
 
-      <!-- ── POR CARTA ── -->
+      
+      <!-- ── RECEPCIÓN ── -->
+      <div id="hon-recepcion" class="hon-tab" style="display:none;">
+        <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px;">
+          <div class="metric-card success">
+            <div class="metric-label">Recibidas</div>
+            <div class="metric-value" id="rec-total-recibidas">—</div>
+            <div class="metric-sub" id="rec-sub-recibidas">cargando...</div>
+          </div>
+          <div class="metric-card warn">
+            <div class="metric-label">Faltantes</div>
+            <div class="metric-value" id="rec-total-faltantes">—</div>
+            <div class="metric-sub">vs ciclo anterior</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Monto total</div>
+            <div class="metric-value" id="rec-total-monto" style="font-size:18px;">—</div>
+            <div class="metric-sub">este ciclo</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Cartas completas</div>
+            <div class="metric-value" id="rec-cartas-ok">—</div>
+            <div class="metric-sub" id="rec-cartas-sub">de las monitoreadas</div>
+          </div>
+        </div>
+        <div id="rec-alertas"></div>
+        <div id="rec-cartas-body">
+          <div style="text-align:center;padding:40px;color:var(--muted);">
+            <i class="ti ti-loader" style="font-size:28px;display:block;margin-bottom:10px;"></i>Cargando...
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn btn-primary" onclick="honControlCargar()"><i class="ti ti-refresh"></i> Actualizar</button>
+        </div>
+      </div>
+
+      <!-- ── PRE-PAGO ── -->
+      <div id="hon-prepago" class="hon-tab" style="display:none;">
+        <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px;">
+          <div class="metric-card success">
+            <div class="metric-label">Listas para pagar</div>
+            <div class="metric-value" id="pre-listas">—</div>
+            <div class="metric-sub">facturas confirmadas</div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-label">Sin CBU</div>
+            <div class="metric-value" id="pre-sin-cbu">—</div>
+            <div class="metric-sub">no entran al lote</div>
+          </div>
+          <div class="metric-card warn">
+            <div class="metric-label">Saldo insuficiente</div>
+            <div class="metric-value" id="pre-sin-saldo">—</div>
+            <div class="metric-sub">cartas en rojo</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Monto del lote</div>
+            <div class="metric-value" id="pre-monto-lote" style="font-size:18px;">—</div>
+            <div class="metric-sub">sin excluidos</div>
+          </div>
+        </div>
+        <div id="pre-alertas"></div>
+        <div class="grid2" style="margin-bottom:16px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-credit-card-off"></i> Sin CBU registrado</div>
+              <span class="badge badge-danger" id="pre-badge-cbu">0</span>
+            </div>
+            <div id="pre-sin-cbu-body" style="padding:16px;color:var(--muted);text-align:center;">Cargando...</div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-chart-bar"></i> Saldos financieros por carta</div>
+            </div>
+            <div id="pre-saldos-body" style="padding:16px;color:var(--muted);text-align:center;">Cargando...</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn btn-primary" onclick="honControlCargar()"><i class="ti ti-refresh"></i> Actualizar</button>
+        </div>
+      </div>
+
+      <!-- ── POST-PAGO ── -->
+      <div id="hon-postpago" class="hon-tab" style="display:none;">
+        <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px;">
+          <div class="metric-card success">
+            <div class="metric-label">Pagadas OK</div>
+            <div class="metric-value" id="post-pagadas">—</div>
+            <div class="metric-sub">del lote enviado</div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-label">Rechazados banco</div>
+            <div class="metric-value" id="post-rechazados">—</div>
+            <div class="metric-sub">esperando info banco</div>
+          </div>
+          <div class="metric-card warn">
+            <div class="metric-label">Pendientes total</div>
+            <div class="metric-value" id="post-pendientes">—</div>
+            <div class="metric-sub">rechazados + sin CBU</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Pagado efectivo</div>
+            <div class="metric-value" id="post-monto" style="font-size:18px;">—</div>
+            <div class="metric-sub" id="post-monto-sub">del lote</div>
+          </div>
+        </div>
+
+        <div class="alert info" style="margin-bottom:12px;">
+          <i class="ti ti-info-circle"></i>
+          <div>Para registrar rechazos del banco, ingresá el monto rechazado. El sistema muestra todos los candidatos con ese monto para identificar manualmente cuando el banco responda.</div>
+        </div>
+
+        <div class="grid2" style="margin-bottom:16px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-search"></i> Buscar rechazado por monto</div>
+            </div>
+            <div class="card-body">
+              <div class="field">
+                <label>Monto rechazado por el banco</label>
+                <div style="display:flex;gap:8px;">
+                  <input type="number" id="post-monto-buscar" placeholder="980500" style="flex:1;">
+                  <button class="btn btn-primary" onclick="postBuscarRechazo()"><i class="ti ti-search"></i> Buscar</button>
+                </div>
+              </div>
+              <div id="post-candidatos" style="margin-top:12px;"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-clock"></i> Pendientes históricos</div>
+              <span class="badge badge-warn" id="post-badge-pendientes">0</span>
+            </div>
+            <div id="post-pendientes-body" style="padding:16px;color:var(--muted);text-align:center;">Cargando...</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-history"></i> Historial del ciclo</div>
+          </div>
+          <div id="post-historial-body" style="padding:16px;color:var(--muted);text-align:center;">Cargando...</div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <button class="btn btn-primary" onclick="honControlCargar()"><i class="ti ti-refresh"></i> Actualizar</button>
+        </div>
+      </div>
+
+<!-- ── POR CARTA ── -->
       <div id="hon-cartas" class="hon-tab" style="display:none;">
         <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
           <select id="sel-carta" style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;" onchange="filterCarta()">
@@ -1776,6 +1926,10 @@ function showHonTab(id, el) {
   document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   if (id === 'resumen') honDashCargar();
+  if (['recepcion','prepago','postpago'].includes(id)) {
+    if (!_honControlData) honControlCargar();
+    else honRenderControl();
+  }
 }
 
 function filterCarta() {}
@@ -1799,25 +1953,7 @@ function setTab29(el, month) {
 // ═══════════════════════════════════════════════════════
 // HONORARIOS — DASHBOARD REAL
 // ═══════════════════════════════════════════════════════
-const HON_CARTAS_FILTRO = [
-  '10.SENASA.23.1',
-  '10.SENASA.27.1',
-  '10.SENASA.28.1',
-  '10.SENASA.29',
-  '10.INTA.CTRAL.C93.CA13.1',
-  '10.INTA.CTRAL.C93.CA36.1',
-  '10.MAABA.613.1'
-];
-
-// Ciclo anterior: 28 abr - 15 may (fecha contable)
-const CICLO_ANT_DESDE = '2026-04-20';
-const CICLO_ANT_HASTA = '2026-05-15';
-// Ciclo actual: 16 may en adelante
-const CICLO_ACT_DESDE = '2026-05-16';
-
-function esCarta(nombre) {
-  return HON_CARTAS_FILTRO.some(f => nombre && nombre.includes(f));
-}
+// Config centralizada en sección PANEL DE CONTROL
 
 async function honDashCargar() {
   const body = document.getElementById('hon-dash-cartas-body');
@@ -2118,7 +2254,7 @@ async function honExtractWithClaude(file, intentos = 3) {
       } catch(parseErr) {
         const match = text.match(/\{[\s\S]*\}/);
         if (match) return JSON.parse(match[0]);
-        if (intento < intentos) { await new Promise(r => setTimeout(r, 6000)); continue; }
+        if (intento < intentos) { await new Promise(r => setTimeout(r, 2000)); continue; }
         throw new Error('JSON inválido de Claude: ' + text.substring(0, 100));
       }
     } catch(e) {
@@ -2279,7 +2415,7 @@ async function honProcesar() {
     }
 
     // Pausa entre archivos para no saturar la API
-    await new Promise(r => setTimeout(r, 6000));
+    await new Promise(r => setTimeout(r, 2000));
   }
 
   pf.style.width = '100%';
@@ -2310,6 +2446,351 @@ document.querySelector('.nav-item[onclick*="honorarios"]')?.addEventListener('cl
   honCargarCartas();
   honDashCargar();
 });
+
+// ═══════════════════════════════════════════════════════
+// HONORARIOS — PANEL DE CONTROL (Recepción / Pre-pago / Post-pago)
+// ═══════════════════════════════════════════════════════
+
+const HON_CARTAS_FILTRO = [
+  '10.SENASA.23.1', '10.SENASA.27.1', '10.SENASA.28.1', '10.SENASA.29',
+  '10.INTA.CTRL.C93.CA13.1', '10.INTA.CTRL.C93.CA36.1', '10.MAABA.613.1'
+];
+const CICLO_ANT_DESDE = '2026-04-20';
+const CICLO_ANT_HASTA = '2026-05-15';
+const CICLO_ACT_DESDE = '2026-05-16';
+
+function esCarta(nombre) {
+  return HON_CARTAS_FILTRO.some(f => nombre && nombre.includes(f));
+}
+
+let _honControlData = null; // cache
+
+async function honControlCargar() {
+  // Load data for all 3 panels
+  _honControlData = null;
+
+  try {
+    // 1. Get all analytic accounts
+    const todasCartas = await odooCall('account.analytic.account', 'search_read',
+      [[['active','=',true]]], {fields:['id','name'], order:'name asc'});
+    const cartasHon = todasCartas.filter(c => esCarta(c.name));
+    const cartaIds = cartasHon.map(c => c.id);
+
+    if (!cartaIds.length) { _honControlData = {error: 'No se encontraron cartas'}; honRenderControl(); return; }
+
+    // 2. Move lines ciclo anterior (expected)
+    const antLineas = await odooCall('account.move.line', 'search_read', [[
+      ['move_id.move_type','=','in_invoice'],
+      ['move_id.date','>=',CICLO_ANT_DESDE],
+      ['move_id.date','<=',CICLO_ANT_HASTA],
+      ['move_id.state','=','posted'],
+      ['analytic_distribution','!=',false]
+    ]], {fields:['move_id','analytic_distribution','price_subtotal','partner_id'], limit:5000});
+
+    // 3. Move lines ciclo actual
+    const actLineas = await odooCall('account.move.line', 'search_read', [[
+      ['move_id.move_type','=','in_invoice'],
+      ['move_id.date','>=',CICLO_ACT_DESDE],
+      ['move_id.state','=','posted'],
+      ['analytic_distribution','!=',false]
+    ]], {fields:['move_id','analytic_distribution','price_subtotal','partner_id'], limit:5000});
+
+    // 4. Get invoices with CBU info for current cycle
+    const actMoveIds = [...new Set(actLineas.map(l => l.move_id[0]))];
+    let facturasCBU = [];
+    if (actMoveIds.length > 0) {
+      // Get in batches of 100
+      for (let i = 0; i < actMoveIds.length; i += 100) {
+        const batch = actMoveIds.slice(i, i + 100);
+        const r = await odooCall('account.move', 'search_read',
+          [[['id','in',batch]]],
+          {fields:['id','partner_id','partner_bank_id','amount_total','payment_state'], limit:200});
+        facturasCBU = facturasCBU.concat(r);
+      }
+    }
+
+    // 5. Saldos financieros — via account.analytic.line with x_plan2_id
+    const saldosData = {};
+    for (const carta of cartasHon) {
+      try {
+        const lineas = await odooCall('account.analytic.line', 'search_read',
+          [[['x_plan2_id','=',carta.id]]],
+          {fields:['amount','general_account_id'], limit:10000});
+        
+        // Filter by asset_cash and asset_current account types
+        // We need account types - get them
+        const accountIds = [...new Set(lineas.map(l => l.general_account_id?.[0]).filter(Boolean))];
+        let accountTypes = {};
+        if (accountIds.length > 0) {
+          const accounts = await odooCall('account.account', 'search_read',
+            [[['id','in',accountIds]]],
+            {fields:['id','account_type','name'], limit:500});
+          accounts.forEach(a => {
+            accountTypes[a.id] = {type: a.account_type, name: typeof a.name === 'object' ? (a.name.es_AR || a.name.en_US || '') : a.name};
+          });
+        }
+        
+        let saldo = 0;
+        lineas.forEach(l => {
+          const accId = l.general_account_id?.[0];
+          if (!accId) return;
+          const acc = accountTypes[accId];
+          if (!acc) return;
+          if (!['asset_cash','asset_current'].includes(acc.type)) return;
+          const nombre = acc.name.toLowerCase();
+          if (nombre.includes('anticipo') || nombre.includes('fondos de terceros')) return;
+          saldo += l.amount;
+        });
+        
+        saldosData[carta.id] = saldo * -1; // invertir signo
+      } catch(e) {
+        saldosData[carta.id] = null;
+      }
+    }
+
+    // Group lines by carta
+    function agruparPorCarta(lineas, cartaIds) {
+      const resultado = {};
+      const movesVistas = {};
+      cartaIds.forEach(id => resultado[id] = { moves: new Set(), monto: 0, partners: [] });
+      lineas.forEach(l => {
+        if (!l.analytic_distribution) return;
+        Object.keys(l.analytic_distribution).forEach(cidStr => {
+          const cid = parseInt(cidStr);
+          if (!resultado[cid]) return;
+          const moveId = l.move_id[0];
+          const key = `${cid}-${moveId}`;
+          if (!movesVistas[key]) {
+            resultado[cid].moves.add(moveId);
+            resultado[cid].monto += l.price_subtotal || 0;
+            if (l.partner_id) resultado[cid].partners.push({id: l.partner_id[0], name: l.partner_id[1], moveId});
+            movesVistas[key] = true;
+          }
+        });
+      });
+      return resultado;
+    }
+
+    const antAgr = agruparPorCarta(antLineas, cartaIds);
+    const actAgr = agruparPorCarta(actLineas, cartaIds);
+
+    // Build CBU map from facturas
+    const cbuMap = {};
+    facturasCBU.forEach(f => {
+      cbuMap[f.id] = {
+        hasCBU: !!f.partner_bank_id,
+        cbu: f.partner_bank_id ? f.partner_bank_id[1] : null,
+        partner: f.partner_id,
+        monto: f.amount_total,
+        paymentState: f.payment_state
+      };
+    });
+
+    // Build resumen per carta
+    const resumen = {};
+    cartasHon.forEach(c => {
+      const actMoves = [...actAgr[c.id].moves];
+      const sinCBU = actMoves.filter(mid => cbuMap[mid] && !cbuMap[mid].hasCBU);
+      const saldo = saldosData[c.id];
+      const montoAct = actAgr[c.id].monto;
+      
+      resumen[c.id] = {
+        id: c.id, name: c.name,
+        esperado: antAgr[c.id].moves.size,
+        montoAnt: antAgr[c.id].monto,
+        actual: actAgr[c.id].moves.size,
+        montoAct,
+        sinCBU: sinCBU.map(mid => cbuMap[mid]),
+        saldoFinanciero: saldo,
+        saldoOK: saldo === null ? true : saldo >= montoAct,
+        paymentStates: actMoves.map(mid => cbuMap[mid]?.paymentState).filter(Boolean)
+      };
+    });
+
+    _honControlData = { resumen, cartasHon, cartaIds, cbuMap, actLineas, antLineas };
+    honRenderControl();
+
+  } catch(e) {
+    _honControlData = {error: e.message};
+    honRenderControl();
+  }
+}
+
+function honRenderControl() {
+  if (!_honControlData) return;
+  if (_honControlData.error) {
+    ['rec-cartas-body','pre-sin-cbu-body','pre-saldos-body','post-pendientes-body'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = `<div class="alert danger"><i class="ti ti-x"></i><div>${_honControlData.error}</div></div>`;
+    });
+    return;
+  }
+
+  const { resumen } = _honControlData;
+  const vals = Object.values(resumen);
+  const fmt = n => '$' + (n/1000000).toFixed(2) + 'M';
+  const fmtN = n => n ? '$' + n.toLocaleString('es-AR') : '—';
+
+  // ── RECEPCIÓN ──
+  const totalEsp = vals.reduce((s,c) => s+c.esperado, 0);
+  const totalAct = vals.reduce((s,c) => s+c.actual, 0);
+  const totalMonto = vals.reduce((s,c) => s+c.montoAct, 0);
+  const faltantes = Math.max(0, totalEsp - totalAct);
+  const cartasOK = vals.filter(c => c.esperado > 0 && c.actual >= c.esperado).length;
+  const cartasConDatos = vals.filter(c => c.esperado > 0).length;
+
+  document.getElementById('rec-total-recibidas').textContent = totalAct;
+  document.getElementById('rec-sub-recibidas').textContent = `de ${totalEsp} esperadas`;
+  document.getElementById('rec-total-faltantes').textContent = faltantes;
+  document.getElementById('rec-total-monto').textContent = fmt(totalMonto);
+  document.getElementById('rec-cartas-ok').textContent = `${cartasOK}/${cartasConDatos}`;
+  document.getElementById('rec-cartas-sub').textContent = 'cartas completas';
+
+  const recAlerta = document.getElementById('rec-alertas');
+  recAlerta.innerHTML = faltantes > 0
+    ? `<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-alert-circle"></i><div><strong>${faltantes} facturas faltantes</strong> vs ciclo anterior.</div></div>`
+    : totalAct > 0 ? `<div class="alert success" style="margin-bottom:8px;"><i class="ti ti-circle-check"></i><div>Todo completo para este ciclo.</div></div>`
+    : `<div class="alert info" style="margin-bottom:8px;"><i class="ti ti-info-circle"></i><div>Ciclo actual sin facturas aún. Esperado: ${totalEsp}.</div></div>`;
+
+  const cartasOrdenadas = vals.sort((a,b) => b.esperado - a.esperado).filter(c => c.esperado > 0 || c.actual > 0);
+  document.getElementById('rec-cartas-body').innerHTML = cartasOrdenadas.map(c => {
+    const pct = c.esperado > 0 ? Math.min(100, Math.round(c.actual/c.esperado*100)) : (c.actual > 0 ? 100 : 0);
+    const estado = c.actual >= c.esperado && c.esperado > 0 ? 'lista' : c.actual > 0 ? 'parcial' : 'inicio';
+    const borde = estado === 'lista' ? 'var(--verde)' : estado === 'parcial' ? '#e0820a' : '#ccc';
+    const badge = estado === 'lista' ? '<span class="badge badge-ok">✓ Completa</span>'
+      : `<span class="badge badge-warn">⚠ ${c.esperado - c.actual} faltantes</span>`;
+    const fill = pct >= 100 ? 'var(--verde)' : pct > 50 ? '#e0820a' : 'var(--danger)';
+    return `<div style="border:1px solid var(--border);border-left:4px solid ${borde};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;background:${estado==='parcial'?'#fffdf8':'var(--surface)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:13px;font-weight:600;">${c.name}</div>
+        <div style="display:flex;gap:6px;">${badge}<span class="badge badge-muted">${c.actual}/${c.esperado}</span></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:8px;">
+        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">RECIBIDAS</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${c.actual>=c.esperado?'var(--success)':'var(--warn)'};">${c.actual}</div></div>
+        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">ESPERADAS</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;">${c.esperado}</div></div>
+        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">MONTO ACT.</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;">${fmt(c.montoAct)}</div></div>
+        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">MONTO ANT.</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--muted);">${fmt(c.montoAnt)}</div></div>
+      </div>
+      <div style="background:#e8f0ea;border-radius:99px;height:6px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${fill};border-radius:99px;"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── PRE-PAGO ──
+  const totalSinCBU = vals.reduce((s,c) => s + c.sinCBU.length, 0);
+  const totalConCBU = totalAct - totalSinCBU;
+  const montoLote = vals.reduce((s,c) => s + (c.montoAct - c.sinCBU.reduce((ss,f) => ss+(f.monto||0), 0)), 0);
+  const cartasSinSaldo = vals.filter(c => c.saldoFinanciero !== null && !c.saldoOK);
+
+  document.getElementById('pre-listas').textContent = totalConCBU;
+  document.getElementById('pre-sin-cbu').textContent = totalSinCBU;
+  document.getElementById('pre-sin-saldo').textContent = cartasSinSaldo.length;
+  document.getElementById('pre-monto-lote').textContent = fmt(montoLote);
+  document.getElementById('pre-badge-cbu').textContent = totalSinCBU;
+
+  const preAlertas = document.getElementById('pre-alertas');
+  preAlertas.innerHTML = '';
+  if (cartasSinSaldo.length > 0) {
+    preAlertas.innerHTML += `<div class="alert danger" style="margin-bottom:8px;"><i class="ti ti-alert-triangle"></i><div><strong>${cartasSinSaldo.length} carta(s) con saldo insuficiente:</strong> ${cartasSinSaldo.map(c => c.name.split(' ')[0]).join(', ')}. Las facturas no se podrán confirmar.</div></div>`;
+  }
+  if (totalSinCBU > 0) {
+    preAlertas.innerHTML += `<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-credit-card-off"></i><div><strong>${totalSinCBU} proveedor(es) sin CBU</strong> — no entran al lote de Interbanking.</div></div>`;
+  }
+  if (cartasSinSaldo.length === 0 && totalSinCBU === 0 && totalAct > 0) {
+    preAlertas.innerHTML += `<div class="alert success" style="margin-bottom:8px;"><i class="ti ti-circle-check"></i><div><strong>Todo OK para el lote.</strong> ${totalAct} facturas listas, saldos suficientes, todas con CBU.</div></div>`;
+  }
+
+  // Sin CBU list
+  const sinCBUList = vals.flatMap(c => c.sinCBU.map(f => ({...f, carta: c.name})));
+  document.getElementById('pre-sin-cbu-body').innerHTML = sinCBUList.length === 0
+    ? '<div style="text-align:center;padding:20px;color:var(--muted);">✓ Todos tienen CBU registrado</div>'
+    : sinCBUList.map(f => `
+      <div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--danger-bg);color:var(--danger);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">?</div>
+        <div style="flex:1;">
+          <div style="font-weight:500;">${f.partner?.[1] || '—'}</div>
+          <div style="font-size:11px;color:var(--muted);">${f.carta}</div>
+        </div>
+        <span class="badge badge-danger">Sin CBU</span>
+      </div>`).join('');
+
+  // Saldos financieros
+  document.getElementById('pre-saldos-body').innerHTML = cartasOrdenadas.map(c => {
+    const saldo = c.saldoFinanciero;
+    const monto = c.montoAct;
+    const ok = saldo === null ? true : saldo >= monto;
+    const saldoStr = saldo === null ? '—' : fmtN(saldo);
+    const color = saldo === null ? 'var(--muted)' : ok ? 'var(--success)' : 'var(--danger)';
+    return `<div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="font-size:12px;font-weight:500;">${c.name.split(' ')[0]}</div>
+      <div style="text-align:right;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:${color};">${saldoStr}</div>
+        <div style="font-size:10px;color:var(--muted);">Monto lote: ${fmt(monto)}</div>
+      </div>
+      <span class="badge ${ok ? 'badge-ok' : 'badge-danger'}">${ok ? '✓ OK' : '✗ Insuf.'}</span>
+    </div>`;
+  }).join('');
+
+  // ── POST-PAGO ──
+  const pagadas = vals.reduce((s,c) => s + c.paymentStates.filter(p => p === 'paid' || p === 'in_payment').length, 0);
+  const enProceso = vals.reduce((s,c) => s + c.paymentStates.filter(p => p === 'not_paid' || p === 'partial').length, 0);
+  document.getElementById('post-pagadas').textContent = pagadas;
+  document.getElementById('post-rechazados').textContent = '?';
+  document.getElementById('post-pendientes').textContent = totalSinCBU + enProceso;
+  document.getElementById('post-monto').textContent = fmt(montoLote);
+
+  document.getElementById('post-pendientes-body').innerHTML = sinCBUList.length === 0
+    ? '<div style="text-align:center;padding:20px;color:var(--muted);">Sin pendientes históricos</div>'
+    : sinCBUList.map(f => `
+      <div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;"><div style="font-weight:500;">${f.partner?.[1] || '—'}</div><div style="font-size:11px;color:var(--muted);">${f.carta} · Sin CBU</div></div>
+        <span class="badge badge-danger">Sin CBU</span>
+      </div>`).join('');
+
+  document.getElementById('post-historial-body').innerHTML = `
+    <table>
+      <thead><tr><th>Evento</th><th>Facturas</th><th>Monto</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>Recibidas este ciclo</td><td class="mono">${totalAct}</td><td class="mono">${fmt(totalMonto)}</td><td><span class="badge badge-ok">OK</span></td></tr>
+        <tr><td>Lote Interbanking (con CBU)</td><td class="mono">${totalConCBU}</td><td class="mono">${fmt(montoLote)}</td><td><span class="badge ${totalConCBU > 0 ? 'badge-ok' : 'badge-muted'}">${totalConCBU > 0 ? 'Listo' : 'Pendiente'}</span></td></tr>
+        <tr><td>Sin CBU (excluidas)</td><td class="mono">${totalSinCBU}</td><td class="mono">—</td><td><span class="badge badge-danger">Sin resolver</span></td></tr>
+        <tr><td>Pagadas</td><td class="mono">${pagadas}</td><td class="mono">—</td><td><span class="badge ${pagadas > 0 ? 'badge-ok' : 'badge-muted'}">${pagadas > 0 ? 'Pagado' : 'Pendiente'}</span></td></tr>
+      </tbody>
+    </table>`;
+}
+
+async function postBuscarRechazo() {
+  const monto = parseFloat(document.getElementById('post-monto-buscar').value);
+  if (!monto) return;
+  
+  const div = document.getElementById('post-candidatos');
+  div.innerHTML = '<div style="color:var(--muted);font-size:12px;">Buscando...</div>';
+
+  try {
+    const lineas = await odooCall('account.move.line', 'search_read', [[
+      ['move_id.move_type','=','in_invoice'],
+      ['move_id.date','>=',CICLO_ACT_DESDE],
+      ['move_id.state','=','posted'],
+      ['price_subtotal','=',monto]
+    ]], {fields:['move_id','partner_id','analytic_distribution'], limit:50});
+
+    if (!lineas.length) {
+      div.innerHTML = '<div class="alert info"><i class="ti ti-info-circle"></i><div>No se encontraron facturas con ese monto en el ciclo actual.</div></div>';
+      return;
+    }
+
+    div.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;">${lineas.length} candidato(s) con monto $${monto.toLocaleString('es-AR')}:</div>` +
+      lineas.map(l => `
+        <div style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--warn-bg);">
+          <div style="font-weight:500;">${l.partner_id?.[1] || '—'}</div>
+          <div style="font-size:11px;color:var(--muted);">Factura #${l.move_id?.[0]} · Monto: $${monto.toLocaleString('es-AR')}</div>
+        </div>`).join('');
+  } catch(e) {
+    div.innerHTML = `<div class="alert danger"><i class="ti ti-x"></i><div>${e.message}</div></div>`;
+  }
+}
+
 let compSelectedFile = null;
 let compBanco = 'interbanking';
 let compZipBlob = null;
