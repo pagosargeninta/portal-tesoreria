@@ -1808,13 +1808,13 @@ const HON_CARTAS_FILTRO = [
 ];
 
 // Ciclo anterior: 28 abr - 15 may (fecha contable)
-const CICLO_ANT_DESDE = '2026-04-28';
+const CICLO_ANT_DESDE = '2026-04-20';
 const CICLO_ANT_HASTA = '2026-05-15';
 // Ciclo actual: 16 may en adelante
 const CICLO_ACT_DESDE = '2026-05-16';
 
 function esCarta(nombre) {
-  return HON_CARTAS_FILTRO.some(f => nombre && (nombre === f || nombre.startsWith(f + ' ') || nombre.startsWith(f + '-')));
+  return HON_CARTAS_FILTRO.some(f => nombre && nombre.includes(f));
 }
 
 async function honDashCargar() {
