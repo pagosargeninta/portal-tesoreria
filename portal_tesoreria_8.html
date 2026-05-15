@@ -1775,7 +1775,6 @@ function showHonTab(id, el) {
   if (tab) tab.style.display = 'block';
   document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
-  if (id === 'resumen') honDashCargar();
 }
 
 function filterCarta() {}
@@ -1800,22 +1799,19 @@ function setTab29(el, month) {
 // HONORARIOS — DASHBOARD REAL
 // ═══════════════════════════════════════════════════════
 const HON_CARTAS_FILTRO = [
-  '10.SENASA.23.1',
-  '10.SENASA.27.1',
-  '10.SENASA.28.1',
-  '10.SENASA.29',
+  '10.SENASA',
   '10.INTA.CTRAL.C93.CA13.1',
   '10.INTA.CTRAL.C93.CA36.1'
 ];
 
-// Ciclo anterior: 28 abr - 15 may (fecha contable)
-const CICLO_ANT_DESDE = '2026-04-20';
+// Ciclo anterior: 28 abr - 15 may
+const CICLO_ANT_DESDE = '2026-04-28';
 const CICLO_ANT_HASTA = '2026-05-15';
 // Ciclo actual: 16 may en adelante
 const CICLO_ACT_DESDE = '2026-05-16';
 
 function esCarta(nombre) {
-  return HON_CARTAS_FILTRO.some(f => nombre && nombre.includes(f));
+  return HON_CARTAS_FILTRO.some(f => nombre && nombre.startsWith(f));
 }
 
 async function honDashCargar() {
@@ -1837,17 +1833,17 @@ async function honDashCargar() {
     // 2. Buscar líneas de factura con distribución analítica en ciclo anterior
     const antLineas = await odooCall('account.move.line', 'search_read', [[
       ['move_id.move_type','=','in_invoice'],
-      ['move_id.date','>=',CICLO_ANT_DESDE],
-      ['move_id.date','<=',CICLO_ANT_HASTA],
-      ['move_id.state','=','posted'],
+      ['move_id.invoice_date','>=',CICLO_ANT_DESDE],
+      ['move_id.invoice_date','<=',CICLO_ANT_HASTA],
+      ['move_id.state','in',['posted','paid']],
       ['analytic_distribution','!=',false]
     ]], {fields:['move_id','analytic_distribution','price_subtotal'], limit:5000});
 
     // 3. Buscar líneas ciclo actual
     const actLineas = await odooCall('account.move.line', 'search_read', [[
       ['move_id.move_type','=','in_invoice'],
-      ['move_id.date','>=',CICLO_ACT_DESDE],
-      ['move_id.state','=','posted'],
+      ['move_id.invoice_date','>=',CICLO_ACT_DESDE],
+      ['move_id.state','in',['draft','posted','paid']],
       ['analytic_distribution','!=',false]
     ]], {fields:['move_id','analytic_distribution','price_subtotal'], limit:5000});
 
@@ -1956,6 +1952,20 @@ async function honDashCargar() {
   }
 }
 
+// Auto-cargar cuando se muestra el resumen
+const _origShowHonTab = window.showHonTab;
+window.showHonTab = function(id, el) {
+  if (typeof _origShowHonTab === 'function') _origShowHonTab(id, el);
+  else {
+    document.querySelectorAll('.hon-tab').forEach(t => t.style.display = 'none');
+    const tab = document.getElementById('hon-' + id);
+    if (tab) tab.style.display = 'block';
+    document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
+    if (el) el.classList.add('active');
+  }
+  if (id === 'resumen') honDashCargar();
+};
+
 // ═══════════════════════════════════════════════════════
 // HONORARIOS — CARGA CON IA
 // ═══════════════════════════════════════════════════════
@@ -2009,6 +2019,10 @@ function honFiltrarCartas() {
 }
 
 // Load cartas when honorarios page is shown
+const origShowPage = window.showPage;
+
+
+
 function honAddFiles(files) {
   honFiles = [...honFiles, ...files.filter(f => !honFiles.find(x=>x.name===f.name))];
   document.getElementById('hon-count-sel').textContent = honFiles.length;
@@ -2091,23 +2105,6 @@ async function honExtractWithClaude(file, intentos = 3) {
   }
 }
 
-async function honAdjuntarPDF(file, invoiceId) {
-  const b64 = await new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result.split(',')[1]);
-    r.onerror = () => rej(new Error('Error leyendo archivo'));
-    r.readAsDataURL(file);
-  });
-  await odooCall('ir.attachment', 'create', [{
-    name: file.name,
-    type: 'binary',
-    datas: b64,
-    res_model: 'account.move',
-    res_id: invoiceId,
-    mimetype: 'application/pdf',
-  }]);
-}
-
 async function honCrearFactura(datos, cartaId) {
   _odooUid = null; // forzar re-auth en cada factura
   const parseNum = v => parseFloat((v||'0').toString().replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
@@ -2182,8 +2179,6 @@ async function honProcesar() {
       const conf = datos.confidence || 0;
       const fmt = n => n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—';
       const odooId = await honCrearFactura(datos, cartaId);
-      // Adjuntar PDF original a la factura
-      try { await honAdjuntarPDF(file, odooId); } catch(adjErr) { console.warn('No se pudo adjuntar PDF:', adjErr.message); }
       okCount++;
       document.getElementById('hon-count-ok').textContent = okCount;
       const confBadge = conf >= 75 ? 'badge-ok' : 'badge-warn';
