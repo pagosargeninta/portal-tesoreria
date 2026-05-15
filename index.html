@@ -1805,7 +1805,8 @@ const HON_CARTAS_FILTRO = [
   '10.SENASA.28.1',
   '10.SENASA.29',
   '10.INTA.CTRAL.C93.CA13.1',
-  '10.INTA.CTRAL.C93.CA36.1'
+  '10.INTA.CTRAL.C93.CA36.1',
+  '10.MAABA.613.1'
 ];
 
 // Ciclo anterior: 28 abr - 15 may (fecha contable)
@@ -2117,7 +2118,7 @@ async function honExtractWithClaude(file, intentos = 3) {
       } catch(parseErr) {
         const match = text.match(/\{[\s\S]*\}/);
         if (match) return JSON.parse(match[0]);
-        if (intento < intentos) { await new Promise(r => setTimeout(r, 2000)); continue; }
+        if (intento < intentos) { await new Promise(r => setTimeout(r, 6000)); continue; }
         throw new Error('JSON inválido de Claude: ' + text.substring(0, 100));
       }
     } catch(e) {
@@ -2278,7 +2279,7 @@ async function honProcesar() {
     }
 
     // Pausa entre archivos para no saturar la API
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 6000));
   }
 
   pf.style.width = '100%';
