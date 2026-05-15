@@ -1799,19 +1799,22 @@ function setTab29(el, month) {
 // HONORARIOS — DASHBOARD REAL
 // ═══════════════════════════════════════════════════════
 const HON_CARTAS_FILTRO = [
-  '10.SENASA',
+  '10.SENASA.23.1',
+  '10.SENASA.27.1',
+  '10.SENASA.28.1',
+  '10.SENASA.29',
   '10.INTA.CTRAL.C93.CA13.1',
   '10.INTA.CTRAL.C93.CA36.1'
 ];
 
-// Ciclo anterior: 28 abr - 15 may
+// Ciclo anterior: 28 abr - 15 may (fecha contable)
 const CICLO_ANT_DESDE = '2026-04-28';
 const CICLO_ANT_HASTA = '2026-05-15';
 // Ciclo actual: 16 may en adelante
 const CICLO_ACT_DESDE = '2026-05-16';
 
 function esCarta(nombre) {
-  return HON_CARTAS_FILTRO.some(f => nombre && nombre.startsWith(f));
+  return HON_CARTAS_FILTRO.some(f => nombre && (nombre === f || nombre.startsWith(f + ' ') || nombre.startsWith(f + '-')));
 }
 
 async function honDashCargar() {
@@ -1833,17 +1836,17 @@ async function honDashCargar() {
     // 2. Buscar líneas de factura con distribución analítica en ciclo anterior
     const antLineas = await odooCall('account.move.line', 'search_read', [[
       ['move_id.move_type','=','in_invoice'],
-      ['move_id.invoice_date','>=',CICLO_ANT_DESDE],
-      ['move_id.invoice_date','<=',CICLO_ANT_HASTA],
-      ['move_id.state','in',['posted','paid']],
+      ['move_id.date','>=',CICLO_ANT_DESDE],
+      ['move_id.date','<=',CICLO_ANT_HASTA],
+      ['move_id.state','=','posted'],
       ['analytic_distribution','!=',false]
     ]], {fields:['move_id','analytic_distribution','price_subtotal'], limit:5000});
 
     // 3. Buscar líneas ciclo actual
     const actLineas = await odooCall('account.move.line', 'search_read', [[
       ['move_id.move_type','=','in_invoice'],
-      ['move_id.invoice_date','>=',CICLO_ACT_DESDE],
-      ['move_id.state','in',['draft','posted','paid']],
+      ['move_id.date','>=',CICLO_ACT_DESDE],
+      ['move_id.state','=','posted'],
       ['analytic_distribution','!=',false]
     ]], {fields:['move_id','analytic_distribution','price_subtotal'], limit:5000});
 
