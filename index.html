@@ -724,36 +724,44 @@ tbody tr:hover td { background: #f8faf9; }
 
       <!-- ── RESUMEN GENERAL ── -->
       <div id="hon-resumen" class="hon-tab">
-        <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));">
+        <!-- Métricas globales -->
+        <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px;">
           <div class="metric-card success">
-            <div class="metric-label">Cargadas esta sesión</div>
-            <div class="metric-value" id="hon-total-ok">0</div>
-            <div class="metric-sub">facturas en Odoo</div>
+            <div class="metric-label">Recibidas este ciclo</div>
+            <div class="metric-value" id="hon-dash-recibidas">—</div>
+            <div class="metric-sub" id="hon-dash-esperadas-sub">cargando...</div>
           </div>
           <div class="metric-card warn">
-            <div class="metric-label">A revisar</div>
-            <div class="metric-value" id="hon-total-rev">0</div>
-            <div class="metric-sub">confianza IA &lt;75%</div>
-          </div>
-          <div class="metric-card danger">
-            <div class="metric-label">Errores</div>
-            <div class="metric-value" id="hon-total-err">0</div>
-            <div class="metric-sub">no cargadas</div>
+            <div class="metric-label">Faltantes</div>
+            <div class="metric-value" id="hon-dash-faltantes">—</div>
+            <div class="metric-sub">vs ciclo anterior</div>
           </div>
           <div class="metric-card">
-            <div class="metric-label">Monto cargado</div>
-            <div class="metric-value" id="hon-total-monto" style="font-size:18px;">$0</div>
-            <div class="metric-sub">esta sesión</div>
+            <div class="metric-label">Monto total</div>
+            <div class="metric-value" id="hon-dash-monto" style="font-size:18px;">—</div>
+            <div class="metric-sub" id="hon-dash-var">este ciclo</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Cartas completas</div>
+            <div class="metric-value" id="hon-dash-cartas">—</div>
+            <div class="metric-sub">de las monitoreadas</div>
           </div>
         </div>
-        <div class="card">
-          <div class="card-body" style="text-align:center;padding:32px;">
-            <i class="ti ti-file-invoice" style="font-size:40px;color:var(--muted);opacity:0.3;display:block;margin-bottom:12px;"></i>
-            <div style="font-size:14px;color:var(--muted);margin-bottom:16px;">Para cargar honorarios, usá el sub-tab <strong>Cargar PDFs</strong></div>
-            <button class="btn btn-primary" onclick="showHonTab('carga', document.querySelectorAll('#page-honorarios .tab-btn')[2])">
-              <i class="ti ti-upload"></i> Ir a Cargar PDFs
-            </button>
+
+        <!-- Alertas -->
+        <div id="hon-dash-alertas"></div>
+
+        <!-- Por carta -->
+        <div id="hon-dash-cartas-body">
+          <div style="text-align:center;padding:40px;color:var(--muted);">
+            <i class="ti ti-loader" style="font-size:28px;display:block;margin-bottom:10px;"></i>
+            Cargando datos de Odoo...
           </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px;">
+          <button class="btn btn-primary" onclick="honDashCargar()"><i class="ti ti-refresh"></i> Actualizar</button>
+          <button class="btn" onclick="showHonTab('carga', document.querySelectorAll('#page-honorarios .tab-btn')[2])"><i class="ti ti-upload"></i> Cargar PDFs</button>
         </div>
       </div>
 
@@ -1788,6 +1796,179 @@ function setTab29(el, month) {
 }
 
 // ═══════════════════════════════════════════════════════
+// HONORARIOS — DASHBOARD REAL
+// ═══════════════════════════════════════════════════════
+const HON_CARTAS_FILTRO = [
+  '10.SENASA',
+  '10.INTA.CTRAL.C93.CA13.1',
+  '10.INTA.CTRAL.C93.CA36.1'
+];
+
+// Ciclo anterior: 28 abr - 15 may
+const CICLO_ANT_DESDE = '2026-04-28';
+const CICLO_ANT_HASTA = '2026-05-15';
+// Ciclo actual: 16 may en adelante
+const CICLO_ACT_DESDE = '2026-05-16';
+
+function esCarta(nombre) {
+  return HON_CARTAS_FILTRO.some(f => nombre && nombre.startsWith(f));
+}
+
+async function honDashCargar() {
+  const body = document.getElementById('hon-dash-cartas-body');
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><i class="ti ti-loader" style="font-size:28px;display:block;margin-bottom:10px;"></i>Consultando Odoo...</div>';
+
+  try {
+    // 1. Traer todas las cartas de honorarios
+    const todasCartas = await odooCall('account.analytic.account', 'search_read',
+      [[['active','=',true]]], {fields:['id','name'], order:'name asc'});
+    const cartasHon = todasCartas.filter(c => esCarta(c.name));
+    const cartaIds = cartasHon.map(c => c.id);
+
+    if (!cartaIds.length) {
+      body.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted);">No se encontraron cartas de honorarios.</div>';
+      return;
+    }
+
+    // 2. Facturas ciclo anterior (esperado)
+    const antFacturas = await odooCall('account.move', 'search_read', [[
+      ['move_type','=','in_invoice'],
+      ['invoice_date','>=',CICLO_ANT_DESDE],
+      ['invoice_date','<=',CICLO_ANT_HASTA],
+      ['state','in',['posted','paid']]
+    ]], {fields:['id','partner_id','invoice_line_ids','amount_total','analytic_distribution','invoice_date'], limit:2000});
+
+    // 3. Facturas ciclo actual
+    const actFacturas = await odooCall('account.move', 'search_read', [[
+      ['move_type','=','in_invoice'],
+      ['invoice_date','>=',CICLO_ACT_DESDE],
+      ['state','in',['draft','posted','paid']]
+    ]], {fields:['id','partner_id','amount_total','analytic_distribution','invoice_date','state'], limit:2000});
+
+    // Filtrar por cartas de honorarios
+    function esDeHon(f) {
+      if (!f.analytic_distribution) return false;
+      return Object.keys(f.analytic_distribution).some(id => cartaIds.includes(parseInt(id)));
+    }
+    function getCartaId(f) {
+      if (!f.analytic_distribution) return null;
+      return Object.keys(f.analytic_distribution).map(id => parseInt(id)).find(id => cartaIds.includes(id));
+    }
+
+    const antHon = antFacturas.filter(esDeHon);
+    const actHon = actFacturas.filter(esDeHon);
+
+    // Agrupar por carta
+    const resumen = {};
+    cartasHon.forEach(c => {
+      resumen[c.id] = { id: c.id, name: c.name, esperado: 0, montoAnt: 0, actual: 0, montoAct: 0 };
+    });
+
+    antHon.forEach(f => {
+      const cid = getCartaId(f);
+      if (cid && resumen[cid]) {
+        resumen[cid].esperado++;
+        resumen[cid].montoAnt += f.amount_total || 0;
+      }
+    });
+
+    actHon.forEach(f => {
+      const cid = getCartaId(f);
+      if (cid && resumen[cid]) {
+        resumen[cid].actual++;
+        resumen[cid].montoAct += f.amount_total || 0;
+      }
+    });
+
+    // Totales globales
+    const totalEsperado = Object.values(resumen).reduce((s,c) => s+c.esperado, 0);
+    const totalActual = Object.values(resumen).reduce((s,c) => s+c.actual, 0);
+    const totalMontoAct = Object.values(resumen).reduce((s,c) => s+c.montoAct, 0);
+    const totalMontoAnt = Object.values(resumen).reduce((s,c) => s+c.montoAnt, 0);
+    const faltantes = Math.max(0, totalEsperado - totalActual);
+    const cartasCompletas = Object.values(resumen).filter(c => c.esperado > 0 && c.actual >= c.esperado).length;
+    const cartasConDatos = Object.values(resumen).filter(c => c.esperado > 0).length;
+
+    // Actualizar métricas
+    document.getElementById('hon-dash-recibidas').textContent = totalActual;
+    document.getElementById('hon-dash-esperadas-sub').textContent = `de ${totalEsperado} esperadas (ciclo ant.)`;
+    document.getElementById('hon-dash-faltantes').textContent = faltantes;
+    document.getElementById('hon-dash-monto').textContent = '$' + (totalMontoAct/1000000).toFixed(1) + 'M';
+    document.getElementById('hon-dash-cartas').textContent = `${cartasCompletas}/${cartasConDatos}`;
+
+    const varPct = totalMontoAnt > 0 ? ((totalMontoAct - totalMontoAnt) / totalMontoAnt * 100).toFixed(0) : 0;
+    const varEl = document.getElementById('hon-dash-var');
+    varEl.textContent = varPct >= 0 ? `↑ ${varPct}% vs ciclo ant.` : `↓ ${Math.abs(varPct)}% vs ciclo ant.`;
+    varEl.style.color = varPct > 10 ? 'var(--warn)' : 'var(--muted)';
+
+    // Alertas
+    const alertas = document.getElementById('hon-dash-alertas');
+    alertas.innerHTML = '';
+    if (faltantes > 0) {
+      alertas.innerHTML += `<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-alert-circle"></i><div><strong>${faltantes} facturas faltantes</strong> respecto al ciclo anterior. Revisá las cartas marcadas en naranja.</div></div>`;
+    } else if (totalActual > 0) {
+      alertas.innerHTML += `<div class="alert success" style="margin-bottom:8px;"><i class="ti ti-circle-check"></i><div><strong>Todo completo.</strong> Se recibieron todas las facturas esperadas.</div></div>`;
+    } else {
+      alertas.innerHTML += `<div class="alert info" style="margin-bottom:8px;"><i class="ti ti-info-circle"></i><div>El ciclo actual todavía no tiene facturas cargadas. El esperado es ${totalEsperado} basado en el ciclo anterior.</div></div>`;
+    }
+
+    // Renderizar cartas
+    const fmt = n => '$' + (n/1000000).toFixed(2) + 'M';
+    const cartasOrdenadas = Object.values(resumen).sort((a,b) => b.esperado - a.esperado);
+
+    body.innerHTML = cartasOrdenadas.map(c => {
+      if (c.esperado === 0 && c.actual === 0) return '';
+      const pct = c.esperado > 0 ? Math.min(100, Math.round(c.actual/c.esperado*100)) : (c.actual > 0 ? 100 : 0);
+      const estado = c.esperado === 0 ? 'nuevo' : (c.actual >= c.esperado ? 'lista' : (c.actual > 0 ? 'parcial' : 'inicio'));
+      const colorBorde = estado === 'lista' ? 'var(--verde)' : estado === 'parcial' ? '#e0820a' : estado === 'nuevo' ? 'var(--info)' : '#ccc';
+      const badgeHtml = estado === 'lista'
+        ? '<span class="badge badge-ok">✓ Completa</span>'
+        : estado === 'parcial'
+        ? `<span class="badge badge-warn">⚠ ${c.esperado - c.actual} faltantes</span>`
+        : estado === 'nuevo'
+        ? '<span class="badge badge-info">Nuevo ciclo</span>'
+        : '<span class="badge badge-muted">Sin recibir</span>';
+
+      const fillColor = pct >= 100 ? 'var(--verde)' : pct > 50 ? '#e0820a' : 'var(--danger)';
+
+      return `
+      <div style="border:1px solid var(--border);border-left:4px solid ${colorBorde};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;background:${estado==='parcial'?'#fffdf8':estado==='inicio'?'#fafafa':'var(--surface)'}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:13px;font-weight:600;">${c.name}</div>
+          <div style="display:flex;gap:6px;">${badgeHtml}<span class="badge badge-muted">${c.actual}/${c.esperado > 0 ? c.esperado : '?'}</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:8px;">
+          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Recibidas</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${c.actual>=c.esperado&&c.esperado>0?'var(--success)':'var(--warn)'};">${c.actual}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Esperadas</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;">${c.esperado > 0 ? c.esperado : '—'}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Monto actual</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;">${fmt(c.montoAct)}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Monto ant.</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--muted);">${c.montoAnt > 0 ? fmt(c.montoAnt) : '—'}</div></div>
+        </div>
+        <div style="background:#e8f0ea;border-radius:99px;height:6px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${fillColor};border-radius:99px;transition:width .3s;"></div>
+        </div>
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    body.innerHTML = `<div class="alert danger"><i class="ti ti-x"></i><div>Error cargando datos: ${e.message}</div></div>`;
+  }
+}
+
+// Auto-cargar cuando se muestra el resumen
+const _origShowHonTab = window.showHonTab;
+window.showHonTab = function(id, el) {
+  if (typeof _origShowHonTab === 'function') _origShowHonTab(id, el);
+  else {
+    document.querySelectorAll('.hon-tab').forEach(t => t.style.display = 'none');
+    const tab = document.getElementById('hon-' + id);
+    if (tab) tab.style.display = 'block';
+    document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
+    if (el) el.classList.add('active');
+  }
+  if (id === 'resumen') honDashCargar();
+};
+
+// ═══════════════════════════════════════════════════════
 // HONORARIOS — CARGA CON IA
 // ═══════════════════════════════════════════════════════
 let honFiles = [];
@@ -2051,8 +2232,11 @@ async function honProcesar() {
   document.getElementById('hon-fileInput').value = '';
 }
 
-// Cargar cartas cuando se muestra el módulo honorarios
-document.querySelector('.nav-item[onclick*="honorarios"]')?.addEventListener('click', honCargarCartas);
+// Cargar cartas y dashboard cuando se muestra el módulo honorarios
+document.querySelector('.nav-item[onclick*="honorarios"]')?.addEventListener('click', () => {
+  honCargarCartas();
+  honDashCargar();
+});
 let compSelectedFile = null;
 let compBanco = 'interbanking';
 let compZipBlob = null;
