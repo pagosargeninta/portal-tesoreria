@@ -1775,6 +1775,7 @@ function showHonTab(id, el) {
   if (tab) tab.style.display = 'block';
   document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
+  if (id === 'resumen') honDashCargar();
 }
 
 function filterCarta() {}
@@ -1955,19 +1956,10 @@ async function honDashCargar() {
   }
 }
 
-// Auto-cargar cuando se muestra el resumen
-const _origShowHonTab = window.showHonTab;
-window.showHonTab = function(id, el) {
-  if (typeof _origShowHonTab === 'function') _origShowHonTab(id, el);
-  else {
-    document.querySelectorAll('.hon-tab').forEach(t => t.style.display = 'none');
-    const tab = document.getElementById('hon-' + id);
-    if (tab) tab.style.display = 'block';
-    document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
-    if (el) el.classList.add('active');
-  }
+// Auto-cargar dashboard al mostrar resumen — se llama desde showHonTab
+function honDashAutoLoad(id) {
   if (id === 'resumen') honDashCargar();
-};
+}
 
 // ═══════════════════════════════════════════════════════
 // HONORARIOS — CARGA CON IA
