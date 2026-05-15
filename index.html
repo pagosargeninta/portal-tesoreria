@@ -1775,6 +1775,7 @@ function showHonTab(id, el) {
   if (tab) tab.style.display = 'block';
   document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
+  if (id === 'resumen') honDashCargar();
 }
 
 function filterCarta() {}
@@ -1955,19 +1956,10 @@ async function honDashCargar() {
   }
 }
 
-// Auto-cargar cuando se muestra el resumen
-const _origShowHonTab = window.showHonTab;
-window.showHonTab = function(id, el) {
-  if (typeof _origShowHonTab === 'function') _origShowHonTab(id, el);
-  else {
-    document.querySelectorAll('.hon-tab').forEach(t => t.style.display = 'none');
-    const tab = document.getElementById('hon-' + id);
-    if (tab) tab.style.display = 'block';
-    document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
-    if (el) el.classList.add('active');
-  }
+// Auto-cargar dashboard al mostrar resumen — se llama desde showHonTab
+function honDashAutoLoad(id) {
   if (id === 'resumen') honDashCargar();
-};
+}
 
 // ═══════════════════════════════════════════════════════
 // HONORARIOS — CARGA CON IA
@@ -2108,7 +2100,22 @@ async function honExtractWithClaude(file, intentos = 3) {
   }
 }
 
-async function honCrearFactura(datos, cartaId) {
+async function honAdjuntarPDF(file, invoiceId) {
+  const b64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = () => rej(new Error('Error leyendo archivo'));
+    r.readAsDataURL(file);
+  });
+  await odooCall('ir.attachment', 'create', [{
+    name: file.name,
+    type: 'binary',
+    datas: b64,
+    res_model: 'account.move',
+    res_id: invoiceId,
+    mimetype: 'application/pdf',
+  }]);
+}
   _odooUid = null; // forzar re-auth en cada factura
   const parseNum = v => parseFloat((v||'0').toString().replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
   const neto = parseNum(datos.neto) || parseNum(datos.total);
@@ -2182,6 +2189,8 @@ async function honProcesar() {
       const conf = datos.confidence || 0;
       const fmt = n => n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—';
       const odooId = await honCrearFactura(datos, cartaId);
+      // Adjuntar PDF original a la factura
+      try { await honAdjuntarPDF(file, odooId); } catch(adjErr) { console.warn('No se pudo adjuntar PDF:', adjErr.message); }
       okCount++;
       document.getElementById('hon-count-ok').textContent = okCount;
       const confBadge = conf >= 75 ? 'badge-ok' : 'badge-warn';
