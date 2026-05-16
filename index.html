@@ -2223,30 +2223,20 @@ async function honExtractWithClaude(file, intentos = 3) {
 
   const usarTexto = textoExtraido.length > 150;
 
-  const promptTexto = `Extraé los datos de esta factura argentina. Respondé ÚNICAMENTE con JSON válido, sin texto extra, sin markdown.
+  const promptTexto = `Sos un experto en facturas argentinas. Extraé los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown.
+Formato exacto requerido:
+{"cuit":"11dígitos","razon_social":"nombre","nro_factura":"XXXX-XXXXXXXX","fecha":"YYYY-MM-DD","neto":0.00,"iva":0.00,"total":0.00,"cae":"númerocae","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":95}
 
-REGLAS:
-1. "cuit" y "razon_social" = datos del EMISOR (quien emite/vende). El EMISOR aparece en el encabezado como datos del vendedor/prestador. El RECEPTOR (Fundación ArgenINTA, SENASA u otro organismo comprador) va en "Datos del receptor" — IGNORALO para cuit y razon_social.
-2. "neto", "iva", "total" = números sin puntos de miles, sin $.
-3. "cae" = solo dígitos.
-4. "confidence" = número entero: 100 si tenés certeza de todos los campos, 90 si falta periodo o un campo menor, 70 si el CUIT del emisor es ambiguo.
+confidence es tu nivel de certeza del 0 al 100.
 
-JSON a completar con los valores reales:
-{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":100}
-
-FACTURA:
+TEXTO DE LA FACTURA:
 ${textoExtraido.substring(0, 3500)}`;
 
-  const promptPDF = `Extraé los datos de esta factura argentina. Respondé ÚNICAMENTE con JSON válido, sin texto extra, sin markdown.
+  const promptPDF = `Sos un experto en facturas argentinas. Extraé los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown.
+Formato exacto requerido:
+{"cuit":"11dígitos","razon_social":"nombre","nro_factura":"XXXX-XXXXXXXX","fecha":"YYYY-MM-DD","neto":0.00,"iva":0.00,"total":0.00,"cae":"númerocae","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":95}
 
-REGLAS:
-1. "cuit" y "razon_social" = datos del EMISOR (quien emite/vende). El EMISOR aparece en el encabezado como datos del vendedor/prestador. El RECEPTOR (Fundación ArgenINTA, SENASA u otro organismo comprador) va en "Datos del receptor" — IGNORALO para cuit y razon_social.
-2. "neto", "iva", "total" = números sin puntos de miles, sin $.
-3. "cae" = solo dígitos.
-4. "confidence" = número entero: 100 si tenés certeza de todos los campos, 90 si falta periodo o un campo menor, 70 si el CUIT del emisor es ambiguo.
-
-JSON a completar con los valores reales:
-{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":100}`;
+confidence es tu nivel de certeza del 0 al 100.`;
 
   for (let intento = 1; intento <= intentos; intento++) {
     try {
@@ -2333,6 +2323,12 @@ async function honCrearFactura(datos, cartaId) {
     ? `Honorarios - ${nombre} - Período ${periodoDesde} al ${periodoHasta}`
     : `Honorarios - ${nombre}`;
   const hoy = new Date().toISOString().split('T')[0];
+  // Normalizar fecha: si viene DD/MM/YYYY convertir a YYYY-MM-DD
+  const normalizarFecha = f => {
+    if (!f) return hoy;
+    const m = f.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : f;
+  };
   const lineas = [];
   if (neto > 0) {
     const l = { name: ref, quantity: 1, price_unit: neto };
@@ -2348,7 +2344,7 @@ async function honCrearFactura(datos, cartaId) {
     move_type:        'in_invoice',
     name:             datos.nro_factura || '/',
     date:             hoy,
-    invoice_date:     datos.fecha || hoy,
+    invoice_date:     normalizarFecha(datos.fecha),
     ref:              ref,
     invoice_line_ids: lineas,
   };
@@ -2388,7 +2384,7 @@ async function honProcesar() {
   let okCount = 0, errCount = 0;
 
   const BATCH_SIZE = 10;
-  const BATCH_DELAY = 4000; // 4s entre lotes — óptimo con Haiku + texto
+  const BATCH_DELAY = 8000; // 8s entre lotes — seguro para nivel 2 con Haiku
 
   for (let i = 0; i < honFiles.length; i += BATCH_SIZE) {
     const batch = honFiles.slice(i, i + BATCH_SIZE);
