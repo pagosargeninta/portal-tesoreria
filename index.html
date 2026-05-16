@@ -2200,130 +2200,137 @@ async function honAdjuntarPDF(file, invoiceId, intentos = 3) {
 }
 
 // ── Llama a Claude para extraer datos del PDF ──
-async function honExtractWithClaude(file, intentos = 3) {
+async function honExtractWithClaude(file, intentos = 4) {
   const claudeKey = localStorage.getItem('claude_key');
   if (!claudeKey) throw new Error('API key de Claude no configurada');
   const portalPass = sessionStorage.getItem('portal_pass_session') || '';
 
-  // PASO 1: extraer texto localmente con pdf.js (gratis, instantáneo)
+  // Extraer texto localmente con pdf.js — gratis, sin tokens
   let textoExtraido = '';
   try {
     const ab = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
-    const paginas = [];
-    for (let p = 1; p <= Math.min(pdf.numPages, 4); p++) {
-      const page = await pdf.getPage(p);
-      const content = await page.getTextContent();
-      paginas.push(content.items.map(i => i.str).join(' '));
+    const pags = [];
+    for (let p = 1; p <= Math.min(pdf.numPages, 3); p++) {
+      const pg = await pdf.getPage(p);
+      const ct = await pg.getTextContent();
+      pags.push(ct.items.map(function(i){ return i.str; }).join(' '));
     }
-    textoExtraido = paginas.join('\n').trim();
-  } catch(e) {
-    console.warn('Extracción de texto falló, usando visión:', e.message);
-  }
+    textoExtraido = pags.join('\n').trim();
+  } catch(e) { console.warn('pdf.js fallo:', e.message); }
 
-  const usarTexto = textoExtraido.length > 150;
-
-  const promptTexto = `Sos un experto en facturas argentinas. Extraé los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown.
-Formato exacto requerido:
-{"cuit":"11dígitos","razon_social":"nombre","nro_factura":"XXXX-XXXXXXXX","fecha":"YYYY-MM-DD","neto":0.00,"iva":0.00,"total":0.00,"cae":"númerocae","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":95}
-
-confidence es tu nivel de certeza del 0 al 100.
-
-TEXTO DE LA FACTURA:
-${textoExtraido.substring(0, 3500)}`;
-
-  const promptPDF = `Sos un experto en facturas argentinas. Extraé los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown.
-Formato exacto requerido:
-{"cuit":"11dígitos","razon_social":"nombre","nro_factura":"XXXX-XXXXXXXX","fecha":"YYYY-MM-DD","neto":0.00,"iva":0.00,"total":0.00,"cae":"númerocae","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":95}
-
-confidence es tu nivel de certeza del 0 al 100.`;
+  // Usar texto solo si tiene contenido real: >300 chars + CUIT + montos
+  var tieneCuit   = /\d{10,11}/.test(textoExtraido);
+  var tieneMontos = /\d{4,}/.test(textoExtraido);
+  var usarTexto   = textoExtraido.length > 300 && tieneCuit && tieneMontos;
+  var notaExtra   = '';
 
   for (let intento = 1; intento <= intentos; intento++) {
     try {
-      let payload;
+      // Prompt sin template literals para evitar conflictos
+      var promptBase =
+        'Extrae los datos del EMISOR de esta factura argentina. Responde SOLO con JSON valido, sin texto extra.\n\n' +
+        'ESTRUCTURA FIJA DE LA FACTURA:\n' +
+        '- ARRIBA: datos del EMISOR (prestador/vendedor) con su CUIT\n' +
+        '- ABAJO: seccion "Datos del receptor" con CUIT 30676303657 (Fundacion ArgenINTA = RECEPTOR)\n\n' +
+        'REGLAS:\n' +
+        '- "cuit" = CUIT del EMISOR de la seccion de arriba. NUNCA 30676303657.\n' +
+        '- "nro_factura" = numero completo como "00001-00000123"\n' +
+        '- "fecha" = YYYY-MM-DD (si ves DD/MM/YYYY convertila)\n' +
+        '- montos = numeros sin puntos de miles ni $\n' +
+        '- "confidence" = 100 si todo claro, 90 si falta periodo, 70 si CUIT dudoso\n' +
+        notaExtra + '\n\n' +
+        'Devuelve exactamente:\n' +
+        '{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":100}';
 
+      var payload;
       if (usarTexto) {
-        // Modo texto: ~400 tokens, 15x más barato que PDF
         payload = {
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 500,
-          messages: [{ role: 'user', content: promptTexto }]
+          max_tokens: 700,
+          messages: [{ role: 'user', content: promptBase + '\n\nFACTURA:\n' + textoExtraido.substring(0, 3000) }]
         };
       } else {
-        // Fallback vision: PDF escaneado o sin texto extraíble
-        const b64 = await new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(r.result.split(',')[1]);
-          r.onerror = () => rej(new Error('Error leyendo archivo'));
+        var b64 = await new Promise(function(res, rej) {
+          var r = new FileReader();
+          r.onload = function(){ res(r.result.split(',')[1]); };
+          r.onerror = function(){ rej(new Error('Error leyendo PDF')); };
           r.readAsDataURL(file);
         });
         payload = {
           model: 'claude-sonnet-4-5-20250929',
-          max_tokens: 600,
+          max_tokens: 700,
           messages: [{ role: 'user', content: [
             { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
-            { type: 'text', text: promptPDF }
+            { type: 'text', text: promptBase }
           ]}]
         };
       }
 
-      const resp = await fetch(PROXY_URL.replace('/proxy', '/claude'), {
+      var resp = await fetch(PROXY_URL.replace('/proxy', '/claude'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portal_password: portalPass, claude_key: claudeKey, payload })
+        body: JSON.stringify({ portal_password: portalPass, claude_key: claudeKey, payload: payload })
       });
 
       if (!resp.ok) {
-        const e = await resp.json().catch(() => ({}));
-        const msg = e.error?.message || `HTTP ${resp.status}`;
-        const isRL = resp.status === 429 || msg.includes('rate limit');
-        if (intento < intentos) { await new Promise(r => setTimeout(r, isRL ? 60000 : 3000 * intento)); continue; }
-        throw new Error(msg);
+        var e0 = await resp.json().catch(function(){ return {}; });
+        var msg0 = (e0.error && e0.error.message) || ('HTTP ' + resp.status);
+        var isRL0 = resp.status === 429 || msg0.includes('rate limit');
+        if (intento < intentos) { await new Promise(function(r){ setTimeout(r, isRL0 ? 60000 : 3000 * intento); }); continue; }
+        throw new Error(msg0);
       }
 
-      const data = await resp.json();
+      var data = await resp.json();
       if (data.error) {
-        const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
-        const isRL = msg.includes('rate limit') || msg.includes('rate_limit');
-        if (intento < intentos) { await new Promise(r => setTimeout(r, isRL ? 60000 : 3000 * intento)); continue; }
-        throw new Error(msg);
+        var msg1 = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
+        var isRL1 = msg1.includes('rate limit') || msg1.includes('rate_limit');
+        if (intento < intentos) { await new Promise(function(r){ setTimeout(r, isRL1 ? 60000 : 3000 * intento); }); continue; }
+        throw new Error(msg1);
       }
-      if (!data.content?.[0]?.text) {
-        if (intento < intentos) { await new Promise(r => setTimeout(r, 3000 * intento)); continue; }
-        throw new Error('Respuesta vacía de Claude');
+      if (!data.content || !data.content[0] || !data.content[0].text) {
+        if (intento < intentos) { await new Promise(function(r){ setTimeout(r, 2000 * intento); }); continue; }
+        throw new Error('Respuesta vacia de Claude');
       }
 
-      const text = data.content[0].text.replace(/```json|```/g,'').trim();
-      try {
-        const parsed = JSON.parse(text);
+      var rawText = data.content[0].text.replace(/```json|```/g, '').trim();
+      var jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        if (intento < intentos) { await new Promise(function(r){ setTimeout(r, 2000); }); continue; }
+        throw new Error('Sin JSON: ' + rawText.substring(0, 80));
+      }
 
-        // Validar: si devuelve CUIT de la Fundación, reintentar con instrucción explícita
-        const cuitLimpio = (parsed.cuit || '').replace(/\D/g,'');
-        if (cuitLimpio === '30676303657') {
-          if (intento < intentos) {
-            // Agregar al texto una instrucción explícita
-            textoExtraido = textoExtraido + '\n\nNOTA CRÍTICA: El CUIT 30-67630365-7 es de la Fundación ArgenINTA (RECEPTOR). NO usarlo. El CUIT del EMISOR es el otro CUIT que aparece en el documento.';
-            await new Promise(r => setTimeout(r, 1000));
-            continue;
-          }
-          throw new Error('No se pudo identificar el CUIT del emisor');
+      var parsed;
+      try { parsed = JSON.parse(jsonMatch[0]); }
+      catch(e2) {
+        if (intento < intentos) { await new Promise(function(r){ setTimeout(r, 2000); }); continue; }
+        throw new Error('JSON invalido: ' + jsonMatch[0].substring(0, 80));
+      }
+
+      // Bloquear CUIT de la Fundacion — reintentar con instruccion explicita
+      var cuitLimpio = (parsed.cuit || '').replace(/\D/g, '');
+      if (cuitLimpio === '30676303657') {
+        if (intento < intentos) {
+          notaExtra = '\n\nATENCION: Devolviste 30676303657 = Fundacion ArgenINTA (RECEPTOR). PROHIBIDO. El CUIT correcto es del PRESTADOR en el encabezado de la factura.';
+          if (intento >= 2) usarTexto = false;
+          await new Promise(function(r){ setTimeout(r, 500); });
+          continue;
         }
-
-        parsed._modo = usarTexto ? 'texto' : 'vision';
-        return parsed;
-      } catch(parseErr) {
-        const match = text.match(/\{[\s\S]*\}/);
-        if (match) {
-          const p2 = JSON.parse(match[0]);
-          const c2 = (p2.cuit || '').replace(/\D/g,'');
-          if (c2 !== '30676303657') { p2._modo = usarTexto ? 'texto' : 'vision'; return p2; }
-        }
-        if (intento < intentos) { await new Promise(r => setTimeout(r, 2000)); continue; }
-        throw new Error('JSON inválido: ' + text.substring(0, 80));
+        throw new Error('CUIT de Fundacion detectado — no se identifico al emisor');
       }
+
+      // Normalizar fecha DD/MM/YYYY → YYYY-MM-DD
+      if (parsed.fecha) {
+        var mf = parsed.fecha.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (mf) parsed.fecha = mf[3] + '-' + mf[2] + '-' + mf[1];
+      }
+
+      parsed._modo = usarTexto ? 'texto' : 'vision';
+      return parsed;
+
     } catch(e) {
       if (intento >= intentos) throw e;
-      await new Promise(r => setTimeout(r, 3000 * intento));
+      await new Promise(function(r){ setTimeout(r, 3000 * intento); });
     }
   }
 }
@@ -2394,8 +2401,8 @@ async function honProcesar() {
 
   let okCount = 0, errCount = 0;
 
-  const BATCH_SIZE = 10;
-  const BATCH_DELAY = 8000; // 8s entre lotes — seguro para nivel 2 con Haiku
+  const BATCH_SIZE = 15;
+  const BATCH_DELAY = 5000; // 5s entre lotes — optimo con Haiku texto nivel 2
 
   for (let i = 0; i < honFiles.length; i += BATCH_SIZE) {
     const batch = honFiles.slice(i, i + BATCH_SIZE);
