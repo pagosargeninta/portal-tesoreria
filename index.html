@@ -2223,20 +2223,26 @@ async function honExtractWithClaude(file, intentos = 3) {
 
   const usarTexto = textoExtraido.length > 150;
 
-  const promptTexto = `Sos un experto en facturas argentinas. Extraé los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown.
-Formato exacto requerido:
-{"cuit":"11dígitos","razon_social":"nombre","nro_factura":"XXXX-XXXXXXXX","fecha":"YYYY-MM-DD","neto":0.00,"iva":0.00,"total":0.00,"cae":"númerocae","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":95}
+  const promptTexto = `Extraé los datos de esta factura argentina. Respondé SOLO con JSON válido, sin texto extra.
 
-confidence es tu nivel de certeza del 0 al 100.
+REGLAS CRÍTICAS:
+- "cuit" y "razon_social" son del EMISOR (quien factura/vende), NO del receptor. El emisor aparece en el encabezado. La Fundación ArgenINTA u otro organismo es el RECEPTOR — ignoralo para estos campos.
+- "confidence": 100 si encontrás todos los campos con certeza. 90 si falta un campo menor (ej: periodo). 70 si hay ambigüedad en CUIT o monto.
+- Todos los números sin puntos de miles ni símbolo $. CUIT sin guiones (11 dígitos).
 
-TEXTO DE LA FACTURA:
-${textoExtraido.substring(0, 3500)}`;
+{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":0}
 
-  const promptPDF = `Sos un experto en facturas argentinas. Extraé los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown.
-Formato exacto requerido:
-{"cuit":"11dígitos","razon_social":"nombre","nro_factura":"XXXX-XXXXXXXX","fecha":"YYYY-MM-DD","neto":0.00,"iva":0.00,"total":0.00,"cae":"númerocae","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":95}
+FACTURA:
+\${textoExtraido.substring(0, 3500)}`;
 
-confidence es tu nivel de certeza del 0 al 100.`;
+  const promptPDF = `Extraé los datos de esta factura argentina. Respondé SOLO con JSON válido, sin texto extra.
+
+REGLAS CRÍTICAS:
+- "cuit" y "razon_social" son del EMISOR (quien factura/vende), NO del receptor. El emisor aparece en el encabezado. La Fundación ArgenINTA u otro organismo es el RECEPTOR — ignoralo para estos campos.
+- "confidence": 100 si encontrás todos los campos con certeza. 90 si falta un campo menor (ej: periodo). 70 si hay ambigüedad en CUIT o monto.
+- Todos los números sin puntos de miles ni símbolo $. CUIT sin guiones (11 dígitos).
+
+{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":0}`;
 
   for (let intento = 1; intento <= intentos; intento++) {
     try {
@@ -2378,7 +2384,7 @@ async function honProcesar() {
   let okCount = 0, errCount = 0;
 
   const BATCH_SIZE = 10;
-  const BATCH_DELAY = 8000; // 8s entre lotes — seguro para nivel 2 con Haiku
+  const BATCH_DELAY = 4000; // 4s entre lotes — óptimo con Haiku texto y nivel 2
 
   for (let i = 0; i < honFiles.length; i += BATCH_SIZE) {
     const batch = honFiles.slice(i, i + BATCH_SIZE);
