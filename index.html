@@ -2221,23 +2221,22 @@ async function honExtractWithClaude(file, intentos = 3) {
     console.warn('Extracción de texto falló, usando visión:', e.message);
   }
 
-  // Validar que el texto extraído tenga contenido real de factura
-  const tieneCuit = /\d{10,11}/.test(textoExtraido);
-  const tieneNumeros = /\$|\d{4,}/.test(textoExtraido);
-  const usarTexto = textoExtraido.length > 400 && tieneCuit && tieneNumeros;
+  const usarTexto = textoExtraido.length > 150;
 
-  const promptTexto = `Extraé estos campos de la factura argentina. Solo JSON, sin texto extra.
-REGLAS: cuit=11 dígitos sin guiones. nro_factura=formato XXXX-XXXXXXXX. fecha=YYYY-MM-DD. neto/iva/total=números sin $ ni puntos. cae=solo dígitos. periodo_desde y periodo_hasta=DD/MM/YYYY. confidence=100 si encontrás todos los campos, 90 si falta alguno menor, 70 si falta algo importante.
+  const promptTexto = `Sos un experto en facturas argentinas. Extraé los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown.
+Formato exacto requerido:
+{"cuit":"11dígitos","razon_social":"nombre","nro_factura":"XXXX-XXXXXXXX","fecha":"YYYY-MM-DD","neto":0.00,"iva":0.00,"total":0.00,"cae":"númerocae","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":95}
 
-{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":100}
+confidence es tu nivel de certeza del 0 al 100.
 
-FACTURA:
-\${textoExtraido.substring(0, 3500)}`;
+TEXTO DE LA FACTURA:
+${textoExtraido.substring(0, 3500)}`;
 
-  const promptPDF = `Extraé estos campos de la factura argentina. Solo JSON, sin texto extra.
-REGLAS: cuit=11 dígitos sin guiones. nro_factura=formato XXXX-XXXXXXXX. fecha=YYYY-MM-DD. neto/iva/total=números sin $ ni puntos. cae=solo dígitos. periodo_desde y periodo_hasta=DD/MM/YYYY. confidence=100 si encontrás todos los campos, 90 si falta alguno menor, 70 si falta algo importante.
+  const promptPDF = `Sos un experto en facturas argentinas. Extraé los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown.
+Formato exacto requerido:
+{"cuit":"11dígitos","razon_social":"nombre","nro_factura":"XXXX-XXXXXXXX","fecha":"YYYY-MM-DD","neto":0.00,"iva":0.00,"total":0.00,"cae":"númerocae","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":95}
 
-{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":100}`;
+confidence es tu nivel de certeza del 0 al 100.`;
 
   for (let intento = 1; intento <= intentos; intento++) {
     try {
@@ -2379,7 +2378,7 @@ async function honProcesar() {
   let okCount = 0, errCount = 0;
 
   const BATCH_SIZE = 10;
-  const BATCH_DELAY = 6000; // 8s entre lotes — seguro para nivel 2 con Haiku
+  const BATCH_DELAY = 8000; // 8s entre lotes — seguro para nivel 2 con Haiku
 
   for (let i = 0; i < honFiles.length; i += BATCH_SIZE) {
     const batch = honFiles.slice(i, i + BATCH_SIZE);
