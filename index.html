@@ -2222,7 +2222,7 @@ async function honExtractWithClaude(file, intentos = 4) {
       pags.push(ct.items.map(i => i.str).join(' '));
     }
     textoExtraido = pags.join('\n').trim();
-  } catch(e) { console.warn('pdf.js falló:', e.message); }
+  } catch(e) { console.warn('pdf.js fallo:', e.message); }
 
   const tieneCuit   = /\d{10,11}/.test(textoExtraido);
   const tieneMontos = /\d{4,}/.test(textoExtraido);
@@ -2231,17 +2231,7 @@ async function honExtractWithClaude(file, intentos = 4) {
 
   for (let intento = 1; intento <= intentos; intento++) {
     try {
-      const promptBase = `Extraé los datos del EMISOR de esta factura argentina. Respondé SOLO con JSON válido, sin texto extra.
-
-REGLAS:
-- "cuit" = CUIT del EMISOR (prestador/vendedor). NUNCA el CUIT 30676303657 (Fundación ArgenINTA = RECEPTOR).
-- "nro_factura" = formato completo "00001-00000123".
-- "fecha" = YYYY-MM-DD (convertí si ves DD/MM/YYYY).
-- Montos = números sin puntos de miles ni $.
-- "confidence" = número entero: 100 si todo claro, 90 si falta periodo, 70 si CUIT dudoso.${notaExtra}
-
-Devolvé exactamente este JSON con los valores reales de la factura:
-{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":100}`;
+      const promptBase = 'Extrae los datos del EMISOR de esta factura argentina. Responde SOLO con JSON valido, sin texto extra.\n\nREGLAS:\n- "cuit" = CUIT del EMISOR (prestador/vendedor). NUNCA el CUIT 30676303657 (Fundacion ArgenINTA = RECEPTOR).\n- "nro_factura" = formato completo "00001-00000123".\n- "fecha" = YYYY-MM-DD (convierte si ves DD/MM/YYYY).\n- Montos = numeros sin puntos de miles ni $.\n- "confidence" = numero entero: 100 si todo claro, 90 si falta periodo, 70 si CUIT dudoso.' + notaExtra + '\n\nDevuelve exactamente este JSON con los valores reales:\n{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":100}';
 
       let payload;
       if (usarTexto) {
@@ -2275,7 +2265,7 @@ Devolvé exactamente este JSON con los valores reales de la factura:
 
       if (!resp.ok) {
         const e = await resp.json().catch(() => ({}));
-        const msg = e.error?.message || `HTTP ${resp.status}`;
+        const msg = e.error?.message || ('HTTP ' + resp.status);
         const isRL = resp.status === 429 || msg.includes('rate limit');
         if (intento < intentos) { await new Promise(r => setTimeout(r, isRL ? 60000 : 3000 * intento)); continue; }
         throw new Error(msg);
@@ -2288,9 +2278,9 @@ Devolvé exactamente este JSON con los valores reales de la factura:
         if (intento < intentos) { await new Promise(r => setTimeout(r, isRL ? 60000 : 3000 * intento)); continue; }
         throw new Error(msg);
       }
-      if (!data.content?.[0]?.text) {
+      if (!data.content || !data.content[0] || !data.content[0].text) {
         if (intento < intentos) { await new Promise(r => setTimeout(r, 2000 * intento)); continue; }
-        throw new Error('Respuesta vacía de Claude');
+        throw new Error('Respuesta vacia de Claude');
       }
 
       const rawText = data.content[0].text.replace(/```json|```/g,'').trim();
@@ -2304,25 +2294,23 @@ Devolvé exactamente este JSON con los valores reales de la factura:
       try { parsed = JSON.parse(jsonMatch[0]); }
       catch(e2) {
         if (intento < intentos) { await new Promise(r => setTimeout(r, 2000)); continue; }
-        throw new Error('JSON inválido: ' + jsonMatch[0].substring(0,80));
+        throw new Error('JSON invalido: ' + jsonMatch[0].substring(0,80));
       }
 
-      // Bloquear CUIT de la Fundación — reintentar con nota explícita
       const cuitLimpio = (parsed.cuit || '').replace(/\D/g,'');
       if (cuitLimpio === '30676303657') {
         if (intento < intentos) {
-          notaExtra = '\n\nATENCION: Devolviste el CUIT 30676303657 = Fundación ArgenINTA (RECEPTOR). PROHIBIDO. Buscá el CUIT del PRESTADOR/VENDEDOR en el encabezado.';
+          notaExtra = '\n\nATENCION: Devolviste el CUIT 30676303657 = Fundacion ArgenINTA (RECEPTOR). PROHIBIDO. El CUIT correcto es del PRESTADOR en el encabezado.';
           if (intento >= 2) usarTexto = false;
           await new Promise(r => setTimeout(r, 500));
           continue;
         }
-        throw new Error('CUIT de Fundación detectado — no se pudo identificar al emisor');
+        throw new Error('CUIT de Fundacion detectado — no se identifico al emisor');
       }
 
-      // Normalizar fecha DD/MM/YYYY → YYYY-MM-DD
       if (parsed.fecha) {
         const mf = parsed.fecha.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-        if (mf) parsed.fecha = `${mf[3]}-${mf[2]}-${mf[1]}`;
+        if (mf) parsed.fecha = mf[3] + '-' + mf[2] + '-' + mf[1];
       }
 
       parsed._modo = usarTexto ? 'texto' : 'vision';
@@ -3214,9 +3202,7 @@ function ibRestart() {
 </script>
 
 
-// ═══════════════════════════════════════════════════════
-// DETALLE DE FACTURAS — Odoo + exportar Excel
-// ═══════════════════════════════════════════════════════
+// === DETALLE FACTURAS ODOO + EXCEL ===
 const HON_CARTAS_FILTRO_DET = ['10.SENASA.23.1','10.SENASA.27.1','10.SENASA.28.1','10.SENASA.29','10.INTA.CTRL.C93.CA13.1','10.INTA.CTRL.C93.CA36.1','10.MAABA.613.1'];
 let _honDetalleData = [];
 
@@ -3229,55 +3215,77 @@ async function honDetalleCargar() {
   if (footer) footer.style.display='none';
   try {
     const todasCartas = await odooCall('account.analytic.account','search_read',[[['active','=',true]]],{fields:['id','name']});
-    const cartaIds = todasCartas.filter(c=>HON_CARTAS_FILTRO_DET.some(f=>c.name&&c.name.includes(f))).map(c=>c.id);
-    const desde = typeof CICLO_ACT_DESDE!=='undefined' ? CICLO_ACT_DESDE : new Date().toISOString().substring(0,7)+'-01';
+    const cartaIds = todasCartas.filter(function(c){return HON_CARTAS_FILTRO_DET.some(function(f){return c.name&&c.name.includes(f);});}).map(function(c){return c.id;});
+    const desde = (typeof CICLO_ACT_DESDE !== 'undefined') ? CICLO_ACT_DESDE : new Date().toISOString().substring(0,7)+'-01';
     const facturas = await odooCall('account.move','search_read',[[['move_type','=','in_invoice'],['date','>=',desde],['state','=','posted']]],{fields:['id','name','partner_id','amount_total','invoice_date','date','l10n_ar_afip_auth_code','payment_state'],limit:1000,order:'date desc'});
-    const moveIds = facturas.map(f=>f.id);
-    let moveHon = new Set(moveIds);
-    if (moveIds.length>0 && cartaIds.length>0) {
+    const moveIds = facturas.map(function(f){return f.id;});
+    var moveHon = new Set(moveIds);
+    if (moveIds.length > 0 && cartaIds.length > 0) {
       const lineas = await odooCall('account.move.line','search_read',[[['move_id','in',moveIds],['analytic_distribution','!=',false]]],{fields:['move_id','analytic_distribution'],limit:5000});
       moveHon = new Set();
-      lineas.forEach(l=>{
-        if(!l.analytic_distribution) return;
-        if(Object.keys(l.analytic_distribution).map(Number).some(id=>cartaIds.includes(id))) moveHon.add(l.move_id[0]);
+      lineas.forEach(function(l){
+        if (!l.analytic_distribution) return;
+        if (Object.keys(l.analytic_distribution).map(Number).some(function(id){return cartaIds.includes(id);})) moveHon.add(l.move_id[0]);
       });
     }
-    const pids = [...new Set(facturas.filter(f=>moveHon.has(f.id)).map(f=>f.partner_id?.[0]).filter(Boolean))];
-    let cuits = {};
-    if(pids.length>0){const ps=await odooCall('res.partner','search_read',[[['id','in',pids]]],{fields:['id','vat'],limit:500});ps.forEach(p=>cuits[p.id]=p.vat||'');}
-    _honDetalleData = facturas.filter(f=>moveHon.has(f.id)).map(f=>({
-      id:f.id, proveedor:f.partner_id?.[1]||'—', cuit:cuits[f.partner_id?.[0]]||'—',
+    const pids = Array.from(new Set(facturas.filter(function(f){return moveHon.has(f.id);}).map(function(f){return f.partner_id&&f.partner_id[0];}).filter(Boolean)));
+    var cuits = {};
+    if (pids.length > 0) {
+      const ps = await odooCall('res.partner','search_read',[[['id','in',pids]]],{fields:['id','vat'],limit:500});
+      ps.forEach(function(p){cuits[p.id]=p.vat||'';});
+    }
+    _honDetalleData = facturas.filter(function(f){return moveHon.has(f.id);}).map(function(f){return {
+      id:f.id, proveedor:(f.partner_id&&f.partner_id[1])||'—', cuit:cuits[f.partner_id&&f.partner_id[0]]||'—',
       nro_factura:f.name||'—', monto:f.amount_total||0, fecha:f.invoice_date||f.date||'—',
       cae:f.l10n_ar_afip_auth_code||'—',
       estado:f.payment_state==='paid'?'Pagado':f.payment_state==='in_payment'?'En proceso':'Pendiente'
-    }));
+    };});
     honDetalleRender(_honDetalleData);
-  } catch(e) { if(loading) loading.innerHTML=`<div class="alert danger" style="margin:16px;"><i class="ti ti-x"></i><div>Error: ${e.message}</div></div>`; }
+  } catch(e) {
+    if (loading) loading.innerHTML = '<div class="alert danger" style="margin:16px;"><i class="ti ti-x"></i><div>Error: '+e.message+'</div></div>';
+  }
 }
 
 function honDetalleRender(data) {
-  const wrap=document.getElementById('hon-detalle-wrap'),footer=document.getElementById('hon-detalle-footer'),tbody=document.getElementById('hon-detalle-body'),loading=document.getElementById('hon-detalle-loading');
-  if(!tbody) return;
-  if(loading) loading.style.display='none';
-  const fmt=n=>'$'+parseFloat(n||0).toLocaleString('es-AR');
-  tbody.innerHTML=data.map(f=>`<tr><td style="font-weight:500;">${f.proveedor}</td><td class="mono" style="font-size:11px;">${f.cuit}</td><td class="mono" style="font-size:11px;">${f.nro_factura}</td><td class="mono">${fmt(f.monto)}</td><td style="color:var(--muted);font-size:11px;">${f.fecha}</td><td class="mono" style="font-size:10px;color:var(--muted);">${f.cae!=='—'?f.cae.substring(0,8)+'...':'—'}</td><td><span class="badge ${f.estado==='Pagado'?'badge-ok':f.estado==='En proceso'?'badge-info':'badge-muted'}">${f.estado}</span></td><td class="mono" style="font-size:11px;">${f.id}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted);">Sin facturas</td></tr>';
-  if(wrap) wrap.style.display='block';
-  if(footer){footer.style.display='block';footer.innerHTML=`${data.length} facturas · Total: <strong>${fmt(data.reduce((s,f)=>s+f.monto,0))}</strong>`;}
+  const wrap=document.getElementById('hon-detalle-wrap');
+  const footer=document.getElementById('hon-detalle-footer');
+  const tbody=document.getElementById('hon-detalle-body');
+  const loading=document.getElementById('hon-detalle-loading');
+  if (!tbody) return;
+  if (loading) loading.style.display='none';
+  var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR'); };
+  var rows = data.map(function(f){
+    var estadoClass = f.estado==='Pagado'?'badge-ok':f.estado==='En proceso'?'badge-info':'badge-muted';
+    var caeStr = f.cae !== '—' ? f.cae.substring(0,8)+'...' : '—';
+    return '<tr><td style="font-weight:500;">'+f.proveedor+'</td><td class="mono" style="font-size:11px;">'+f.cuit+'</td><td class="mono" style="font-size:11px;">'+f.nro_factura+'</td><td class="mono">'+fmt(f.monto)+'</td><td style="color:var(--muted);font-size:11px;">'+f.fecha+'</td><td class="mono" style="font-size:10px;color:var(--muted);">'+caeStr+'</td><td><span class="badge '+estadoClass+'">'+f.estado+'</span></td><td class="mono" style="font-size:11px;">'+f.id+'</td></tr>';
+  });
+  tbody.innerHTML = rows.join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted);">Sin facturas</td></tr>';
+  if (wrap) wrap.style.display='block';
+  if (footer) {
+    footer.style.display='block';
+    var total = data.reduce(function(s,f){return s+f.monto;},0);
+    footer.innerHTML = data.length+' facturas &middot; Total: <strong>'+fmt(total)+'</strong>';
+  }
 }
 
-function honDetalleFiltrar(){const q=(document.getElementById('hon-det-search')?.value||'').toLowerCase();honDetalleRender(q?_honDetalleData.filter(f=>f.proveedor.toLowerCase().includes(q)||f.cuit.toLowerCase().includes(q)||f.nro_factura.toLowerCase().includes(q)):_honDetalleData);}
+function honDetalleFiltrar() {
+  var q = (document.getElementById('hon-det-search')?document.getElementById('hon-det-search').value:'').toLowerCase();
+  honDetalleRender(q ? _honDetalleData.filter(function(f){return f.proveedor.toLowerCase().includes(q)||f.cuit.toLowerCase().includes(q)||f.nro_factura.toLowerCase().includes(q);}) : _honDetalleData);
+}
 
-function honDetalleExcel(){
-  if(!_honDetalleData.length) return showToast('Sin datos','err');
-  const q=(document.getElementById('hon-det-search')?.value||'').toLowerCase();
-  const data=q?_honDetalleData.filter(f=>f.proveedor.toLowerCase().includes(q)||f.cuit.toLowerCase().includes(q)):_honDetalleData;
-  const csv='﻿'+['ID Odoo,Proveedor,CUIT,Nro Factura,Monto,Fecha,CAE,Estado',...data.map(f=>[f.id,`"${f.proveedor}"`,f.cuit,f.nro_factura,f.monto,f.fecha,f.cae,f.estado].join(','))].join('
-');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
-  a.download=`honorarios_${new Date().toISOString().split('T')[0]}.csv`;
+function honDetalleExcel() {
+  if (!_honDetalleData.length) { showToast('Sin datos','err'); return; }
+  var q = (document.getElementById('hon-det-search')?document.getElementById('hon-det-search').value:'').toLowerCase();
+  var data = q ? _honDetalleData.filter(function(f){return f.proveedor.toLowerCase().includes(q)||f.cuit.toLowerCase().includes(q);}) : _honDetalleData;
+  var header = 'ID Odoo,Proveedor,CUIT,Nro Factura,Monto,Fecha,CAE,Estado';
+  var rows = data.map(function(f){ return [f.id,'"'+f.proveedor+'"',f.cuit,f.nro_factura,f.monto,f.fecha,f.cae,f.estado].join(','); });
+  var csv = '\uFEFF' + [header].concat(rows).join('\n');
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'honorarios_'+new Date().toISOString().split('T')[0]+'.csv';
   a.click();
-  showToast(`${data.length} facturas exportadas`,'ok');
+  showToast(data.length+' facturas exportadas','ok');
 }
 
 
