@@ -2067,43 +2067,83 @@ async function honExtractWithClaude(file, intentos = 3) {
   const claudeKey = localStorage.getItem('claude_key');
   if (!claudeKey) throw new Error('API key de Claude no configurada');
   const portalPass = sessionStorage.getItem('portal_pass_session') || '';
-  const b64 = await honFileToBase64(file);
+
+  // ── PASO 1: extraer texto con pdf.js (gratis, local) ──
+  let textoExtraido = '';
+  try {
+    const ab = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+    const paginas = [];
+    for (let p = 1; p <= Math.min(pdf.numPages, 4); p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      paginas.push(content.items.map(i => i.str).join(' '));
+    }
+    textoExtraido = paginas.join('\n').trim();
+  } catch(e) {
+    console.warn('pdf.js text extraction failed:', e.message);
+  }
+
+  const usarTexto = textoExtraido.length > 100; // tiene texto legible
+
+  // ── PASO 2: prompt optimizado según modo ──
+  const promptTexto = `Extraé los datos de esta factura argentina. Respondé SOLO con JSON válido, sin texto extra.
+{"cuit":"solo números","razon_social":"nombre completo","nro_factura":"0001-00012345","fecha":"YYYY-MM-DD","neto":0,"iva":0,"total":0,"cae":"solo números","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":0}
+
+FACTURA:
+${textoExtraido.substring(0, 3000)}`;
+
+  const promptPDF = `Extraé los datos de esta factura argentina. Respondé SOLO con JSON válido, sin texto extra.
+{"cuit":"solo números","razon_social":"nombre completo","nro_factura":"0001-00012345","fecha":"YYYY-MM-DD","neto":0,"iva":0,"total":0,"cae":"solo números","periodo_desde":"DD/MM/YYYY","periodo_hasta":"DD/MM/YYYY","confidence":0}`;
 
   for (let intento = 1; intento <= intentos; intento++) {
     try {
+      let payload;
+
+      if (usarTexto) {
+        // Modo texto: ~300 tokens, 10x más barato
+        payload = {
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 400,
+          messages: [{ role: 'user', content: promptTexto }]
+        };
+      } else {
+        // Fallback: PDF completo (escaneados o sin texto)
+        const b64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result.split(',')[1]);
+          r.onerror = () => rej(new Error('Error leyendo archivo'));
+          r.readAsDataURL(file);
+        });
+        payload = {
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 600,
+          messages: [{ role: 'user', content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+            { type: 'text', text: promptPDF }
+          ]}]
+        };
+      }
+
       const resp = await fetch(PROXY_URL.replace('/proxy', '/claude'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          portal_password: portalPass,
-          claude_key: claudeKey,
-          payload: {
-            model: 'claude-sonnet-4-5',
-            max_tokens: 1000,
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
-                { type: 'text', text: HON_PROMPT }
-              ]
-            }]
-          }
-        })
+        body: JSON.stringify({ portal_password: portalPass, claude_key: claudeKey, payload })
       });
 
       if (!resp.ok) {
         const e = await resp.json().catch(() => ({}));
         const msg = e.error?.message || `HTTP ${resp.status}`;
-        const waitMs = (resp.status === 429 || msg.includes('rate limit')) ? 60000 : 3000 * intento;
-        if (intento < intentos) { await new Promise(r => setTimeout(r, waitMs)); continue; }
+        const isRateLimit = resp.status === 429 || msg.includes('rate limit');
+        if (intento < intentos) { await new Promise(r => setTimeout(r, isRateLimit ? 60000 : 3000 * intento)); continue; }
         throw new Error(msg);
       }
 
       const data = await resp.json();
       if (data.error) {
         const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
-        const waitMs = (msg.includes('rate limit') || msg.includes('rate_limit')) ? 60000 : 3000 * intento;
-        if (intento < intentos) { await new Promise(r => setTimeout(r, waitMs)); continue; }
+        const isRateLimit = msg.includes('rate limit') || msg.includes('rate_limit');
+        if (intento < intentos) { await new Promise(r => setTimeout(r, isRateLimit ? 60000 : 3000 * intento)); continue; }
         throw new Error(msg);
       }
       if (!data.content?.[0]?.text) {
@@ -2113,13 +2153,16 @@ async function honExtractWithClaude(file, intentos = 3) {
 
       const text = data.content[0].text.replace(/```json|```/g, '').trim();
       try {
-        return JSON.parse(text);
+        const parsed = JSON.parse(text);
+        parsed._modo = usarTexto ? 'texto' : 'vision'; // para debug
+        return parsed;
       } catch(parseErr) {
         const match = text.match(/\{[\s\S]*\}/);
         if (match) return JSON.parse(match[0]);
         if (intento < intentos) { await new Promise(r => setTimeout(r, 2000)); continue; }
-        throw new Error('JSON inválido de Claude: ' + text.substring(0, 100));
+        throw new Error('JSON inválido: ' + text.substring(0, 80));
       }
+
     } catch(e) {
       if (intento >= intentos) throw e;
       await new Promise(r => setTimeout(r, 3000 * intento));
@@ -2127,7 +2170,6 @@ async function honExtractWithClaude(file, intentos = 3) {
   }
 }
 
-// ── Crea la factura en Odoo y devuelve su ID ──
 async function honCrearFactura(datos, cartaId) {
   _odooUid = null; // forzar re-auth en cada factura
   const parseNum = v => parseFloat((v || '0').toString().replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
@@ -2194,73 +2236,94 @@ async function honProcesar() {
 
   let okCount = 0, errCount = 0;
 
-  const BATCH_SIZE = 3;
-  const BATCH_DELAY = 4000; // 4s between batches = ~45 PDFs/min within 40K token limit
+  for (let i = 0; i < honFiles.length; i++) {
+    const file = honFiles[i];
+    pf.style.width  = Math.round((i / honFiles.length) * 100) + '%';
+    pt.textContent  = `[${i + 1}/${honFiles.length}] ${file.name}`;
 
-  for (let i = 0; i < honFiles.length; i += BATCH_SIZE) {
-    const batch = honFiles.slice(i, i + BATCH_SIZE);
-    pf.style.width = Math.round((i / honFiles.length) * 100) + '%';
-    pt.textContent = `[${i + 1}-${Math.min(i + BATCH_SIZE, honFiles.length)}/${honFiles.length}] Procesando lote...`;
+    // Fila provisional mientras se procesa
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</td>
+      <td>—</td><td>—</td><td>—</td>
+      <td><span class="badge badge-muted">Procesando...</span></td>`;
+    tbody.appendChild(tr);
 
-    // Add placeholder rows for the batch
-    const batchRows = batch.map((file, bi) => {
-      const tr = document.createElement('tr');
+    try {
+      // 1. Extracción con IA
+      pt.textContent = `[${i + 1}/${honFiles.length}] Extrayendo datos — ${file.name}`;
+      const datos = await honExtractWithClaude(file);
+      const conf  = datos.confidence || 0;
+      const fmt   = n => n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—';
+
+      // 2. Crear factura en Odoo
+      pt.textContent = `[${i + 1}/${honFiles.length}] Creando factura en Odoo — ${file.name}`;
+      const odooId = await honCrearFactura(datos, cartaId);
+
+      // 3. Adjuntar PDF original a la factura
+      pt.textContent = `[${i + 1}/${honFiles.length}] Adjuntando PDF — ${file.name}`;
+      let adjuntado = false;
+      let adjError  = '';
+      try {
+        await honAdjuntarPDF(file, odooId);
+        adjuntado = true;
+      } catch(adjErr) {
+        adjError = adjErr.message || String(adjErr);
+        console.warn('PDF no adjuntado:', adjError);
+      }
+
+      okCount++;
+      document.getElementById('hon-count-ok').textContent = okCount;
+
+      const confBadge = conf >= 75 ? 'badge-ok' : 'badge-warn';
+      // Badge de adjunto: verde si OK, amarillo si falló (la factura igual se creó)
+      const adjBadge = adjuntado
+        ? '<span class="badge badge-ok" title="PDF adjunto en Odoo">📎 PDF</span>'
+        : `<span class="badge badge-warn" title="${adjError}">⚠ Sin PDF</span>`;
+
       tr.innerHTML = `
         <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</td>
-        <td>—</td><td>—</td><td>—</td>
-        <td><span class="badge badge-muted">Procesando...</span></td>`;
-      tbody.appendChild(tr);
-      return tr;
-    });
+        <td style="font-size:12px;">${datos.razon_social || datos.cuit || '—'}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${fmt(datos.total)}</td>
+        <td><span class="badge ${confBadge}" style="font-size:10px;">${conf}%</span></td>
+        <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+          <span class="badge badge-ok">✓ ID ${odooId}</span>
+          ${adjBadge}
+        </td>`;
 
-    // Process batch in parallel
-    const results = await Promise.allSettled(batch.map(async (file, bi) => {
-      const tr = batchRows[bi];
-      try {
-        const datos = await honExtractWithClaude(file);
-        const conf  = datos.confidence || 0;
-        const fmt   = n => n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—';
-        const odooId = await honCrearFactura(datos, cartaId);
-
-        let adjuntado = false;
-        try { await honAdjuntarPDF(file, odooId); adjuntado = true; } catch(e) {}
-
-        const confBadge = conf >= 75 ? 'badge-ok' : 'badge-warn';
-        const adjBadge = adjuntado
-          ? '<span class="badge badge-ok" title="PDF adjunto">📎 PDF</span>'
-          : '<span class="badge badge-warn">⚠ Sin PDF</span>';
-
-        tr.innerHTML = `
-          <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</td>
-          <td style="font-size:12px;">${datos.razon_social || datos.cuit || '—'}</td>
-          <td class="mono" style="font-size:11px;">${fmt(datos.total)}</td>
-          <td><span class="badge ${confBadge}" style="font-size:10px;">${conf}%</span></td>
-          <td style="display:flex;gap:4px;align-items:center;"><span class="badge badge-ok">✓ ID ${odooId}</span>${adjBadge}</td>`;
-
-        okCount++;
-        document.getElementById('hon-count-ok').textContent = okCount;
-        return { ok: true, datos, odooId };
-      } catch(e) {
-        const msg = e?.message || String(e);
-        tr.innerHTML = `
-          <td style="font-size:11px;color:var(--muted);" title="${file.name}">${file.name}</td>
-          <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
-          <td><span class="badge badge-danger">✗ Error</span></td>`;
-        errCount++;
-        return { ok: false, error: msg };
+      // Agregar al tab Detalle
+      const detBody  = document.getElementById('hon-detalle-body');
+      const detWrap  = document.getElementById('hon-detalle-wrap');
+      const detEmpty = document.getElementById('hon-detalle-empty');
+      if (detBody) {
+        const dtr = document.createElement('tr');
+        dtr.innerHTML = `
+          <td>${datos.razon_social || '—'}</td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${datos.cuit || '—'}</td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${datos.nro_factura || '—'}</td>
+          <td style="font-family:'JetBrains Mono',monospace;">${fmt(datos.total)}</td>
+          <td><span class="badge ${datos.cae ? 'badge-ok' : 'badge-muted'}">${datos.cae ? '✓' : '—'}</span></td>
+          <td><span class="badge ${confBadge}">${conf}%</span></td>
+          <td style="font-family:'JetBrains Mono',monospace;">${odooId}</td>`;
+        detBody.appendChild(dtr);
+        if (detEmpty) detEmpty.style.display = 'none';
+        if (detWrap)  detWrap.style.display  = 'block';
       }
-    }));
 
-    pf.style.width = Math.round(((i + batch.length) / honFiles.length) * 100) + '%';
-    pt.textContent = `Lote ${Math.floor(i/BATCH_SIZE)+1} completado — ${okCount} OK · ${errCount} errores`;
-
-    // Pause between batches (not after last batch)
-    if (i + BATCH_SIZE < honFiles.length) {
-      await new Promise(r => setTimeout(r, BATCH_DELAY));
+    } catch(e) {
+      errCount++;
+      const msg = e?.faultString || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
+      tr.innerHTML = `
+        <td style="font-size:11px;color:var(--muted);" title="${file.name}">${file.name}</td>
+        <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
+        <td><span class="badge badge-danger">✗ Error</span></td>`;
     }
+
+    // Pausa entre archivos para no saturar la API
+    await new Promise(r => setTimeout(r, 2000));
   }
 
-  pf.stylepf.style.width = '100%';
+  pf.style.width = '100%';
   pt.textContent = `Completado: ${okCount} OK · ${errCount} errores`;
   btn.disabled   = false;
 
