@@ -2296,11 +2296,28 @@ confidence es tu nivel de certeza del 0 al 100.`;
       const text = data.content[0].text.replace(/```json|```/g,'').trim();
       try {
         const parsed = JSON.parse(text);
+
+        // Validar: si devuelve CUIT de la Fundación, reintentar con instrucción explícita
+        const cuitLimpio = (parsed.cuit || '').replace(/\D/g,'');
+        if (cuitLimpio === '30676303657') {
+          if (intento < intentos) {
+            // Agregar al texto una instrucción explícita
+            textoExtraido = textoExtraido + '\n\nNOTA CRÍTICA: El CUIT 30-67630365-7 es de la Fundación ArgenINTA (RECEPTOR). NO usarlo. El CUIT del EMISOR es el otro CUIT que aparece en el documento.';
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+          throw new Error('No se pudo identificar el CUIT del emisor');
+        }
+
         parsed._modo = usarTexto ? 'texto' : 'vision';
         return parsed;
       } catch(parseErr) {
         const match = text.match(/\{[\s\S]*\}/);
-        if (match) return JSON.parse(match[0]);
+        if (match) {
+          const p2 = JSON.parse(match[0]);
+          const c2 = (p2.cuit || '').replace(/\D/g,'');
+          if (c2 !== '30676303657') { p2._modo = usarTexto ? 'texto' : 'vision'; return p2; }
+        }
         if (intento < intentos) { await new Promise(r => setTimeout(r, 2000)); continue; }
         throw new Error('JSON inválido: ' + text.substring(0, 80));
       }
@@ -2323,12 +2340,6 @@ async function honCrearFactura(datos, cartaId) {
     ? `Honorarios - ${nombre} - Período ${periodoDesde} al ${periodoHasta}`
     : `Honorarios - ${nombre}`;
   const hoy = new Date().toISOString().split('T')[0];
-  // Normalizar fecha: si viene DD/MM/YYYY convertir a YYYY-MM-DD
-  const normalizarFecha = f => {
-    if (!f) return hoy;
-    const m = f.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    return m ? `${m[3]}-${m[2]}-${m[1]}` : f;
-  };
   const lineas = [];
   if (neto > 0) {
     const l = { name: ref, quantity: 1, price_unit: neto };
@@ -2344,7 +2355,7 @@ async function honCrearFactura(datos, cartaId) {
     move_type:        'in_invoice',
     name:             datos.nro_factura || '/',
     date:             hoy,
-    invoice_date:     normalizarFecha(datos.fecha),
+    invoice_date:     datos.fecha || hoy,
     ref:              ref,
     invoice_line_ids: lineas,
   };
