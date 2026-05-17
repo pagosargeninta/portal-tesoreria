@@ -1412,177 +1412,63 @@ tbody tr:hover td { background: #f8faf9; }
     <!-- ══════════ CARTA 29 ══════════ -->
     <div id="page-carta29" class="page">
 
+      <!-- TOPBAR FILTROS -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-        <div class="tab-row" style="margin-bottom:0;">
-          <button class="tab-btn active" onclick="setTab29(this,'mayo')">Mayo 2026</button>
-          <button class="tab-btn" onclick="setTab29(this,'abril')">Abril 2026</button>
-          <button class="tab-btn" onclick="setTab29(this,'marzo')">Marzo 2026</button>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn" onclick="showPage('config',document.querySelectorAll('.nav-item')[8])">
-            <i class="ti ti-upload"></i> Subir eChecq CSV
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="c29-mes" onchange="c29Cargar()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;font-family:'Inter',sans-serif;color:var(--text);background:var(--surface);">
+            <option value="">-- Mes --</option>
+          </select>
+          <button class="btn btn-primary" id="c29-btn-reload" onclick="c29Cargar()">
+            <i class="ti ti-refresh"></i> Actualizar
           </button>
         </div>
+        <div id="c29-last-update" style="font-size:11px;color:var(--muted);"></div>
       </div>
 
-      <div class="metrics-grid" style="margin-bottom:16px;">
+      <!-- METRICAS -->
+      <div class="metrics-grid" style="margin-bottom:16px;" id="c29-metrics">
         <div class="metric-card success">
-          <div class="metric-label">Depósitos recibidos</div>
-          <div class="metric-value">8/12</div>
-          <div class="metric-sub">4 subconvenios pendientes</div>
-        </div>
-        <div class="metric-card danger">
-          <div class="metric-label">Sin COGAYT</div>
-          <div class="metric-value">2</div>
-          <div class="metric-sub">saldo sobreestimado</div>
+          <div class="metric-label">Completos</div>
+          <div class="metric-value" id="c29-cnt-ok">—</div>
+          <div class="metric-sub">cheque + COGAYT + débito</div>
         </div>
         <div class="metric-card warn">
-          <div class="metric-label">Depósitos tardíos</div>
-          <div class="metric-value">3</div>
-          <div class="metric-sub">honorarios pagados tarde</div>
+          <div class="metric-label">Parciales</div>
+          <div class="metric-value" id="c29-cnt-warn">—</div>
+          <div class="metric-sub">falta algún movimiento</div>
+        </div>
+        <div class="metric-card danger">
+          <div class="metric-label">Sin ingreso</div>
+          <div class="metric-value" id="c29-cnt-danger">—</div>
+          <div class="metric-sub">sin cheque registrado</div>
         </div>
         <div class="metric-card info">
-          <div class="metric-label">Total ingresado neto</div>
-          <div class="metric-value">$142M</div>
-          <div class="metric-sub">después de COGAYT 6%</div>
+          <div class="metric-label">Total ingresado</div>
+          <div class="metric-value" id="c29-total">—</div>
+          <div class="metric-sub">sum. facturas de cliente</div>
         </div>
       </div>
 
-      <div class="alert danger" style="margin-bottom:12px;">
-        <i class="ti ti-x"></i>
-        <div><strong>29.8 — Frigorífico del Norte:</strong> sin depósito en mayo ni abril. 2 meses consecutivos sin ingreso. 8 honorarios sin saldo para pagar.</div>
-      </div>
-      <div class="alert warn" style="margin-bottom:16px;">
-        <i class="ti ti-alert-circle"></i>
-        <div><strong>29.4 — Riosma:</strong> depósito registrado pero COGAYT no descontado. El saldo en Odoo está sobreestimado en $831.420. Corregir antes de pagar honorarios.</div>
-      </div>
+      <!-- ALERTAS -->
+      <div id="c29-alertas" style="margin-bottom:12px;"></div>
 
-      <div class="section-title">Estado por subconvenio</div>
-
-      <div class="subconv-row danger">
-        <div class="subconv-header">
-          <div>
-            <div class="subconv-name">29.8 — Frigorífico del Norte</div>
-            <div class="subconv-frigorifico">Sin depósito — 2 meses consecutivos</div>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <span class="badge badge-danger"><i class="ti ti-x"></i> Sin depósito</span>
-            <span class="badge badge-danger">Sin COGAYT</span>
-            <span class="badge badge-danger">0/8 honorarios</span>
-          </div>
-        </div>
-        <div class="subconv-nums">
-          <div class="num-item"><div class="num-label">Esperado</div><div class="num-value">$9.240.000</div></div>
-          <div class="num-item"><div class="num-label">Ingresado</div><div class="num-value danger">$0</div></div>
-          <div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value danger">No descontado</div></div>
-          <div class="num-item"><div class="num-label">Disponible</div><div class="num-value danger">$0</div></div>
-          <div class="num-item"><div class="num-label">Honorarios</div><div class="num-value danger">0/8</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="progress" style="flex:1;"><div class="progress-fill danger" style="width:0%"></div></div>
-          <span style="font-size:11px;color:var(--danger);font-weight:600;">0%</span>
-        </div>
+      <!-- LOADING -->
+      <div id="c29-loading" style="text-align:center;padding:60px;color:var(--muted);display:none;">
+        <i class="ti ti-loader" style="font-size:32px;display:block;margin-bottom:12px;"></i>
+        <div id="c29-loading-msg">Consultando Odoo...</div>
       </div>
 
-      <div class="subconv-row warn">
-        <div class="subconv-header">
-          <div>
-            <div class="subconv-name">29.4 — Frigorífico Riosma</div>
-            <div class="subconv-frigorifico">Depósito OK · COGAYT pendiente</div>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <span class="badge badge-ok"><i class="ti ti-check"></i> Depósito OK</span>
-            <span class="badge badge-danger">Sin COGAYT</span>
-            <span class="badge badge-warn">9/12 honorarios</span>
-          </div>
-        </div>
-        <div class="subconv-nums">
-          <div class="num-item"><div class="num-label">Esperado</div><div class="num-value">$13.857.000</div></div>
-          <div class="num-item"><div class="num-label">Ingresado</div><div class="num-value ok">$13.857.000</div></div>
-          <div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value danger">Falta $831.420</div></div>
-          <div class="num-item"><div class="num-label">Disponible real</div><div class="num-value warn">$13.025.580</div></div>
-          <div class="num-item"><div class="num-label">Honorarios</div><div class="num-value warn">9/12</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="progress" style="flex:1;"><div class="progress-fill warn" style="width:75%"></div></div>
-          <span style="font-size:11px;color:var(--warn);font-weight:600;">75%</span>
-        </div>
+      <!-- EMPTY -->
+      <div id="c29-empty" style="display:none;" class="empty">
+        <i class="ti ti-inbox"></i>
+        <div>No hay subconvenios registrados para este período.</div>
+        <div style="font-size:11px;margin-top:4px;">Verificá que existan cartas <strong>10.SENASA.29.*</strong> en Odoo.</div>
       </div>
 
-      <div class="subconv-row warn">
-        <div class="subconv-header">
-          <div>
-            <div class="subconv-name">29.35 — Jorge Luis Tolosa SA</div>
-            <div class="subconv-frigorifico">Depósito con 12 días de demora · COGAYT OK</div>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <span class="badge badge-warn"><i class="ti ti-clock"></i> Tardío 12 días</span>
-            <span class="badge badge-ok">COGAYT OK</span>
-            <span class="badge badge-warn">10/12 honorarios</span>
-          </div>
-        </div>
-        <div class="subconv-nums">
-          <div class="num-item"><div class="num-label">Esperado</div><div class="num-value">$13.857.570</div></div>
-          <div class="num-item"><div class="num-label">Ingresado</div><div class="num-value ok">$13.857.570</div></div>
-          <div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value ok">$831.454 ✓</div></div>
-          <div class="num-item"><div class="num-label">Disponible</div><div class="num-value ok">$13.026.116</div></div>
-          <div class="num-item"><div class="num-label">Honorarios</div><div class="num-value warn">10/12</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="progress" style="flex:1;"><div class="progress-fill warn" style="width:83%"></div></div>
-          <span style="font-size:11px;color:var(--warn);font-weight:600;">83%</span>
-        </div>
-      </div>
+      <!-- CARDS POR FRIGORIFICO -->
+      <div id="c29-cards"></div>
 
-      <div class="subconv-row ok">
-        <div class="subconv-header">
-          <div>
-            <div class="subconv-name">29.1 — Mattievich SA</div>
-            <div class="subconv-frigorifico">Todo al día ✓</div>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <span class="badge badge-ok"><i class="ti ti-check"></i> Depósito OK</span>
-            <span class="badge badge-ok">COGAYT OK</span>
-            <span class="badge badge-ok">14/14 honorarios</span>
-          </div>
-        </div>
-        <div class="subconv-nums">
-          <div class="num-item"><div class="num-label">Esperado</div><div class="num-value">$6.928.785</div></div>
-          <div class="num-item"><div class="num-label">Ingresado</div><div class="num-value ok">$6.928.785</div></div>
-          <div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value ok">$415.727 ✓</div></div>
-          <div class="num-item"><div class="num-label">Disponible</div><div class="num-value ok">$6.513.058</div></div>
-          <div class="num-item"><div class="num-label">Honorarios</div><div class="num-value ok">14/14</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="progress" style="flex:1;"><div class="progress-fill ok" style="width:100%"></div></div>
-          <span style="font-size:11px;color:var(--success);font-weight:600;">100%</span>
-        </div>
-      </div>
-
-      <div class="sep"></div>
-
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="ti ti-history"></i> Historial últimos 3 meses</div>
-        </div>
-        <div class="card-body" style="padding:0;">
-          <div class="table-wrap" style="border:none;border-radius:0;">
-            <table>
-              <thead><tr><th>Subconv.</th><th>Frigorífico</th><th>Marzo</th><th>Abril</th><th>Mayo</th><th>COGAYT</th></tr></thead>
-              <tbody>
-                <tr><td><strong>29.1</strong></td><td>Mattievich SA</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="badge badge-ok">Al día</span></td></tr>
-                <tr><td><strong>29.4</strong></td><td>Riosma</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot warn"></span>Sin COGAYT</td><td><span class="badge badge-danger">Falta mayo</span></td></tr>
-                <tr><td><strong>29.8</strong></td><td>Del Norte</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot danger"></span>Sin dep.</td><td><span class="hdot danger"></span>Sin dep.</td><td><span class="badge badge-danger">2 meses</span></td></tr>
-                <tr><td><strong>29.35</strong></td><td>Tolosa J.L.</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot warn"></span>Tardío</td><td><span class="hdot warn"></span>Tardío</td><td><span class="badge badge-ok">Al día</span></td></tr>
-                <tr><td><strong>29.10</strong></td><td>Alberdi SA</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="badge badge-ok">Al día</span></td></tr>
-                <tr><td><strong>29.29</strong></td><td>Pampa Cía. Carnes</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="hdot ok"></span>OK</td><td><span class="badge badge-ok">Al día</span></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
     </div>
-
     <!-- ══════════ REPORTES ══════════ -->
     <div id="page-reportes" class="page">
 
@@ -1971,11 +1857,386 @@ function showPage(id, el) {
   const t = pageTitles[id] || [id, ''];
   document.getElementById('topbar-title').textContent = t[0];
   document.getElementById('topbar-sub').textContent = t[1];
+  if (id === 'carta29') { c29IniciarMeses(); c29Cargar(); }
 }
 
-function setTab29(el, month) {
-  document.querySelectorAll('#page-carta29 .tab-btn').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
+// ═══════════════════════════════════════════════════════
+// CARTA 29 — CONTROL INGRESOS FRIGORFICOS (REAL ODOO)
+// ═══════════════════════════════════════════════════════
+var _c29Data = null;
+
+function c29IniciarMeses() {
+  var sel = document.getElementById('c29-mes');
+  if (!sel || sel.options.length > 1) return;
+  var opts = '';
+  var hoy = new Date();
+  for (var i = 0; i < 6; i++) {
+    var d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    var val = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    var label = d.toLocaleString('es-AR', {month:'long', year:'numeric'});
+    label = label.charAt(0).toUpperCase() + label.slice(1);
+    opts += '<option value="' + val + '"' + (i===0?' selected':'') + '>' + label + '</option>';
+  }
+  sel.innerHTML = opts;
+}
+
+async function c29Cargar() {
+  c29IniciarMeses();
+  var sel = document.getElementById('c29-mes');
+  var mes = sel ? sel.value : '';
+  if (!mes) return;
+
+  var desde = mes + '-01';
+  var partes = mes.split('-');
+  var ultimoDia = new Date(parseInt(partes[0]), parseInt(partes[1]), 0).getDate();
+  var hasta = mes + '-' + ultimoDia;
+
+  var loading = document.getElementById('c29-loading');
+  var cards   = document.getElementById('c29-cards');
+  var empty   = document.getElementById('c29-empty');
+  var alertas = document.getElementById('c29-alertas');
+  var btn     = document.getElementById('c29-btn-reload');
+
+  if (loading) { loading.style.display='block'; loading.querySelector('#c29-loading-msg').textContent='Cargando cartas analíticas...'; }
+  if (cards)   cards.innerHTML = '';
+  if (empty)   empty.style.display = 'none';
+  if (alertas) alertas.innerHTML = '';
+  if (btn)     btn.disabled = true;
+
+  c29SetMetrica('c29-cnt-ok','—'); c29SetMetrica('c29-cnt-warn','—');
+  c29SetMetrica('c29-cnt-danger','—'); c29SetMetrica('c29-total','—');
+
+  try {
+    // 1. Cartas hijas de la 29
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Buscando subconvenios...';
+    var todasCartas = await odooCall('account.analytic.account','search_read',[[['active','=',true]]],{fields:['id','name'],order:'name asc'});
+    var cartas29 = todasCartas.filter(function(ca){ return ca.name && ca.name.indexOf('10.SENASA.29') >= 0 && ca.name !== '10.SENASA.29'; });
+
+    if (!cartas29.length) {
+      if (loading) loading.style.display='none';
+      if (empty) empty.style.display='block';
+      if (btn) btn.disabled=false;
+      return;
+    }
+
+    var cartaIds = cartas29.map(function(ca){ return ca.id; });
+
+    // 2. Facturas del período en esas cartas (out_invoice = ingreso cheque / COGAYT, in_invoice = débito convenio)
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Consultando facturas (' + desde + ' → ' + hasta + ')...';
+
+    var moveIds29 = [];
+    // Busco líneas analíticas en ese período para cualquier tipo de factura
+    var lineas = await odooCall('account.move.line','search_read',
+      [[['analytic_distribution','!=',false],['date','>=',desde],['date','<=',hasta]]],
+      {fields:['move_id','analytic_distribution','date','product_id'],limit:5000});
+
+    // Para cada carta, colecto los move_id que la tienen
+    var moveIdsPorCarta = {};
+    cartas29.forEach(function(ca){ moveIdsPorCarta[ca.id] = new Set(); });
+
+    // Mapa move_id -> array de product names (para identificar débito G3)
+    var moveProductos = {};
+
+    lineas.forEach(function(l) {
+      if (!l.analytic_distribution) return;
+      Object.keys(l.analytic_distribution).map(Number).forEach(function(cid) {
+        if (moveIdsPorCarta[cid]) moveIdsPorCarta[cid].add(l.move_id[0]);
+      });
+      // Acumular productos por move
+      if (l.product_id) {
+        var mid = l.move_id[0];
+        var pname = Array.isArray(l.product_id) ? l.product_id[1] : String(l.product_id);
+        if (!moveProductos[mid]) moveProductos[mid] = [];
+        if (moveProductos[mid].indexOf(pname) < 0) moveProductos[mid].push(pname);
+      }
+    });
+
+    // IDs únicos de todos los moves relacionados
+    var allMoveIds = [];
+    cartas29.forEach(function(ca) {
+      moveIdsPorCarta[ca.id].forEach(function(mid){ if(allMoveIds.indexOf(mid)<0) allMoveIds.push(mid); });
+    });
+
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Descargando detalles de facturas...';
+
+    var facturas = {};
+    if (allMoveIds.length > 0) {
+      var fList = await odooCall('account.move','search_read',
+        [[['id','in',allMoveIds]]],
+        {fields:['id','name','move_type','partner_id','amount_total','invoice_date','date','payment_state','state'],limit:2000});
+      fList.forEach(function(f){ facturas[f.id] = f; });
+    }
+
+    // 3. Partners para identificar Fundación
+    var pids = [];
+    Object.values(facturas).forEach(function(f){ var pid=f.partner_id&&f.partner_id[0]; if(pid&&pids.indexOf(pid)<0) pids.push(pid); });
+    var cuitMap = {};
+    if (pids.length > 0) {
+      var partners = await odooCall('res.partner','search_read',[[['id','in',pids]]],{fields:['id','vat'],limit:500});
+      partners.forEach(function(p){ cuitMap[p.id]=(p.vat||'').replace(/\D/g,''); });
+    }
+    var CUIT_FUNDACION = '30676303657';
+
+    // 4. Armar estructura por frigorífico
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Procesando resultados...';
+
+    _c29Data = cartas29.map(function(ca) {
+      var moveSet = moveIdsPorCarta[ca.id];
+      var facsMoves = Array.from(moveSet).map(function(mid){ return facturas[mid]; }).filter(Boolean);
+
+      // Cheque ingresado: out_invoice, partner != Fundación
+      var fCheques = facsMoves.filter(function(f){
+        if (f.move_type !== 'out_invoice') return false;
+        var pid = f.partner_id && f.partner_id[0];
+        return pid && cuitMap[pid] !== CUIT_FUNDACION;
+      });
+
+      // COGAYT 6%: out_invoice, partner == Fundación
+      var fCogayt = facsMoves.filter(function(f){
+        if (f.move_type !== 'out_invoice') return false;
+        var pid = f.partner_id && f.partner_id[0];
+        return pid && cuitMap[pid] === CUIT_FUNDACION;
+      });
+
+      // Débito convenio: in_invoice en esta carta con producto G3-Gastos administrativos
+      var fDebito = facsMoves.filter(function(f){
+        if (f.move_type !== 'in_invoice') return false;
+        var prods = moveProductos[f.id] || [];
+        return prods.some(function(p){ return p && p.toLowerCase().indexOf('g3') >= 0; });
+      });
+
+      var totalCheque = fCheques.reduce(function(s,f){ return s+f.amount_total; },0);
+      var totalCogayt = fCogayt.reduce(function(s,f){ return s+f.amount_total; },0);
+      var totalDebito = fDebito.reduce(function(s,f){ return s+f.amount_total; },0);
+      var cogaytEsperado = totalCheque * 0.06;
+      var cogaytOk = totalCogayt > 0 && Math.abs(totalCogayt - cogaytEsperado) < cogaytEsperado * 0.05;
+
+      var tieneChecque = fCheques.length > 0;
+      var tieneCogayt  = fCogayt.length > 0;
+      var tieneDebito  = fDebito.length > 0;
+
+      var estadoKey = 'ok';
+      if (!tieneChecque) estadoKey = 'danger';
+      else if (!tieneCogayt || !tieneDebito) estadoKey = 'warn';
+
+      return {
+        id: ca.id,
+        nombre: ca.name,
+        estadoKey: estadoKey,
+        tieneChecque: tieneChecque,
+        tieneCogayt: tieneCogayt,
+        tieneDebito: tieneDebito,
+        cogaytOk: cogaytOk,
+        totalCheque: totalCheque,
+        totalCogayt: totalCogayt,
+        totalDebito: totalDebito,
+        cogaytEsperado: cogaytEsperado,
+        fCheques: fCheques,
+        fCogayt: fCogayt,
+        fDebito: fDebito,
+        moveProductos: moveProductos
+      };
+    });
+
+    // Ordenar: danger primero, warn después, ok al final
+    _c29Data.sort(function(a,b){
+      var ord = {danger:0,warn:1,ok:2};
+      return ord[a.estadoKey] - ord[b.estadoKey];
+    });
+
+    if (loading) loading.style.display='none';
+    c29Render(_c29Data, mes);
+
+  } catch(e) {
+    if (loading) loading.innerHTML = '<div class="alert danger" style="margin:0;"><i class="ti ti-x"></i><div>Error: '+e.message+'</div></div>';
+  }
+  if (btn) btn.disabled = false;
+  var upd = document.getElementById('c29-last-update');
+  if (upd) upd.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR');
+}
+
+function c29SetMetrica(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function c29Render(data, mes) {
+  var fmt = function(n){ return '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+  var mesLabel = document.getElementById('c29-mes');
+  mesLabel = mesLabel ? mesLabel.options[mesLabel.selectedIndex].text : mes;
+
+  var cntOk=0, cntWarn=0, cntDanger=0, totalGen=0;
+  data.forEach(function(d){
+    if(d.estadoKey==='ok') cntOk++;
+    else if(d.estadoKey==='warn') cntWarn++;
+    else cntDanger++;
+    totalGen += d.totalCheque;
+  });
+  c29SetMetrica('c29-cnt-ok', cntOk);
+  c29SetMetrica('c29-cnt-warn', cntWarn);
+  c29SetMetrica('c29-cnt-danger', cntDanger);
+  c29SetMetrica('c29-total', fmt(totalGen));
+
+  // Alertas
+  var alertas = document.getElementById('c29-alertas');
+  if (alertas) {
+    var html = '';
+    data.filter(function(d){ return d.estadoKey !== 'ok'; }).forEach(function(d) {
+      var msgs = [];
+      if (!d.tieneChecque) msgs.push('sin cheque registrado');
+      if (d.tieneChecque && !d.tieneCogayt) msgs.push('COGAYT 6% no registrado (faltarían ' + fmt(d.cogaytEsperado) + ')');
+      if (d.tieneChecque && !d.tieneDebito) msgs.push('débito al convenio pendiente');
+      var cls = d.estadoKey === 'danger' ? 'danger' : 'warn';
+      var icn = d.estadoKey === 'danger' ? 'ti-x' : 'ti-alert-circle';
+      html += '<div class="alert ' + cls + '" style="margin-bottom:8px;"><i class="ti ' + icn + '"></i><div><strong>' + d.nombre + ':</strong> ' + msgs.join(' · ') + '</div></div>';
+    });
+    alertas.innerHTML = html;
+  }
+
+  // Cards por frigorifico
+  var cards = document.getElementById('c29-cards');
+  if (!cards) return;
+  if (!data.length) { cards.innerHTML = ''; return; }
+
+  var html = '<div class="section-title">Estado por subconvenio — ' + mesLabel + '</div>';
+
+  data.forEach(function(d) {
+    var borderCls = d.estadoKey === 'ok' ? 'ok' : d.estadoKey === 'warn' ? 'warn' : 'danger';
+
+    // Badges de estado
+    var badges = '';
+    if (!d.tieneChecque) {
+      badges += '<span class="badge badge-danger"><i class="ti ti-x"></i> Sin cheque</span>';
+    } else {
+      badges += '<span class="badge badge-ok"><i class="ti ti-check"></i> Cheque OK</span>';
+    }
+    if (!d.tieneCogayt) {
+      badges += ' <span class="badge badge-danger">Sin COGAYT</span>';
+    } else if (!d.cogaytOk) {
+      badges += ' <span class="badge badge-warn">COGAYT parcial</span>';
+    } else {
+      badges += ' <span class="badge badge-ok">COGAYT OK</span>';
+    }
+    if (!d.tieneDebito) {
+      badges += ' <span class="badge badge-muted">Débito pendiente</span>';
+    } else {
+      badges += ' <span class="badge badge-ok">Débito OK</span>';
+    }
+
+    // Sub-estado textual
+    var subText = '';
+    if (d.estadoKey === 'ok') subText = 'Todos los movimientos registrados ✓';
+    else if (!d.tieneChecque) subText = 'Sin depósito de cheque en el período';
+    else { var pend = []; if(!d.tieneCogayt) pend.push('COGAYT'); if(!d.tieneDebito) pend.push('Débito convenio'); subText = 'Pendiente: ' + pend.join(' · '); }
+
+    // Cheques detalle
+    var cheqRows = '';
+    if (d.fCheques.length) {
+      d.fCheques.forEach(function(f){
+        var pst = f.payment_state==='paid'?'<span class="badge badge-ok">Pagada</span>':f.payment_state==='in_payment'?'<span class="badge badge-info">En proceso</span>':'<span class="badge badge-muted">Pendiente</span>';
+        cheqRows += '<tr><td style="color:var(--muted);font-size:10px;">' + (f.invoice_date||f.date||'—') + '</td><td class="mono" style="font-size:11px;">' + (f.name||'—') + '</td><td class="mono">' + fmt(f.amount_total) + '</td><td>' + pst + '</td><td style="font-size:10px;color:var(--muted);">' + ((f.partner_id&&f.partner_id[1])||'—') + '</td></tr>';
+      });
+    } else {
+      cheqRows = '<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--danger);">Sin cheque registrado</td></tr>';
+    }
+
+    // COGAYT detalle
+    var cogRows = '';
+    if (d.fCogayt.length) {
+      d.fCogayt.forEach(function(f){
+        var pst = f.payment_state==='paid'?'<span class="badge badge-ok">Pagada</span>':f.payment_state==='in_payment'?'<span class="badge badge-info">En proceso</span>':'<span class="badge badge-muted">Pendiente</span>';
+        cogRows += '<tr><td style="color:var(--muted);font-size:10px;">' + (f.invoice_date||f.date||'—') + '</td><td class="mono" style="font-size:11px;">' + (f.name||'—') + '</td><td class="mono">' + fmt(f.amount_total) + '</td><td>' + pst + '</td></tr>';
+      });
+    } else {
+      var esperado = d.tieneChecque ? (' — Esperado: ' + fmt(d.cogaytEsperado)) : '';
+      cogRows = '<tr><td colspan="4" style="text-align:center;padding:12px;color:var(--danger);">Sin COGAYT registrado' + esperado + '</td></tr>';
+    }
+
+    // Débito detalle
+    var debRows = '';
+    if (d.fDebito.length) {
+      d.fDebito.forEach(function(f){
+        var pst = f.payment_state==='paid'?'<span class="badge badge-ok">Pagada</span>':f.payment_state==='in_payment'?'<span class="badge badge-info">En proceso</span>':'<span class="badge badge-muted">Pendiente</span>';
+        var prods = (d.moveProductos && d.moveProductos[f.id]) || [];
+        var prodStr = prods.length ? prods.join(', ') : '—';
+        debRows += '<tr><td style="color:var(--muted);font-size:10px;">' + (f.invoice_date||f.date||'—') + '</td><td class="mono" style="font-size:11px;">' + (f.name||'—') + '</td><td class="mono">' + fmt(f.amount_total) + '</td><td>' + pst + '</td><td style="font-size:10px;color:var(--muted);">' + ((f.partner_id&&f.partner_id[1])||'—') + '</td><td style="font-size:10px;color:var(--info);">' + prodStr + '</td></tr>';
+      });
+    } else {
+      debRows = '<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--muted);">Sin débito al convenio registrado</td></tr>';
+    }
+
+    // COGAYT resumen
+    var cogaytResumen = '';
+    if (d.tieneChecque) {
+      var diff = d.totalCogayt - d.cogaytEsperado;
+      var diffColor = Math.abs(diff) < d.cogaytEsperado * 0.05 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--warn)';
+      cogaytResumen = '<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:6px 10px;background:#f8faf9;border-radius:6px;">' +
+        'Esperado 6%: <strong>' + fmt(d.cogaytEsperado) + '</strong>' +
+        ' &nbsp;·&nbsp; Registrado: <strong style="color:' + diffColor + ';">' + fmt(d.totalCogayt) + '</strong>' +
+        (Math.abs(diff) > 100 ? ' &nbsp;·&nbsp; Diferencia: <strong style="color:' + diffColor + ';">' + fmt(Math.abs(diff)) + '</strong>' : ' &nbsp;✓') +
+        '</div>';
+    }
+
+    html += '<div class="subconv-row ' + borderCls + '" style="margin-bottom:12px;">' +
+      '<div class="subconv-header">' +
+        '<div>' +
+          '<div class="subconv-name">' + d.nombre + '</div>' +
+          '<div class="subconv-frigorifico">' + subText + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + badges + '</div>' +
+      '</div>' +
+
+      // Montos resumen
+      '<div class="subconv-nums" style="margin-bottom:10px;">' +
+        '<div class="num-item"><div class="num-label">Cheque ingresado</div><div class="num-value ' + (d.tieneChecque?'ok':'danger') + '">' + fmt(d.totalCheque) + '</div></div>' +
+        '<div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value ' + (d.cogaytOk?'ok':d.tieneCogayt?'warn':'danger') + '">' + fmt(d.totalCogayt) + '</div></div>' +
+        '<div class="num-item"><div class="num-label">Débito convenio</div><div class="num-value ' + (d.tieneDebito?'ok':'muted') + '">' + fmt(d.totalDebito) + '</div></div>' +
+        '<div class="num-item"><div class="num-label">Neto disponible</div><div class="num-value ' + (d.tieneChecque&&d.cogaytOk?'ok':'warn') + '">' + fmt(d.totalCheque - d.totalCogayt) + '</div></div>' +
+      '</div>' +
+
+      cogaytResumen +
+
+      // Detalle expandible — cheques
+      '<details style="margin-top:10px;">' +
+        '<summary style="font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px;">' +
+          '<i class="ti ti-chevron-right" style="font-size:12px;"></i>' +
+          '<i class="ti ti-receipt"></i> Ingresos / cheques (' + d.fCheques.length + ')' +
+        '</summary>' +
+        '<div class="table-wrap" style="margin-top:8px;">' +
+          '<table><thead><tr><th>Fecha</th><th>Comprobante</th><th>Monto</th><th>Estado</th><th>Partner</th></tr></thead>' +
+          '<tbody>' + cheqRows + '</tbody></table>' +
+        '</div>' +
+      '</details>' +
+
+      // Detalle — COGAYT
+      '<details style="margin-top:6px;">' +
+        '<summary style="font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px;">' +
+          '<i class="ti ti-chevron-right" style="font-size:12px;"></i>' +
+          '<i class="ti ti-percentage"></i> COGAYT 6% — Fundación (' + d.fCogayt.length + ')' +
+        '</summary>' +
+        '<div class="table-wrap" style="margin-top:8px;">' +
+          '<table><thead><tr><th>Fecha</th><th>Comprobante</th><th>Monto</th><th>Estado</th></tr></thead>' +
+          '<tbody>' + cogRows + '</tbody></table>' +
+        '</div>' +
+      '</details>' +
+
+      // Detalle — Débito
+      '<details style="margin-top:6px;">' +
+        '<summary style="font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px;">' +
+          '<i class="ti ti-chevron-right" style="font-size:12px;"></i>' +
+          '<i class="ti ti-arrow-down-circle"></i> Débito al convenio (' + d.fDebito.length + ')' +
+        '</summary>' +
+        '<div class="table-wrap" style="margin-top:8px;">' +
+          '<table><thead><tr><th>Fecha</th><th>Comprobante</th><th>Monto</th><th>Estado</th><th>Partner</th><th>Producto</th></tr></thead>' +
+          '<tbody>' + debRows + '</tbody></table>' +
+        '</div>' +
+      '</details>' +
+
+    '</div>';
+  });
+
+  var cardsEl = document.getElementById('c29-cards');
+  if (cardsEl) cardsEl.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3299,68 +3560,35 @@ function planParseCSV(text) {
   });
 })();
 
-function planApplyParsed(file, hdrs, rows) {
-  _planHeaders = hdrs;
-  _planRows    = rows;
-
-  var info = document.getElementById('plan-fileInfo');
-  if (info) { info.style.display = 'block'; info.textContent = file.name + ' — ' + _planRows.length + ' registros'; }
-
-  var colCuit   = document.getElementById('plan-col-cuit');
-  var colNombre = document.getElementById('plan-col-nombre');
-  var opts = '<option value="">-- seleccionar --</option>';
-  _planHeaders.forEach(function(h){ opts += '<option value="' + h + '">' + h + '</option>'; });
-  if (colCuit)   colCuit.innerHTML   = opts;
-  if (colNombre) colNombre.innerHTML = opts;
-
-  function guessCol(kws) {
-    return _planHeaders.find(function(h){ return kws.some(function(k){ return h.toLowerCase().indexOf(k) >= 0; }); }) || '';
-  }
-  if (colCuit)   colCuit.value   = guessCol(['cuit','cuil','vat','nit','tax']);
-  if (colNombre) colNombre.value = guessCol(['nombre','name','razon','apellido','empresa']);
-
-  var sec = document.getElementById('plan-col-section');
-  if (sec) sec.style.display = 'block';
-  var btn = document.getElementById('plan-btn-comparar');
-  if (btn) btn.disabled = false;
-}
-
 function planHandleFile(file) {
-  var ext = file.name.split('.').pop().toLowerCase();
-  if (ext === 'xlsx' || ext === 'xls') {
-    // Leer con SheetJS
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-        var ws = wb.Sheets[wb.SheetNames[0]];
-        var raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        if (!raw || raw.length < 2) { showToast('El archivo Excel está vacío o no tiene datos', 'err'); return; }
-        var hdrs = raw[0].map(function(h){ return String(h).trim(); });
-        var rows = [];
-        for (var i = 1; i < raw.length; i++) {
-          var rowArr = raw[i];
-          var allEmpty = rowArr.every(function(v){ return v === '' || v === null || v === undefined; });
-          if (allEmpty) continue;
-          var obj = {};
-          hdrs.forEach(function(h, idx) { obj[h] = rowArr[idx] !== undefined ? String(rowArr[idx]).trim() : ''; });
-          rows.push(obj);
-        }
-        planApplyParsed(file, hdrs, rows);
-      } catch(err) {
-        showToast('Error leyendo Excel: ' + err.message, 'err');
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  } else {
-    // CSV / TXT — flujo original
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var parsed = planParseCSV(e.target.result);
-      planApplyParsed(file, parsed.hdrs, parsed.rows);
-    };
-    reader.readAsText(file, 'UTF-8');
-  }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var parsed = planParseCSV(e.target.result);
+    _planHeaders = parsed.hdrs;
+    _planRows    = parsed.rows;
+
+    var info = document.getElementById('plan-fileInfo');
+    if (info) { info.style.display = 'block'; info.textContent = file.name + ' — ' + _planRows.length + ' registros'; }
+
+    var colCuit   = document.getElementById('plan-col-cuit');
+    var colNombre = document.getElementById('plan-col-nombre');
+    var opts = '<option value="">-- seleccionar --</option>';
+    _planHeaders.forEach(function(h){ opts += '<option value="' + h + '">' + h + '</option>'; });
+    if (colCuit)   colCuit.innerHTML   = opts;
+    if (colNombre) colNombre.innerHTML = opts;
+
+    function guessCol(kws) {
+      return _planHeaders.find(function(h){ return kws.some(function(k){ return h.toLowerCase().indexOf(k) >= 0; }); }) || '';
+    }
+    if (colCuit)   colCuit.value   = guessCol(['cuit','cuil','vat','nit','tax']);
+    if (colNombre) colNombre.value = guessCol(['nombre','name','razon','apellido','empresa']);
+
+    var sec = document.getElementById('plan-col-section');
+    if (sec) sec.style.display = 'block';
+    var btn = document.getElementById('plan-btn-comparar');
+    if (btn) btn.disabled = false;
+  };
+  reader.readAsText(file, 'UTF-8');
 }
 
 async function planComparar() {
@@ -3585,7 +3813,6 @@ function honDetalleExcel(){
 
 </script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
