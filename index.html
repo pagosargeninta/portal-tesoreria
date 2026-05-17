@@ -1001,11 +1001,10 @@ tbody tr:hover td { background: #f8faf9; }
 
       <!-- ── COMPARAR PLANILLA ── -->
       <div id="hon-planilla" class="hon-tab" style="display:none;">
-
         <div class="grid2" style="margin-bottom:16px;">
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="ti ti-file-spreadsheet"></i> Paso 1 — Configurar</div>
+              <div class="card-title"><i class="ti ti-file-spreadsheet"></i> Configurar comparación</div>
             </div>
             <div class="card-body">
               <div class="field">
@@ -1019,7 +1018,7 @@ tbody tr:hover td { background: #f8faf9; }
                 <div class="dropzone" id="plan-dropzone" onclick="document.getElementById('plan-fileInput').click()" style="margin-bottom:8px;">
                   <i class="ti ti-table-import"></i>
                   <p>Arrastrá el archivo o hacé <span>clic para seleccionar</span></p>
-                  <p style="font-size:11px;margin-top:4px;">Excel (.xlsx, .xls) o CSV — debe tener columnas de CUIT y Nombre</p>
+                  <p style="font-size:11px;margin-top:4px;">CSV o Excel — necesita columnas de CUIT y Nombre</p>
                 </div>
                 <input type="file" id="plan-fileInput" accept=".csv,.xlsx,.xls,.txt" style="display:none">
                 <div id="plan-fileInfo" style="display:none;padding:8px 12px;background:var(--success-bg);border-radius:7px;font-size:12px;color:var(--success);margin-bottom:8px;"></div>
@@ -1039,42 +1038,28 @@ tbody tr:hover td { background: #f8faf9; }
               </button>
             </div>
           </div>
-
           <div class="card">
             <div class="card-header">
               <div class="card-title"><i class="ti ti-info-circle"></i> Cómo funciona</div>
             </div>
             <div class="card-body">
               <div style="display:flex;flex-direction:column;gap:12px;">
-                <div style="display:flex;gap:10px;align-items:flex-start;">
-                  <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">1</div>
-                  <div><div style="font-size:12px;font-weight:500;">Seleccionás la carta</div><div style="font-size:11px;color:var(--muted);">Para filtrar las facturas de Odoo por esa carta analítica</div></div>
-                </div>
-                <div style="display:flex;gap:10px;align-items:flex-start;">
-                  <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">2</div>
-                  <div><div style="font-size:12px;font-weight:500;">Subís la planilla</div><div style="font-size:11px;color:var(--muted);">Excel o CSV del organismo con CUIT y Nombre</div></div>
-                </div>
-                <div style="display:flex;gap:10px;align-items:flex-start;">
-                  <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">3</div>
-                  <div><div style="font-size:12px;font-weight:500;">Cruce automático</div><div style="font-size:11px;color:var(--muted);">Cruza por CUIT contra facturas en Odoo</div></div>
-                </div>
-                <div style="display:flex;gap:10px;align-items:flex-start;">
-                  <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">4</div>
-                  <div><div style="font-size:12px;font-weight:500;">Resultado por persona</div><div style="font-size:11px;color:var(--muted);">✓ Pagada · 🔄 En proceso · 📝 Borrador · ✗ Faltante</div></div>
-                </div>
+                <div style="display:flex;gap:10px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">1</div><div><div style="font-size:12px;font-weight:500;">Seleccionás la carta</div><div style="font-size:11px;color:var(--muted);">Para filtrar facturas en Odoo</div></div></div>
+                <div style="display:flex;gap:10px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">2</div><div><div style="font-size:12px;font-weight:500;">Subís la planilla</div><div style="font-size:11px;color:var(--muted);">CSV o Excel con CUIT y Nombre</div></div></div>
+                <div style="display:flex;gap:10px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">3</div><div><div style="font-size:12px;font-weight:500;">Cruce por CUIT</div><div style="font-size:11px;color:var(--muted);">Exacto, sin ambigüedades</div></div></div>
+                <div style="display:flex;gap:10px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">4</div><div><div style="font-size:12px;font-weight:500;">Estado por persona</div><div style="font-size:11px;color:var(--muted);">Pagada · En proceso · Borrador · Faltante</div></div></div>
               </div>
             </div>
           </div>
         </div>
 
         <div id="plan-resultados" style="display:none;">
-          <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-bottom:16px;">
-            <div class="metric-card success"><div class="metric-label">Pagadas</div><div class="metric-value" id="plan-cnt-pagadas">0</div><div class="metric-sub">en Odoo</div></div>
-            <div class="metric-card info"><div class="metric-label">En proceso</div><div class="metric-value" id="plan-cnt-proceso">0</div><div class="metric-sub">en pago</div></div>
-            <div class="metric-card"><div class="metric-label">Borrador</div><div class="metric-value" id="plan-cnt-borrador">0</div><div class="metric-sub">sin confirmar</div></div>
-            <div class="metric-card danger"><div class="metric-label">Faltantes</div><div class="metric-value" id="plan-cnt-faltantes">0</div><div class="metric-sub">no están en Odoo</div></div>
+          <div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
+            <div class="metric-card success"><div class="metric-label">Pagadas</div><div class="metric-value" id="plan-cnt-pagadas">0</div></div>
+            <div class="metric-card info"><div class="metric-label">En proceso</div><div class="metric-value" id="plan-cnt-proceso">0</div></div>
+            <div class="metric-card"><div class="metric-label">Borrador</div><div class="metric-value" id="plan-cnt-borrador">0</div></div>
+            <div class="metric-card danger"><div class="metric-label">Faltantes</div><div class="metric-value" id="plan-cnt-faltantes">0</div></div>
           </div>
-
           <div class="card">
             <div class="card-header">
               <div class="card-title"><i class="ti ti-table"></i> Detalle por persona</div>
@@ -1092,31 +1077,35 @@ tbody tr:hover td { background: #f8faf9; }
             </div>
             <div class="table-wrap" style="border:none;border-radius:0;max-height:500px;overflow-y:auto;">
               <table>
-                <thead><tr><th>Nombre (planilla)</th><th>CUIT</th><th>Nro Factura</th><th>Monto</th><th>Fecha</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Nombre</th><th>CUIT</th><th>Nro Factura</th><th>Monto</th><th>Fecha</th><th>Estado</th></tr></thead>
                 <tbody id="plan-tbody"></tbody>
               </table>
             </div>
           </div>
         </div>
-
       </div>
 
       <!-- ── DETALLE DE FACTURAS ── -->
       <div id="hon-detalle" class="hon-tab" style="display:none;">
         <div class="card">
-          <div class="card-body" style="padding:0;">
-            <div id="hon-detalle-empty" style="text-align:center;padding:40px;color:var(--muted);">
-              <i class="ti ti-inbox" style="font-size:36px;opacity:0.3;display:block;margin-bottom:10px;"></i>
-              <div style="font-size:14px;margin-bottom:6px;">Sin facturas cargadas en esta sesión</div>
-              <div style="font-size:12px;">Las facturas aparecen acá después de cargarlas desde Cargar PDFs</div>
-            </div>
-            <div class="table-wrap" id="hon-detalle-wrap" style="border:none;border-radius:0;display:none;max-height:500px;overflow-y:auto;">
-              <table>
-                <thead><tr><th>Proveedor</th><th>CUIT</th><th>Nro Factura</th><th>Total</th><th>CAE</th><th>Conf.</th><th>Odoo ID</th></tr></thead>
-                <tbody id="hon-detalle-body"></tbody>
-              </table>
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-table"></i> Facturas del ciclo — Odoo</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" id="hon-det-search" placeholder="Buscar..." oninput="honDetalleFiltrar()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;width:180px;">
+              <button class="btn" onclick="honDetalleCargar()"><i class="ti ti-refresh"></i> Actualizar</button>
+              <button class="btn btn-primary" onclick="honDetalleExcel()"><i class="ti ti-download"></i> Excel</button>
             </div>
           </div>
+          <div id="hon-detalle-loading" style="text-align:center;padding:32px;color:var(--muted);">
+            <i class="ti ti-loader" style="font-size:28px;display:block;margin-bottom:10px;"></i>Cargando desde Odoo...
+          </div>
+          <div class="table-wrap" id="hon-detalle-wrap" style="border:none;border-radius:0;display:none;max-height:520px;overflow-y:auto;">
+            <table>
+              <thead><tr><th>Proveedor</th><th>CUIT</th><th>Nro Factura</th><th>Monto</th><th>Fecha</th><th>CAE</th><th>Estado</th><th>ID</th></tr></thead>
+              <tbody id="hon-detalle-body"></tbody>
+            </table>
+          </div>
+          <div id="hon-detalle-footer" style="display:none;padding:10px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);"></div>
         </div>
       </div>
 
@@ -1964,6 +1953,7 @@ function showHonTab(id, el) {
   document.querySelectorAll('#page-honorarios .tab-btn').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   if (id === 'resumen') honDashCargar();
+  if (id === 'planilla') planCargarCartas();
   if (['recepcion','prepago','postpago'].includes(id)) {
     if (!_honControlData) honControlCargar();
     else honRenderControl();
@@ -2238,45 +2228,43 @@ async function honAdjuntarPDF(file, invoiceId, intentos = 3) {
 }
 
 // ── Llama a Claude para extraer datos del PDF ──
-async function honExtractWithClaude(file, intentos = 4) {
-  const claudeKey = localStorage.getItem('claude_key');
+async function honExtractWithClaude(file, intentos) {
+  if (intentos === undefined) intentos = 4;
+  var claudeKey = localStorage.getItem('claude_key');
   if (!claudeKey) throw new Error('API key de Claude no configurada');
-  const portalPass = sessionStorage.getItem('portal_pass_session') || '';
+  var portalPass = sessionStorage.getItem('portal_pass_session') || '';
 
-  // Extraer texto localmente con pdf.js — gratis, sin tokens
-  let textoExtraido = '';
+  var textoExtraido = '';
   try {
-    const ab = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
-    const pags = [];
-    for (let p = 1; p <= Math.min(pdf.numPages, 3); p++) {
-      const pg = await pdf.getPage(p);
-      const ct = await pg.getTextContent();
+    var ab = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+    var pags = [];
+    for (var p = 1; p <= Math.min(pdf.numPages, 3); p++) {
+      var pg = await pdf.getPage(p);
+      var ct = await pg.getTextContent();
       pags.push(ct.items.map(function(i){ return i.str; }).join(' '));
     }
     textoExtraido = pags.join('\n').trim();
-  } catch(e) { console.warn('pdf.js fallo:', e.message); }
+  } catch(ex) { console.warn('pdf.js fallo:', ex.message); }
 
-  // Usar texto solo si tiene contenido real: >300 chars + CUIT + montos
   var tieneCuit   = /\d{10,11}/.test(textoExtraido);
   var tieneMontos = /\d{4,}/.test(textoExtraido);
   var usarTexto   = textoExtraido.length > 300 && tieneCuit && tieneMontos;
   var notaExtra   = '';
 
-  for (let intento = 1; intento <= intentos; intento++) {
+  for (var intento = 1; intento <= intentos; intento++) {
     try {
-      // Prompt sin template literals para evitar conflictos
       var promptBase =
         'Extrae los datos del EMISOR de esta factura argentina. Responde SOLO con JSON valido, sin texto extra.\n\n' +
         'ESTRUCTURA FIJA DE LA FACTURA:\n' +
         '- ARRIBA: datos del EMISOR (prestador/vendedor) con su CUIT\n' +
-        '- ABAJO: seccion "Datos del receptor" con CUIT 30676303657 (Fundacion ArgenINTA = RECEPTOR)\n\n' +
+        '- ABAJO: seccion Datos del receptor con CUIT 30676303657 (Fundacion ArgenINTA = RECEPTOR)\n\n' +
         'REGLAS:\n' +
-        '- "cuit" = CUIT del EMISOR de la seccion de arriba. NUNCA 30676303657.\n' +
-        '- "nro_factura" = numero completo como "00001-00000123"\n' +
-        '- "fecha" = YYYY-MM-DD (si ves DD/MM/YYYY convertila)\n' +
-        '- montos = numeros sin puntos de miles ni $\n' +
-        '- "confidence" = 100 si todo claro, 90 si falta periodo, 70 si CUIT dudoso\n' +
+        '- cuit = CUIT del EMISOR de arriba. NUNCA 30676303657.\n' +
+        '- nro_factura = numero completo como 00001-00000123\n' +
+        '- fecha = YYYY-MM-DD (si ves DD/MM/YYYY convertila)\n' +
+        '- montos = numeros sin puntos de miles ni signo pesos\n' +
+        '- confidence = 100 si todo claro, 90 si falta periodo, 70 si CUIT dudoso\n' +
         notaExtra + '\n\n' +
         'Devuelve exactamente:\n' +
         '{"cuit":"","razon_social":"","nro_factura":"","fecha":"","neto":0,"iva":0,"total":0,"cae":"","periodo_desde":"","periodo_hasta":"","confidence":100}';
@@ -2290,10 +2278,10 @@ async function honExtractWithClaude(file, intentos = 4) {
         };
       } else {
         var b64 = await new Promise(function(res, rej) {
-          var r = new FileReader();
-          r.onload = function(){ res(r.result.split(',')[1]); };
-          r.onerror = function(){ rej(new Error('Error leyendo PDF')); };
-          r.readAsDataURL(file);
+          var rd = new FileReader();
+          rd.onload = function(){ res(rd.result.split(',')[1]); };
+          rd.onerror = function(){ rej(new Error('Error leyendo PDF')); };
+          rd.readAsDataURL(file);
         });
         payload = {
           model: 'claude-sonnet-4-5-20250929',
@@ -2313,8 +2301,8 @@ async function honExtractWithClaude(file, intentos = 4) {
 
       if (!resp.ok) {
         var e0 = await resp.json().catch(function(){ return {}; });
-        var msg0 = (e0.error && e0.error.message) || ('HTTP ' + resp.status);
-        var isRL0 = resp.status === 429 || msg0.includes('rate limit');
+        var msg0 = (e0.error && e0.error.message) ? e0.error.message : ('HTTP ' + resp.status);
+        var isRL0 = resp.status === 429 || msg0.indexOf('rate limit') >= 0;
         if (intento < intentos) { await new Promise(function(r){ setTimeout(r, isRL0 ? 60000 : 3000 * intento); }); continue; }
         throw new Error(msg0);
       }
@@ -2322,7 +2310,7 @@ async function honExtractWithClaude(file, intentos = 4) {
       var data = await resp.json();
       if (data.error) {
         var msg1 = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
-        var isRL1 = msg1.includes('rate limit') || msg1.includes('rate_limit');
+        var isRL1 = msg1.indexOf('rate limit') >= 0 || msg1.indexOf('rate_limit') >= 0;
         if (intento < intentos) { await new Promise(function(r){ setTimeout(r, isRL1 ? 60000 : 3000 * intento); }); continue; }
         throw new Error(msg1);
       }
@@ -2345,19 +2333,17 @@ async function honExtractWithClaude(file, intentos = 4) {
         throw new Error('JSON invalido: ' + jsonMatch[0].substring(0, 80));
       }
 
-      // Bloquear CUIT de la Fundacion — reintentar con instruccion explicita
       var cuitLimpio = (parsed.cuit || '').replace(/\D/g, '');
       if (cuitLimpio === '30676303657') {
         if (intento < intentos) {
-          notaExtra = '\n\nATENCION: Devolviste 30676303657 = Fundacion ArgenINTA (RECEPTOR). PROHIBIDO. El CUIT correcto es del PRESTADOR en el encabezado de la factura.';
+          notaExtra = '\nATENCION: 30676303657 es Fundacion ArgenINTA (RECEPTOR). PROHIBIDO. Usa el CUIT del PRESTADOR del encabezado.';
           if (intento >= 2) usarTexto = false;
           await new Promise(function(r){ setTimeout(r, 500); });
           continue;
         }
-        throw new Error('CUIT de Fundacion detectado — no se identifico al emisor');
+        throw new Error('CUIT de Fundacion detectado');
       }
 
-      // Normalizar fecha DD/MM/YYYY → YYYY-MM-DD
       if (parsed.fecha) {
         var mf = parsed.fecha.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
         if (mf) parsed.fecha = mf[3] + '-' + mf[2] + '-' + mf[1];
@@ -2439,7 +2425,7 @@ async function honProcesar() {
   let okCount = 0, errCount = 0;
 
   const BATCH_SIZE = 25;
-  const BATCH_DELAY = 5000; // 5s entre lotes — optimo con Haiku texto nivel 2
+  const BATCH_DELAY = 5000; // 5s entre lotes con 25 paralelos
 
   for (let i = 0; i < honFiles.length; i += BATCH_SIZE) {
     const batch = honFiles.slice(i, i + BATCH_SIZE);
@@ -3251,25 +3237,28 @@ function ibRestart() {
 </script>
 
 
-// ═══════════════════════════════════════════════════════
-// COMPARADOR DE PLANILLAS
-// ═══════════════════════════════════════════════════════
-let _planRows = [];       // filas de la planilla
-let _planHeaders = [];    // headers del CSV/Excel
-let _planResultados = []; // resultado del cruce
+<script>
 
-// Cargar cartas en el selector de planilla
+// === COMPARADOR DE PLANILLAS ===
+var _planRows = [];
+var _planHeaders = [];
+var _planResultados = [];
+
 async function planCargarCartas() {
   var sel = document.getElementById('plan-sel-carta');
-  if (!sel || sel.options.length > 1) return;
+  if (!sel) return;
+  if (sel.options.length > 1) return;
   try {
     var cartas = await odooCall('account.analytic.account','search_read',[[['active','=',true]]],{fields:['id','name'],order:'name asc'});
-    var hon = cartas.filter(function(c){ return HON_CARTAS_FILTRO_DET && HON_CARTAS_FILTRO_DET.some(function(f){ return c.name && c.name.includes(f); }); });
-    sel.innerHTML = '<option value="">-- Seleccioná una carta --</option>' + hon.map(function(c){ return '<option value="'+c.id+'">'+c.name+'</option>'; }).join('');
-  } catch(e) { sel.innerHTML = '<option value="">Error cargando cartas</option>'; }
+    var hon = cartas.filter(function(ca){
+      return Array.isArray(HON_CARTAS_FILTRO_DET) && HON_CARTAS_FILTRO_DET.some(function(f){ return ca.name && ca.name.indexOf(f) >= 0; });
+    });
+    var html = '<option value="">-- Selecciona una carta --</option>';
+    hon.forEach(function(ca){ html += '<option value="' + ca.id + '">' + ca.name + '</option>'; });
+    sel.innerHTML = html;
+  } catch(e) { sel.innerHTML = '<option value="">Error: ' + e.message + '</option>'; }
 }
 
-// Parsear CSV
 function planParseCSV(text) {
   var lines = text.trim().split(/\r?\n/);
   if (!lines.length) return { hdrs: [], rows: [] };
@@ -3291,126 +3280,122 @@ function planParseCSV(text) {
     if (!lines[i].trim()) continue;
     var vals = parseLine(lines[i]);
     var obj = {};
-    hdrs.forEach(function(h, idx) { obj[h] = vals[idx] || ''; });
+    hdrs.forEach(function(h, idx) { obj[h] = vals[idx] !== undefined ? vals[idx] : ''; });
     rows.push(obj);
   }
   return { hdrs: hdrs, rows: rows };
 }
 
-// Manejar archivo subido
-document.addEventListener('DOMContentLoaded', function() {
-  var dz = document.getElementById('plan-dropzone');
-  var fi = document.getElementById('plan-fileInput');
-  if (dz) {
-    dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('drag-over'); });
-    dz.addEventListener('dragleave', function(){ dz.classList.remove('drag-over'); });
-    dz.addEventListener('drop', function(e){ e.preventDefault(); dz.classList.remove('drag-over'); if(e.dataTransfer.files[0]) planHandleFile(e.dataTransfer.files[0]); });
-  }
-  if (fi) fi.addEventListener('change', function(e){ if(e.target.files[0]) planHandleFile(e.target.files[0]); });
-});
+(function setupPlanDropzone() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var dz = document.getElementById('plan-dropzone');
+    var fi = document.getElementById('plan-fileInput');
+    if (dz) {
+      dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('drag-over'); });
+      dz.addEventListener('dragleave', function(){ dz.classList.remove('drag-over'); });
+      dz.addEventListener('drop', function(e){ e.preventDefault(); dz.classList.remove('drag-over'); if(e.dataTransfer.files[0]) planHandleFile(e.dataTransfer.files[0]); });
+    }
+    if (fi) fi.addEventListener('change', function(e){ if(e.target.files[0]) planHandleFile(e.target.files[0]); });
+  });
+})();
 
 function planHandleFile(file) {
   var reader = new FileReader();
   reader.onload = function(e) {
-    var text = e.target.result;
-    var parsed = planParseCSV(text);
+    var parsed = planParseCSV(e.target.result);
     _planHeaders = parsed.hdrs;
-    _planRows = parsed.rows;
+    _planRows    = parsed.rows;
 
     var info = document.getElementById('plan-fileInfo');
-    info.style.display = 'block';
-    info.textContent = '✓ ' + file.name + ' — ' + _planRows.length + ' registros';
+    if (info) { info.style.display = 'block'; info.textContent = file.name + ' — ' + _planRows.length + ' registros'; }
 
-    // Poblar selects de columnas
     var colCuit   = document.getElementById('plan-col-cuit');
     var colNombre = document.getElementById('plan-col-nombre');
-    var opts = '<option value="">-- seleccionar --</option>' + _planHeaders.map(function(h){ return '<option value="'+h+'">'+h+'</option>'; }).join('');
-    colCuit.innerHTML   = opts;
-    colNombre.innerHTML = opts;
+    var opts = '<option value="">-- seleccionar --</option>';
+    _planHeaders.forEach(function(h){ opts += '<option value="' + h + '">' + h + '</option>'; });
+    if (colCuit)   colCuit.innerHTML   = opts;
+    if (colNombre) colNombre.innerHTML = opts;
 
-    // Autodetectar columnas
-    var guessCol = function(kws) { return _planHeaders.find(function(h){ return kws.some(function(k){ return h.toLowerCase().includes(k); }); }) || ''; };
-    colCuit.value   = guessCol(['cuit','cuil','vat','nit','tax']);
-    colNombre.value = guessCol(['nombre','name','razon','apellido','empresa']);
+    function guessCol(kws) {
+      return _planHeaders.find(function(h){ return kws.some(function(k){ return h.toLowerCase().indexOf(k) >= 0; }); }) || '';
+    }
+    if (colCuit)   colCuit.value   = guessCol(['cuit','cuil','vat','nit','tax']);
+    if (colNombre) colNombre.value = guessCol(['nombre','name','razon','apellido','empresa']);
 
-    document.getElementById('plan-col-section').style.display = 'block';
-    document.getElementById('plan-btn-comparar').disabled = false;
+    var sec = document.getElementById('plan-col-section');
+    if (sec) sec.style.display = 'block';
+    var btn = document.getElementById('plan-btn-comparar');
+    if (btn) btn.disabled = false;
   };
   reader.readAsText(file, 'UTF-8');
 }
 
 async function planComparar() {
   var cartaId = parseInt(document.getElementById('plan-sel-carta').value);
-  if (!cartaId) { showToast('Seleccioná una carta', 'err'); return; }
+  if (!cartaId) { showToast('Selecciona una carta', 'err'); return; }
   var colCuit   = document.getElementById('plan-col-cuit').value;
   var colNombre = document.getElementById('plan-col-nombre').value;
-  if (!colCuit) { showToast('Seleccioná la columna CUIT', 'err'); return; }
+  if (!colCuit) { showToast('Selecciona la columna CUIT', 'err'); return; }
 
   var btn = document.getElementById('plan-btn-comparar');
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader"></i> Consultando Odoo...';
 
   try {
-    // Traer facturas de Odoo para esta carta
-    var desde = (typeof CICLO_ACT_DESDE !== 'undefined') ? CICLO_ACT_DESDE : new Date().toISOString().substring(0,7)+'-01';
-    var facturas = await odooCall('account.move','search_read',[[
-      ['move_type','=','in_invoice'],['date','>=',desde],['state','in',['draft','posted']]
-    ]],{fields:['id','name','partner_id','amount_total','invoice_date','payment_state'],limit:2000});
+    var desde = (typeof CICLO_ACT_DESDE !== 'undefined') ? CICLO_ACT_DESDE : new Date().toISOString().substring(0,7) + '-01';
+    var facturas = await odooCall('account.move','search_read',[[['move_type','=','in_invoice'],['date','>=',desde],['state','in',['draft','posted']]]],{fields:['id','name','partner_id','amount_total','invoice_date','payment_state','state'],limit:2000});
 
-    // Filtrar por carta analítica
     var moveIds = facturas.map(function(f){ return f.id; });
     var moveHon = new Set();
     if (moveIds.length > 0) {
-      var lineas = await odooCall('account.move.line','search_read',[[
-        ['move_id','in',moveIds],['analytic_distribution','!=',false]
-      ]],{fields:['move_id','analytic_distribution'],limit:5000});
+      var lineas = await odooCall('account.move.line','search_read',[[['move_id','in',moveIds],['analytic_distribution','!=',false]]],{fields:['move_id','analytic_distribution'],limit:5000});
       lineas.forEach(function(l){
         if (!l.analytic_distribution) return;
         if (Object.keys(l.analytic_distribution).map(Number).some(function(id){ return id === cartaId; }))
           moveHon.add(l.move_id[0]);
       });
     }
-    var facturasHon = facturas.filter(function(f){ return moveHon.has(f.id); });
 
-    // Traer CUIT de cada partner
-    var pids = Array.from(new Set(facturasHon.map(function(f){ return f.partner_id && f.partner_id[0]; }).filter(Boolean)));
+    var facturasHon = facturas.filter(function(f){ return moveHon.has(f.id); });
+    var pids = [];
+    facturasHon.forEach(function(f){ var pid = f.partner_id && f.partner_id[0]; if(pid && pids.indexOf(pid)<0) pids.push(pid); });
+
     var cuitMap = {};
     if (pids.length > 0) {
       var partners = await odooCall('res.partner','search_read',[[['id','in',pids]]],{fields:['id','vat'],limit:500});
       partners.forEach(function(p){ cuitMap[p.id] = (p.vat || '').replace(/\D/g,''); });
     }
 
-    // Indexar facturas por CUIT
     var facturasPorCuit = {};
     facturasHon.forEach(function(f) {
-      var cuit = cuitMap[f.partner_id && f.partner_id[0]] || '';
+      var pid  = f.partner_id && f.partner_id[0];
+      var cuit = pid ? cuitMap[pid] : '';
       if (cuit) facturasPorCuit[cuit] = f;
     });
 
-    // Cruzar planilla con Odoo
     _planResultados = _planRows.map(function(row) {
-      var cuitRaw  = (row[colCuit] || '').replace(/\D/g,'');
-      var nombre   = colNombre ? (row[colNombre] || '—') : '—';
-      var factura  = facturasPorCuit[cuitRaw];
+      var cuitRaw = (row[colCuit] || '').replace(/\D/g,'');
+      var nombre  = colNombre ? (row[colNombre] || '—') : '—';
+      var factura = facturasPorCuit[cuitRaw];
       var estado, estadoKey;
       if (!cuitRaw) {
-        estado = '⚠ Sin CUIT'; estadoKey = 'faltante';
+        estado = 'Sin CUIT'; estadoKey = 'faltante';
       } else if (!factura) {
-        estado = '✗ Faltante'; estadoKey = 'faltante';
+        estado = 'Faltante'; estadoKey = 'faltante';
       } else if (factura.state === 'draft') {
-        estado = '📝 Borrador'; estadoKey = 'borrador';
+        estado = 'Borrador'; estadoKey = 'borrador';
       } else if (factura.payment_state === 'paid') {
-        estado = '✓ Pagada'; estadoKey = 'pagada';
+        estado = 'Pagada'; estadoKey = 'pagada';
       } else if (factura.payment_state === 'in_payment') {
-        estado = '🔄 En proceso'; estadoKey = 'proceso';
+        estado = 'En proceso'; estadoKey = 'proceso';
       } else {
-        estado = '📋 Confirmada'; estadoKey = 'proceso';
+        estado = 'Confirmada'; estadoKey = 'proceso';
       }
       return {
         nombre: nombre,
-        cuit: cuitRaw || row[colCuit] || '—',
+        cuit: cuitRaw || (row[colCuit] || '—'),
         nro_factura: factura ? (factura.name || '—') : '—',
-        monto: factura ? factura.amount_total : 0,
+        monto: factura ? (factura.amount_total || 0) : 0,
         fecha: factura ? (factura.invoice_date || '—') : '—',
         estado: estado,
         estadoKey: estadoKey
@@ -3418,7 +3403,6 @@ async function planComparar() {
     });
 
     planRenderResultados(_planResultados);
-
   } catch(e) {
     showToast('Error: ' + e.message, 'err');
   }
@@ -3429,51 +3413,144 @@ async function planComparar() {
 
 function planRenderResultados(data) {
   var cnt = { pagada:0, proceso:0, borrador:0, faltante:0 };
-  data.forEach(function(r){ if(cnt[r.estadoKey]!==undefined) cnt[r.estadoKey]++; });
-
+  data.forEach(function(r){ if (cnt[r.estadoKey] !== undefined) cnt[r.estadoKey]++; });
   document.getElementById('plan-cnt-pagadas').textContent  = cnt.pagada;
   document.getElementById('plan-cnt-proceso').textContent  = cnt.proceso;
   document.getElementById('plan-cnt-borrador').textContent = cnt.borrador;
   document.getElementById('plan-cnt-faltantes').textContent= cnt.faltante;
 
   var fmt = function(n){ return n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—'; };
-  var tbody = document.getElementById('plan-tbody');
-  tbody.innerHTML = data.map(function(r){
+  var rows = '';
+  data.forEach(function(r) {
     var cls = r.estadoKey === 'pagada' ? 'badge-ok' : r.estadoKey === 'proceso' ? 'badge-info' : r.estadoKey === 'borrador' ? 'badge-muted' : 'badge-danger';
-    return '<tr><td style="font-weight:500;">'+r.nombre+'</td><td class="mono" style="font-size:11px;">'+r.cuit+'</td><td class="mono" style="font-size:11px;">'+r.nro_factura+'</td><td class="mono">'+fmt(r.monto)+'</td><td style="color:var(--muted);font-size:11px;">'+r.fecha+'</td><td><span class="badge '+cls+'">'+r.estado+'</span></td></tr>';
-  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">Sin resultados</td></tr>';
+    rows += '<tr>';
+    rows += '<td style="font-weight:500;">' + r.nombre + '</td>';
+    rows += '<td class="mono" style="font-size:11px;">' + r.cuit + '</td>';
+    rows += '<td class="mono" style="font-size:11px;">' + r.nro_factura + '</td>';
+    rows += '<td class="mono">' + fmt(r.monto) + '</td>';
+    rows += '<td style="color:var(--muted);font-size:11px;">' + r.fecha + '</td>';
+    rows += '<td><span class="badge ' + cls + '">' + r.estado + '</span></td>';
+    rows += '</tr>';
+  });
 
-  document.getElementById('plan-resultados').style.display = 'block';
+  var tbody = document.getElementById('plan-tbody');
+  if (tbody) tbody.innerHTML = rows || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">Sin resultados</td></tr>';
+
+  var res = document.getElementById('plan-resultados');
+  if (res) res.style.display = 'block';
 }
 
 function planFiltrar() {
-  var q    = (document.getElementById('plan-search').value || '').toLowerCase();
-  var est  = document.getElementById('plan-filtro-estado').value;
-  var data = _planResultados.filter(function(r){
-    var matchQ   = !q   || r.nombre.toLowerCase().includes(q) || r.cuit.includes(q);
-    var matchEst = !est || r.estadoKey === est;
-    return matchQ && matchEst;
+  var q   = (document.getElementById('plan-search') ? document.getElementById('plan-search').value : '').toLowerCase();
+  var est = document.getElementById('plan-filtro-estado') ? document.getElementById('plan-filtro-estado').value : '';
+  var data = _planResultados.filter(function(r) {
+    var mq = !q   || r.nombre.toLowerCase().indexOf(q) >= 0 || r.cuit.indexOf(q) >= 0;
+    var me = !est || r.estadoKey === est;
+    return mq && me;
   });
   planRenderResultados(data);
 }
 
 function planExcel() {
   if (!_planResultados.length) { showToast('Sin datos', 'err'); return; }
-  var q   = (document.getElementById('plan-search').value || '').toLowerCase();
-  var est = document.getElementById('plan-filtro-estado').value;
+  var q   = (document.getElementById('plan-search') ? document.getElementById('plan-search').value : '').toLowerCase();
+  var est = document.getElementById('plan-filtro-estado') ? document.getElementById('plan-filtro-estado').value : '';
   var data = _planResultados.filter(function(r){
-    return (!q || r.nombre.toLowerCase().includes(q) || r.cuit.includes(q)) && (!est || r.estadoKey === est);
+    return (!q || r.nombre.toLowerCase().indexOf(q)>=0 || r.cuit.indexOf(q)>=0) && (!est || r.estadoKey===est);
   });
-  var csv = '\uFEFF' + ['Nombre,CUIT,Nro Factura,Monto,Fecha,Estado'].concat(
-    data.map(function(r){ return ['"'+r.nombre+'"', r.cuit, r.nro_factura, r.monto, r.fecha, r.estado].join(','); })
-  ).join('\n');
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
-  a.download = 'comparacion_'+new Date().toISOString().split('T')[0]+'.csv';
+  var lines = ['Nombre,CUIT,Nro Factura,Monto,Fecha,Estado'];
+  data.forEach(function(r){
+    lines.push(['"'+r.nombre+'"', r.cuit, r.nro_factura, r.monto, r.fecha, r.estado].join(','));
+  });
+  var csv  = '\uFEFF' + lines.join('\n');
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  var a    = document.createElement('a');
+  a.href   = URL.createObjectURL(blob);
+  a.download = 'comparacion_' + new Date().toISOString().split('T')[0] + '.csv';
   a.click();
   showToast(data.length + ' filas exportadas', 'ok');
 }
 
+const HON_CARTAS_FILTRO_DET = ['10.SENASA.23.1','10.SENASA.27.1','10.SENASA.28.1','10.SENASA.29','10.INTA.CTRL.C93.CA13.1','10.INTA.CTRL.C93.CA36.1','10.MAABA.613.1'];
+var _honDetalleData = [];
+
+async function honDetalleCargar() {
+  var loading = document.getElementById('hon-detalle-loading');
+  var wrap    = document.getElementById('hon-detalle-wrap');
+  var footer  = document.getElementById('hon-detalle-footer');
+  if (loading) { loading.style.display='block'; loading.innerHTML='<i class="ti ti-loader" style="font-size:28px;display:block;margin-bottom:10px;"></i>Cargando desde Odoo...'; }
+  if (wrap)   wrap.style.display='none';
+  if (footer) footer.style.display='none';
+  try {
+    var todasCartas = await odooCall('account.analytic.account','search_read',[[['active','=',true]]],{fields:['id','name']});
+    var cartaIds = [];
+    todasCartas.forEach(function(ca){ if(HON_CARTAS_FILTRO_DET.some(function(f){ return ca.name && ca.name.indexOf(f)>=0; })) cartaIds.push(ca.id); });
+    var desde = (typeof CICLO_ACT_DESDE !== 'undefined') ? CICLO_ACT_DESDE : new Date().toISOString().substring(0,7)+'-01';
+    var facturas = await odooCall('account.move','search_read',[[['move_type','=','in_invoice'],['date','>=',desde],['state','=','posted']]],{fields:['id','name','partner_id','amount_total','invoice_date','date','l10n_ar_afip_auth_code','payment_state'],limit:1000,order:'date desc'});
+    var moveIds = facturas.map(function(f){ return f.id; });
+    var moveHon = new Set(moveIds);
+    if (moveIds.length > 0 && cartaIds.length > 0) {
+      var lineas = await odooCall('account.move.line','search_read',[[['move_id','in',moveIds],['analytic_distribution','!=',false]]],{fields:['move_id','analytic_distribution'],limit:5000});
+      moveHon = new Set();
+      lineas.forEach(function(l){
+        if(!l.analytic_distribution) return;
+        if(Object.keys(l.analytic_distribution).map(Number).some(function(id){ return cartaIds.indexOf(id)>=0; })) moveHon.add(l.move_id[0]);
+      });
+    }
+    var pids = [];
+    facturas.filter(function(f){ return moveHon.has(f.id); }).forEach(function(f){ var pid=f.partner_id&&f.partner_id[0]; if(pid&&pids.indexOf(pid)<0) pids.push(pid); });
+    var cuits = {};
+    if(pids.length>0){ var ps=await odooCall('res.partner','search_read',[[['id','in',pids]]],{fields:['id','vat'],limit:500}); ps.forEach(function(p){ cuits[p.id]=p.vat||''; }); }
+    _honDetalleData = facturas.filter(function(f){ return moveHon.has(f.id); }).map(function(f){ return {
+      id:f.id, proveedor:(f.partner_id&&f.partner_id[1])||'—', cuit:cuits[f.partner_id&&f.partner_id[0]]||'—',
+      nro_factura:f.name||'—', monto:f.amount_total||0, fecha:f.invoice_date||f.date||'—',
+      cae:f.l10n_ar_afip_auth_code||'—',
+      estado:f.payment_state==='paid'?'Pagado':f.payment_state==='in_payment'?'En proceso':'Pendiente'
+    }; });
+    honDetalleRender(_honDetalleData);
+  } catch(e) { if(loading) loading.innerHTML='<div class="alert danger" style="margin:16px;"><i class="ti ti-x"></i><div>Error: '+e.message+'</div></div>'; }
+}
+
+function honDetalleRender(data) {
+  var wrap=document.getElementById('hon-detalle-wrap');
+  var footer=document.getElementById('hon-detalle-footer');
+  var tbody=document.getElementById('hon-detalle-body');
+  var loading=document.getElementById('hon-detalle-loading');
+  if(!tbody) return;
+  if(loading) loading.style.display='none';
+  var fmt=function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR'); };
+  var rows='';
+  data.forEach(function(f){
+    var cls=f.estado==='Pagado'?'badge-ok':f.estado==='En proceso'?'badge-info':'badge-muted';
+    var caeStr=f.cae!=='—'?f.cae.substring(0,8)+'...':'—';
+    rows+='<tr><td style="font-weight:500;">'+f.proveedor+'</td><td class="mono" style="font-size:11px;">'+f.cuit+'</td><td class="mono" style="font-size:11px;">'+f.nro_factura+'</td><td class="mono">'+fmt(f.monto)+'</td><td style="color:var(--muted);font-size:11px;">'+f.fecha+'</td><td class="mono" style="font-size:10px;color:var(--muted);">'+caeStr+'</td><td><span class="badge '+cls+'">'+f.estado+'</span></td><td class="mono" style="font-size:11px;">'+f.id+'</td></tr>';
+  });
+  if(tbody) tbody.innerHTML=rows||'<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted);">Sin facturas</td></tr>';
+  if(wrap) wrap.style.display='block';
+  if(footer){ footer.style.display='block'; var total=data.reduce(function(s,f){return s+f.monto;},0); footer.innerHTML=data.length+' facturas &middot; Total: <strong>'+fmt(total)+'</strong>'; }
+}
+
+function honDetalleFiltrar(){
+  var q=(document.getElementById('hon-det-search')?document.getElementById('hon-det-search').value:'').toLowerCase();
+  honDetalleRender(q?_honDetalleData.filter(function(f){ return f.proveedor.toLowerCase().indexOf(q)>=0||f.cuit.toLowerCase().indexOf(q)>=0||f.nro_factura.toLowerCase().indexOf(q)>=0; }):_honDetalleData);
+}
+
+function honDetalleExcel(){
+  if(!_honDetalleData.length){ showToast('Sin datos','err'); return; }
+  var q=(document.getElementById('hon-det-search')?document.getElementById('hon-det-search').value:'').toLowerCase();
+  var data=q?_honDetalleData.filter(function(f){ return f.proveedor.toLowerCase().indexOf(q)>=0||f.cuit.toLowerCase().indexOf(q)>=0; }):_honDetalleData;
+  var lines=['ID Odoo,Proveedor,CUIT,Nro Factura,Monto,Fecha,CAE,Estado'];
+  data.forEach(function(f){ lines.push([f.id,'"'+f.proveedor+'"',f.cuit,f.nro_factura,f.monto,f.fecha,f.cae,f.estado].join(',')); });
+  var csv='\uFEFF'+lines.join('\n');
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='honorarios_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+  showToast(data.length+' facturas exportadas','ok');
+}
+
+
+</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
