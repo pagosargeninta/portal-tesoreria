@@ -1921,14 +1921,15 @@ async function c29Cargar() {
 
     var cartaIds = cartas29.map(function(ca){ return ca.id; });
 
-    // 2. Facturas del período en esas cartas (out_invoice = ingreso cheque / COGAYT, in_invoice = débito convenio)
-    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Consultando facturas (' + desde + ' → ' + hasta + ')...';
+    // 2. Traer TODAS las líneas analíticas de las cartas CA29 (sin filtro de fecha)
+    //    El filtro de período se aplica después sobre los moves completos
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Cargando líneas analíticas CA29...';
 
-    var moveIds29 = [];
-    // Busco líneas analíticas en ese período para cualquier tipo de factura
+    // Buscar moves directamente en Odoo filtrando por cartas analíticas y período
+    // Primero traigo todos los move_ids de las cartas CA29 sin límite de fecha
     var lineas = await odooCall('account.move.line','search_read',
-      [[['analytic_distribution','!=',false],['date','>=',desde],['date','<=',hasta]]],
-      {fields:['move_id','analytic_distribution','date','product_id'],limit:5000});
+      [[['analytic_distribution','!=',false],['move_id.move_type','in',['out_invoice','in_invoice']]]],
+      {fields:['move_id','analytic_distribution','product_id'],limit:10000});
 
     // Para cada carta, colecto los move_id que la tienen
     var moveIdsPorCarta = {};
@@ -1942,7 +1943,6 @@ async function c29Cargar() {
       Object.keys(l.analytic_distribution).map(Number).forEach(function(cid) {
         if (moveIdsPorCarta[cid]) moveIdsPorCarta[cid].add(l.move_id[0]);
       });
-      // Acumular productos por move
       if (l.product_id) {
         var mid = l.move_id[0];
         var pname = Array.isArray(l.product_id) ? l.product_id[1] : String(l.product_id);
@@ -1951,20 +1951,25 @@ async function c29Cargar() {
       }
     });
 
-    // IDs únicos de todos los moves relacionados
+    // IDs únicos de todos los moves de cartas CA29
     var allMoveIds = [];
     cartas29.forEach(function(ca) {
       moveIdsPorCarta[ca.id].forEach(function(mid){ if(allMoveIds.indexOf(mid)<0) allMoveIds.push(mid); });
     });
 
-    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Descargando detalles de facturas...';
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Descargando facturas del período (' + desde + ' → ' + hasta + ')...';
 
+    // Traer moves y filtrar por período en invoice_date O date
     var facturas = {};
     if (allMoveIds.length > 0) {
       var fList = await odooCall('account.move','search_read',
-        [[['id','in',allMoveIds]]],
-        {fields:['id','name','move_type','partner_id','amount_total','invoice_date','date','payment_state','state'],limit:2000});
-      fList.forEach(function(f){ facturas[f.id] = f; });
+        [[['id','in',allMoveIds],['state','in',['draft','posted']]]],
+        {fields:['id','name','move_type','partner_id','amount_total','invoice_date','date','payment_state','state'],limit:5000});
+      fList.forEach(function(f){
+        // Filtrar por período: usar invoice_date si existe, sino date
+        var fDate = f.invoice_date || f.date || '';
+        if (fDate >= desde && fDate <= hasta) facturas[f.id] = f;
+      });
     }
 
     // 3. Partners para identificar Fundación
