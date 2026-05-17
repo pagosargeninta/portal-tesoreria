@@ -1454,7 +1454,7 @@ tbody tr:hover td { background: #f8faf9; }
                     <th>Nombre</th>
                     <th>Cheque</th>
                     <th>COGAYT</th>
-                    <th>G3 Débito</th>
+                    <th>Débito COGAYT</th>
                     <th>Hon. pagados</th>
                     <th>Saldo financiero</th>
                     <th>Estado</th>
@@ -1464,6 +1464,30 @@ tbody tr:hover td { background: #f8faf9; }
                 <tbody id="c29-tbody"></tbody>
               </table>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHEQUES POR INGRESAR -->
+      <div id="c29-cheques-wrap" style="margin-top:20px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-clock"></i> Cheques depositados — pendientes de ingreso en Odoo</div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+              <div id="c29-chq-dropzone" onclick="document.getElementById('c29-chq-input').click()"
+                style="border:2px dashed var(--border);border-radius:8px;padding:12px 20px;cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;transition:border-color .2s;"
+                ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
+                ondragleave="this.style.borderColor='var(--border)'"
+                ondrop="event.preventDefault();this.style.borderColor='var(--border)';c29ChqHandleFile(event.dataTransfer.files[0])">
+                <i class="ti ti-upload"></i> Subir CSV Interbanking (Depósitos)
+              </div>
+              <input type="file" id="c29-chq-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="c29ChqHandleFile(this.files[0])">
+              <div id="c29-chq-file-info" style="font-size:11px;color:var(--muted);display:none;"></div>
+            </div>
+            <div id="c29-chq-loading" style="display:none;font-size:12px;color:var(--muted);padding:8px 0;"><i class="ti ti-loader"></i> Cruzando contra Odoo...</div>
+            <div id="c29-chq-resultado"></div>
           </div>
         </div>
       </div>
@@ -1879,6 +1903,285 @@ function showPage(id, el) {
 var _c29Data = null;
 var _c29DataFiltrada = null;
 
+// ── CHEQUES POR INGRESAR (Interbanking CSV) ─────────────────────────────────
+function c29ChqHandleFile(file) {
+  if (!file) return;
+  var ext = file.name.split('.').pop().toLowerCase();
+  var info = document.getElementById('c29-chq-file-info');
+  if (info) { info.style.display='block'; info.textContent=file.name; }
+
+  if (ext==='xlsx'||ext==='xls') {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var wb   = XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        var ws   = wb.Sheets[wb.SheetNames[0]];
+        var raw  = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        if (!raw||raw.length<2) { showToast('Archivo vacío','err'); return; }
+        var hdrs = raw[0].map(function(h){return String(h).trim();});
+        var rows = [];
+        for (var i=1;i<raw.length;i++) {
+          var obj={};
+          hdrs.forEach(function(h,idx){obj[h]=raw[i][idx]!==undefined?String(raw[i][idx]).trim():'';});
+          rows.push(obj);
+        }
+        c29ChqProcesar(hdrs, rows);
+      } catch(err){ showToast('Error Excel: '+err.message,'err'); }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var lines = e.target.result.replace(/\r/g,'').split('\n').filter(function(l){return l.trim();});
+      if (lines.length<2) { showToast('Archivo vacío','err'); return; }
+      // Detectar separador
+      var sep = lines[0].indexOf(';')>=0?';':',';
+      function parseLine(line) {
+        var result=[]; var cur=''; var inQ=false;
+        for (var i=0;i<line.length;i++) {
+          var c=line[i];
+          if (c==='"') { inQ=!inQ; }
+          else if (c===sep&&!inQ) { result.push(cur.trim()); cur=''; }
+          else { cur+=c; }
+        }
+        result.push(cur.trim());
+        return result;
+      }
+      var hdrs = parseLine(lines[0]).map(function(h){return h.replace(/^\uFEFF/,'').trim();});
+      var rows = [];
+      for (var i=1;i<lines.length;i++) {
+        var cols=parseLine(lines[i]);
+        if (cols.every(function(c){return !c;})) continue;
+        var obj={};
+        hdrs.forEach(function(h,idx){obj[h]=cols[idx]||'';});
+        rows.push(obj);
+      }
+      c29ChqProcesar(hdrs, rows);
+    };
+    reader.readAsText(file,'UTF-8');
+  }
+}
+
+async function c29ChqProcesar(hdrs, rows) {
+  var loading  = document.getElementById('c29-chq-loading');
+  var resultado= document.getElementById('c29-chq-resultado');
+  if (loading)   loading.style.display='block';
+  if (resultado) resultado.innerHTML='';
+
+  // Detectar columnas del CSV Interbanking
+  function findCol(kws) {
+    return hdrs.find(function(h){ return kws.some(function(k){return h.toLowerCase().indexOf(k)>=0;}); })||'';
+  }
+  var colCuit    = findCol(['cuit emisor','cuit_emisor','cuit']);
+  var colImporte = findCol(['importe','monto','amount']);
+  var colFecha   = findCol(['fecha de pago','fecha pago','fecha']);
+  var colEstado  = findCol(['estado coelsa','estado']);
+  var colNombre  = findCol(['recibido de','nombre','razon']);
+  var colNroCheq = findCol(['número cheque','numero cheque','nro cheque','cheque']);
+
+  if (!colCuit||!colImporte) {
+    if (loading) loading.style.display='none';
+    if (resultado) resultado.innerHTML='<div class="alert danger"><i class="ti ti-x"></i><div>No se encontraron columnas CUIT/Importe. Verificá el formato del archivo.</div></div>';
+    return;
+  }
+
+  // Parsear filas
+  function parseMonto(s) {
+    if (!s) return 0;
+    return parseFloat(String(s).replace(/\$/g,'').replace(/\./g,'').replace(/,/,'.'). replace(/[^\d.-]/g,''))||0;
+  }
+  function parseFecha(s) {
+    if (!s) return '';
+    // DD/MM/YYYY → YYYY-MM-DD
+    var m=String(s).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    return m?(m[3]+'-'+m[2]+'-'+m[1]):s;
+  }
+
+  var cheques = rows.map(function(r){
+    return {
+      cuit:    (r[colCuit]||'').replace(/\D/g,''),
+      importe: parseMonto(r[colImporte]),
+      fecha:   parseFecha(r[colFecha]||''),
+      estado:  r[colEstado]||r[hdrs.find(function(h){return h.toLowerCase().indexOf('estado')>=0;})]||'',
+      nombre:  r[colNombre]||'',
+      nroCheq: r[colNroCheq]||''
+    };
+  }).filter(function(c){return c.cuit&&c.importe>0;});
+
+  if (!cheques.length) {
+    if (loading) loading.style.display='none';
+    if (resultado) resultado.innerHTML='<div class="alert warn"><i class="ti ti-alert-circle"></i><div>No se encontraron filas válidas con CUIT e importe.</div></div>';
+    return;
+  }
+
+  // CUITs únicos del CSV
+  var cuitsCSV = [];
+  cheques.forEach(function(c){ if(cuitsCSV.indexOf(c.cuit)<0) cuitsCSV.push(c.cuit); });
+
+  // Buscar partners en Odoo por CUIT
+  if (loading) loading.querySelector ? (loading.textContent='Buscando partners en Odoo...') : null;
+  var partnersByCuit = {};
+  try {
+    var pList = await odooCall('res.partner','search_read',
+      [[['vat','!=',false]]],
+      {fields:['id','name','vat'],limit:2000});
+    pList.forEach(function(p){
+      var cuit=(p.vat||'').replace(/\D/g,'');
+      if (cuit) partnersByCuit[cuit]=p;
+    });
+  } catch(e){ console.warn('Error buscando partners:', e.message); }
+
+  // Cruzar cheques CSV con cartas CA29 de _c29Data
+  // Primero armar mapa CUIT → carta(s) CA29
+  var cartaPorCuit = {};  // cuit -> {id, nombre}
+  if (_c29Data) {
+    // Para cada carta, buscar sus facturas out_invoice y sacar el CUIT del partner
+    // Usamos los datos ya cargados en _c29Data
+    _c29Data.forEach(function(d){
+      d.actual.cheques.concat(
+        // También buscar en historial si hay
+        Object.values(d.patron||{}).reduce(function(acc,p){return acc.concat(p.cheques);},[]
+      )).forEach(function(f){
+        var pid = f.partner_id&&f.partner_id[0];
+        // Buscar CUIT via partnersByCuit (inverso)
+        Object.keys(partnersByCuit).forEach(function(cuit){
+          if (partnersByCuit[cuit].id===pid) {
+            if (!cartaPorCuit[cuit]) cartaPorCuit[cuit]=[];
+            var ya = cartaPorCuit[cuit].some(function(x){return x.id===d.id;});
+            if (!ya) cartaPorCuit[cuit].push({id:d.id, nombre:d.nombre});
+          }
+        });
+      });
+    });
+    // También intentar por nombre de la carta vs nombre del partner
+    _c29Data.forEach(function(d){
+      var nombreCarta = d.nombre.toLowerCase();
+      Object.keys(partnersByCuit).forEach(function(cuit){
+        var nombreP = (partnersByCuit[cuit].name||'').toLowerCase();
+        // Match parcial de palabras clave del nombre
+        var palabras = nombreP.split(/\s+/).filter(function(w){return w.length>4;});
+        var match = palabras.some(function(w){return nombreCarta.indexOf(w)>=0;});
+        if (match && !cartaPorCuit[cuit]) {
+          cartaPorCuit[cuit]=[{id:d.id, nombre:d.nombre}];
+        }
+      });
+    });
+  }
+
+  // Para cada cheque del CSV, ver si ya tiene factura en Odoo (por monto ~igual en el mes)
+  // Usamos _c29Data que ya tiene las facturas del mes
+  var TOLERANCIA = 0.01; // 1% de diferencia aceptada
+  function yaIngresado(cuit, importe) {
+    if (!_c29Data) return false;
+    return _c29Data.some(function(d){
+      return d.actual.cheques.some(function(f){
+        var diff = Math.abs(f.amount_total - importe) / importe;
+        return diff <= TOLERANCIA;
+      });
+    });
+  }
+
+  // Clasificar cheques
+  var pendientes = [], ingresados = [], sinCarta = [];
+  cheques.forEach(function(ch){
+    var cartas = cartaPorCuit[ch.cuit]||[];
+    var partner= partnersByCuit[ch.cuit];
+    var ingresado = yaIngresado(ch.cuit, ch.importe);
+    var obj = Object.assign({},ch,{cartas:cartas, partner:partner, ingresado:ingresado});
+    if (ingresado)       ingresados.push(obj);
+    else if (cartas.length) pendientes.push(obj);
+    else                 sinCarta.push(obj);
+  });
+
+  // Render resultado
+  if (loading) loading.style.display='none';
+
+  var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+  var html = '';
+
+  // Resumen
+  var totalPend = pendientes.reduce(function(s,c){return s+c.importe;},0);
+  var totalIng  = ingresados.reduce(function(s,c){return s+c.importe;},0);
+  html += '<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">' +
+    '<div class="metric-card danger" style="flex:1;min-width:140px;padding:12px 16px;">' +
+      '<div class="metric-label">Por ingresar a Odoo</div>' +
+      '<div class="metric-value" style="font-size:20px;">'+pendientes.length+'</div>' +
+      '<div class="metric-sub">'+fmt(totalPend)+'</div>' +
+    '</div>' +
+    '<div class="metric-card success" style="flex:1;min-width:140px;padding:12px 16px;">' +
+      '<div class="metric-label">Ya en Odoo</div>' +
+      '<div class="metric-value" style="font-size:20px;">'+ingresados.length+'</div>' +
+      '<div class="metric-sub">'+fmt(totalIng)+'</div>' +
+    '</div>' +
+    (sinCarta.length?'<div class="metric-card warn" style="flex:1;min-width:140px;padding:12px 16px;">' +
+      '<div class="metric-label">Sin carta CA29</div>' +
+      '<div class="metric-value" style="font-size:20px;">'+sinCarta.length+'</div>' +
+      '<div class="metric-sub">No identificados</div>' +
+    '</div>':'') +
+  '</div>';
+
+  // Tabla pendientes
+  if (pendientes.length) {
+    html += '<div class="section-title" style="color:var(--danger);">⚠ Cheques depositados sin factura en Odoo</div>';
+    html += '<div class="table-wrap"><table><thead><tr>' +
+      '<th>Fecha</th><th>CUIT</th><th>Nombre</th><th>Importe</th><th>Nro Cheque</th><th>Estado</th><th>Carta CA29</th>' +
+    '</tr></thead><tbody>';
+    pendientes.forEach(function(c){
+      var cartaNom = c.cartas.length ? c.cartas.map(function(x){
+        return '<span style="font-size:10px;color:var(--primary);">'+x.nombre.replace('10.SENASA.','')+'</span>';
+      }).join('<br>') : '<span style="color:var(--warn);">Buscar manualmente</span>';
+      var estadoBadge = c.estado&&c.estado.toLowerCase().indexOf('pag')>=0 ?
+        '<span class="badge badge-ok">'+c.estado+'</span>' :
+        '<span class="badge badge-info">'+c.estado+'</span>';
+      html += '<tr>' +
+        '<td style="font-size:11px;">'+c.fecha+'</td>' +
+        '<td class="mono" style="font-size:11px;">'+c.cuit+'</td>' +
+        '<td style="font-size:11px;">'+(c.partner?c.partner.name:c.nombre)+'</td>' +
+        '<td class="mono" style="font-weight:600;color:var(--danger);">'+fmt(c.importe)+'</td>' +
+        '<td class="mono" style="font-size:11px;">'+c.nroCheq+'</td>' +
+        '<td>'+estadoBadge+'</td>' +
+        '<td>'+cartaNom+'</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Tabla ya ingresados (colapsada)
+  if (ingresados.length) {
+    html += '<details style="margin-top:12px;"><summary style="font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;padding:4px 0;">'+
+      '<i class="ti ti-check"></i> Ya ingresados en Odoo ('+ingresados.length+') — '+fmt(totalIng)+'</summary>';
+    html += '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>Fecha</th><th>CUIT</th><th>Nombre</th><th>Importe</th><th>Nro Cheque</th></tr></thead><tbody>';
+    ingresados.forEach(function(c){
+      html+='<tr style="opacity:.7;">' +
+        '<td style="font-size:11px;">'+c.fecha+'</td>' +
+        '<td class="mono" style="font-size:11px;">'+c.cuit+'</td>' +
+        '<td style="font-size:11px;">'+(c.partner?c.partner.name:c.nombre)+'</td>' +
+        '<td class="mono" style="color:var(--success);">'+fmt(c.importe)+'</td>' +
+        '<td class="mono" style="font-size:11px;">'+c.nroCheq+'</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div></details>';
+  }
+
+  // Sin carta
+  if (sinCarta.length) {
+    html += '<details style="margin-top:8px;"><summary style="font-size:11px;font-weight:600;color:var(--warn);cursor:pointer;padding:4px 0;">'+
+      '<i class="ti ti-alert-circle"></i> Sin carta CA29 identificada ('+sinCarta.length+')</summary>';
+    html += '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>Fecha</th><th>CUIT</th><th>Nombre</th><th>Importe</th></tr></thead><tbody>';
+    sinCarta.forEach(function(c){
+      html+='<tr>' +
+        '<td style="font-size:11px;">'+c.fecha+'</td>' +
+        '<td class="mono" style="font-size:11px;">'+c.cuit+'</td>' +
+        '<td style="font-size:11px;">'+c.nombre+'</td>' +
+        '<td class="mono">'+fmt(c.importe)+'</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div></details>';
+  }
+
+  if (resultado) resultado.innerHTML = html;
+}
+
 function c29IniciarMeses() {
   var sel = document.getElementById('c29-mes');
   if (!sel || sel.options.length > 1) return;
@@ -2025,8 +2328,10 @@ async function c29Cargar() {
       var moves = Array.from(moveSet).map(function(mid){ return facturasObj[mid]; }).filter(Boolean);
       var cheques = moves.filter(function(f){ return f.move_type==='out_invoice' && !esFundacion[f.partner_id&&f.partner_id[0]]; });
       var cogayt  = moves.filter(function(f){ return f.move_type==='out_invoice' && esFundacion[f.partner_id&&f.partner_id[0]]; });
-      var debito  = moves.filter(function(f){ return f.move_type==='in_invoice' && (moveProductos[f.id]||[]).some(function(p){ return p&&p.toLowerCase().indexOf('g3')>=0; }); });
-      var honores = moves.filter(function(f){ return f.move_type==='in_invoice' && !(moveProductos[f.id]||[]).some(function(p){ return p&&p.toLowerCase().indexOf('g3')>=0; }); });
+      // Débito COGAYT: in_invoice donde partner ES Fundación (le saca el 6% a la carta)
+      var debito  = moves.filter(function(f){ return f.move_type==='in_invoice' && esFundacion[f.partner_id&&f.partner_id[0]]; });
+      // Honorarios: in_invoice donde partner NO es Fundación (veterinarios)
+      var honores = moves.filter(function(f){ return f.move_type==='in_invoice' && !esFundacion[f.partner_id&&f.partner_id[0]]; });
       return { cheques:cheques, cogayt:cogayt, debito:debito, honores:honores };
     }
 
@@ -2138,7 +2443,7 @@ function c29RenderTabla(data, mes) {
       var msgs=[];
       if(!d.tieneChecque) msgs.push('sin cheque');
       if(d.tieneChecque&&!d.tieneCogayt) msgs.push('COGAYT no registrado ('+fmt(d.cogaytEsp)+')');
-      if(d.tieneChecque&&!d.tieneDebito) msgs.push('débito G3 pendiente');
+      if(d.tieneChecque&&!d.tieneDebito) msgs.push('débito COGAYT pendiente');
       var cls=d.estadoKey==='danger'?'danger':'warn';
       var icn=d.estadoKey==='danger'?'ti-x':'ti-alert-circle';
       html+='<div class="alert '+cls+'" style="margin-bottom:6px;"><i class="ti '+icn+'"></i><div><strong>'+d.nombre+':</strong> '+msgs.join(' · ')+'</div></div>';
@@ -2259,8 +2564,8 @@ function c29AbrirDetalle(idx) {
     (d.promCantHon>0?'<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Promedio histórico: '+d.promCantHon+' profesionales · '+fmt(d.promHon)+'/mes</div>':'')+
     tbl(honRows,'Sin honorarios en este período')+
 
-    '<div class="section-title" style="margin-top:16px;">Débito convenio (G3)</div>'+
-    tbl(debRows,'Sin débito G3 registrado')+
+    '<div class="section-title" style="margin-top:16px;">Débito COGAYT — Fundación ArgenINTA</div>'+
+    tbl(debRows,'Sin débito COGAYT registrado')+
 
     patronHtml+
     saldoHtml;
