@@ -1861,7 +1861,7 @@ function showPage(id, el) {
 }
 
 // ═══════════════════════════════════════════════════════
-// CARTA 29 — CONTROL INGRESOS FRIGORFICOS (REAL ODOO)
+// CARTA 29 — CONTROL INGRESOS FRIGORÍFICOS (REAL ODOO)
 // ═══════════════════════════════════════════════════════
 var _c29Data = null;
 
@@ -1907,8 +1907,8 @@ async function c29Cargar() {
   c29SetMetrica('c29-cnt-danger','—'); c29SetMetrica('c29-total','—');
 
   try {
-    // 1. Cartas hijas de la 29
-    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Buscando subconvenios...';
+    // 1. Cartas CA29
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Buscando subconvenios CA29...';
     var todasCartas = await odooCall('account.analytic.account','search_read',[[['active','=',true]]],{fields:['id','name'],order:'name asc'});
     var cartas29 = todasCartas.filter(function(ca){ return ca.name && ca.name.indexOf('10.SENASA.CA29') >= 0; });
 
@@ -1918,24 +1918,19 @@ async function c29Cargar() {
       if (btn) btn.disabled=false;
       return;
     }
-
     var cartaIds = cartas29.map(function(ca){ return ca.id; });
 
-    // 2. Traer TODAS las líneas analíticas de las cartas CA29 (sin filtro de fecha)
-    //    El filtro de período se aplica después sobre los moves completos
-    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Cargando líneas analíticas CA29...';
+    // 2. Facturas del período — buscar moves out_invoice e in_invoice con analítica en CA29
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Buscando facturas del período...';
 
-    // Buscar moves directamente en Odoo filtrando por cartas analíticas y período
-    // Primero traigo todos los move_ids de las cartas CA29 sin límite de fecha
+    // Traer líneas analíticas de moves de CA29 SIN filtro de fecha
     var lineas = await odooCall('account.move.line','search_read',
       [[['analytic_distribution','!=',false],['move_id.move_type','in',['out_invoice','in_invoice']]]],
       {fields:['move_id','analytic_distribution','product_id'],limit:10000});
 
-    // Para cada carta, colecto los move_id que la tienen
+    // Mapas: por carta y por producto
     var moveIdsPorCarta = {};
     cartas29.forEach(function(ca){ moveIdsPorCarta[ca.id] = new Set(); });
-
-    // Mapa move_id -> array de product names (para identificar débito G3)
     var moveProductos = {};
 
     lineas.forEach(function(l) {
@@ -1951,7 +1946,6 @@ async function c29Cargar() {
       }
     });
 
-    // IDs únicos de todos los moves de cartas CA29
     var allMoveIds = [];
     cartas29.forEach(function(ca) {
       moveIdsPorCarta[ca.id].forEach(function(mid){ if(allMoveIds.indexOf(mid)<0) allMoveIds.push(mid); });
@@ -1959,60 +1953,102 @@ async function c29Cargar() {
 
     if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Descargando facturas del período (' + desde + ' → ' + hasta + ')...';
 
-    // Traer moves y filtrar por período en invoice_date O date
+    // Traer moves y filtrar por período usando invoice_date o date
     var facturas = {};
     if (allMoveIds.length > 0) {
       var fList = await odooCall('account.move','search_read',
         [[['id','in',allMoveIds],['state','in',['draft','posted']]]],
         {fields:['id','name','move_type','partner_id','amount_total','invoice_date','date','payment_state','state'],limit:5000});
       fList.forEach(function(f){
-        // Filtrar por período: usar invoice_date si existe, sino date
         var fDate = f.invoice_date || f.date || '';
         if (fDate >= desde && fDate <= hasta) facturas[f.id] = f;
       });
     }
 
-    // 3. Partners para identificar Fundación
+    // 3. Identificar partner Fundación por nombre (más robusto que por CUIT)
     var pids = [];
     Object.values(facturas).forEach(function(f){ var pid=f.partner_id&&f.partner_id[0]; if(pid&&pids.indexOf(pid)<0) pids.push(pid); });
-    var cuitMap = {};
+    var esFundacion = {};  // pid -> bool
     if (pids.length > 0) {
-      var partners = await odooCall('res.partner','search_read',[[['id','in',pids]]],{fields:['id','vat'],limit:500});
-      partners.forEach(function(p){ cuitMap[p.id]=(p.vat||'').replace(/\D/g,''); });
+      var partners = await odooCall('res.partner','search_read',[[['id','in',pids]]],{fields:['id','name','vat'],limit:500});
+      partners.forEach(function(p){
+        var nombre = (p.name || '').toLowerCase();
+        var cuit   = (p.vat  || '').replace(/\D/g,'');
+        esFundacion[p.id] = (cuit === '30676303657') || nombre.indexOf('argeninta') >= 0 || nombre.indexOf('fundacion') >= 0;
+      });
     }
-    var CUIT_FUNDACION = '30676303657';
 
-    // 4. Armar estructura por frigorífico
+    // 4. Saldos financieros por carta (account.analytic.line con x_plan2_id)
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Cargando saldos financieros...';
+    var saldosPorCarta = {};
+    cartas29.forEach(function(ca){ saldosPorCarta[ca.id] = null; });
+
+    try {
+      var analLines = await odooCall('account.analytic.line','search_read',
+        [[['x_plan2_id','in',cartaIds]]],
+        {fields:['x_plan2_id','amount','general_account_id'],limit:20000});
+
+      // Traer cuentas para filtrar por tipo (asset_cash, asset_current) y excluir anticipo/fondos de terceros
+      var cuentaIds = [];
+      analLines.forEach(function(l){ var cid=l.general_account_id&&l.general_account_id[0]; if(cid&&cuentaIds.indexOf(cid)<0) cuentaIds.push(cid); });
+
+      var cuentasTipo = {};
+      if (cuentaIds.length > 0) {
+        var cuentas = await odooCall('account.account','search_read',
+          [[['id','in',cuentaIds]]],
+          {fields:['id','name','account_type'],limit:500});
+        cuentas.forEach(function(c){
+          var nombre = (typeof c.name === 'object' ? (c.name.es_AR || c.name.en_US || JSON.stringify(c.name)) : c.name).toLowerCase();
+          var esFinanciera = (c.account_type === 'asset_cash' || c.account_type === 'asset_current');
+          var excluir = nombre.indexOf('anticipo') >= 0 || nombre.indexOf('fondos de terceros') >= 0;
+          cuentasTipo[c.id] = esFinanciera && !excluir;
+        });
+      }
+
+      // Sumar saldos financieros por carta (amount * -1)
+      analLines.forEach(function(l){
+        var cartaId = l.x_plan2_id && l.x_plan2_id[0];
+        if (!cartaId || saldosPorCarta[cartaId] === undefined) return;
+        var cid = l.general_account_id && l.general_account_id[0];
+        if (!cid || !cuentasTipo[cid]) return;
+        if (saldosPorCarta[cartaId] === null) saldosPorCarta[cartaId] = 0;
+        saldosPorCarta[cartaId] += (l.amount * -1);
+      });
+    } catch(eSaldo) {
+      console.warn('Saldos CA29 no disponibles:', eSaldo.message);
+    }
+
+    // 5. Armar estructura por frigorífico
     if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Procesando resultados...';
 
     _c29Data = cartas29.map(function(ca) {
-      var moveSet = moveIdsPorCarta[ca.id];
+      var moveSet   = moveIdsPorCarta[ca.id];
       var facsMoves = Array.from(moveSet).map(function(mid){ return facturas[mid]; }).filter(Boolean);
 
-      // Cheque ingresado: out_invoice, partner != Fundación
+      // Cheque ingresado: out_invoice, partner NO es Fundación
       var fCheques = facsMoves.filter(function(f){
         if (f.move_type !== 'out_invoice') return false;
         var pid = f.partner_id && f.partner_id[0];
-        return pid && cuitMap[pid] !== CUIT_FUNDACION;
+        return !esFundacion[pid];
       });
 
-      // COGAYT 6%: out_invoice, partner == Fundación
+      // COGAYT 6%: out_invoice, partner SÍ es Fundación
       var fCogayt = facsMoves.filter(function(f){
         if (f.move_type !== 'out_invoice') return false;
         var pid = f.partner_id && f.partner_id[0];
-        return pid && cuitMap[pid] === CUIT_FUNDACION;
+        return esFundacion[pid];
       });
 
-      // Débito convenio: in_invoice en esta carta con producto G3-Gastos administrativos
+      // Débito convenio: in_invoice con producto G3
       var fDebito = facsMoves.filter(function(f){
         if (f.move_type !== 'in_invoice') return false;
         var prods = moveProductos[f.id] || [];
         return prods.some(function(p){ return p && p.toLowerCase().indexOf('g3') >= 0; });
       });
 
-      var totalCheque = fCheques.reduce(function(s,f){ return s+f.amount_total; },0);
-      var totalCogayt = fCogayt.reduce(function(s,f){ return s+f.amount_total; },0);
-      var totalDebito = fDebito.reduce(function(s,f){ return s+f.amount_total; },0);
+      var totalCheque   = fCheques.reduce(function(s,f){ return s+f.amount_total; },0);
+      var totalCogayt   = fCogayt.reduce(function(s,f){ return s+f.amount_total; },0);
+      var totalDebito   = fDebito.reduce(function(s,f){ return s+f.amount_total; },0);
       var cogaytEsperado = totalCheque * 0.06;
       var cogaytOk = totalCogayt > 0 && Math.abs(totalCogayt - cogaytEsperado) < cogaytEsperado * 0.05;
 
@@ -2025,25 +2061,17 @@ async function c29Cargar() {
       else if (!tieneCogayt || !tieneDebito) estadoKey = 'warn';
 
       return {
-        id: ca.id,
-        nombre: ca.name,
-        estadoKey: estadoKey,
-        tieneChecque: tieneChecque,
-        tieneCogayt: tieneCogayt,
-        tieneDebito: tieneDebito,
+        id: ca.id, nombre: ca.name, estadoKey: estadoKey,
+        tieneChecque: tieneChecque, tieneCogayt: tieneCogayt, tieneDebito: tieneDebito,
         cogaytOk: cogaytOk,
-        totalCheque: totalCheque,
-        totalCogayt: totalCogayt,
-        totalDebito: totalDebito,
+        totalCheque: totalCheque, totalCogayt: totalCogayt, totalDebito: totalDebito,
         cogaytEsperado: cogaytEsperado,
-        fCheques: fCheques,
-        fCogayt: fCogayt,
-        fDebito: fDebito,
+        saldo: saldosPorCarta[ca.id],
+        fCheques: fCheques, fCogayt: fCogayt, fDebito: fDebito,
         moveProductos: moveProductos
       };
     });
 
-    // Ordenar: danger primero, warn después, ok al final
     _c29Data.sort(function(a,b){
       var ord = {danger:0,warn:1,ok:2};
       return ord[a.estadoKey] - ord[b.estadoKey];
@@ -2053,13 +2081,12 @@ async function c29Cargar() {
     c29Render(_c29Data, mes);
 
   } catch(e) {
-    if (loading) loading.innerHTML = '<div class="alert danger" style="margin:0;"><i class="ti ti-x"></i><div>Error: '+e.message+'</div></div>';
+    if (loading) loading.innerHTML = '<div class="alert danger" style="margin:16px;"><i class="ti ti-x"></i><div>Error: '+e.message+'</div></div>';
   }
   if (btn) btn.disabled = false;
   var upd = document.getElementById('c29-last-update');
   if (upd) upd.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR');
 }
-
 function c29SetMetrica(id, val) {
   var el = document.getElementById(id);
   if (el) el.textContent = val;
@@ -2196,7 +2223,8 @@ function c29Render(data, mes) {
         '<div class="num-item"><div class="num-label">Cheque ingresado</div><div class="num-value ' + (d.tieneChecque?'ok':'danger') + '">' + fmt(d.totalCheque) + '</div></div>' +
         '<div class="num-item"><div class="num-label">COGAYT 6%</div><div class="num-value ' + (d.cogaytOk?'ok':d.tieneCogayt?'warn':'danger') + '">' + fmt(d.totalCogayt) + '</div></div>' +
         '<div class="num-item"><div class="num-label">Débito convenio</div><div class="num-value ' + (d.tieneDebito?'ok':'muted') + '">' + fmt(d.totalDebito) + '</div></div>' +
-        '<div class="num-item"><div class="num-label">Neto disponible</div><div class="num-value ' + (d.tieneChecque&&d.cogaytOk?'ok':'warn') + '">' + fmt(d.totalCheque - d.totalCogayt) + '</div></div>' +
+        '<div class="num-item"><div class="num-label">Neto período</div><div class="num-value ' + (d.tieneChecque&&d.cogaytOk?'ok':'warn') + '">' + fmt(d.totalCheque - d.totalCogayt) + '</div></div>' +
+        '<div class="num-item"><div class="num-label">Saldo financiero</div><div class="num-value ' + (d.saldo===null?'muted':d.saldo>=0?'ok':'danger') + '">' + (d.saldo===null?'—':fmt(d.saldo)) + '</div></div>' +
       '</div>' +
 
       cogaytResumen +
