@@ -1001,66 +1001,104 @@ tbody tr:hover td { background: #f8faf9; }
 
       <!-- ── COMPARAR PLANILLA ── -->
       <div id="hon-planilla" class="hon-tab" style="display:none;">
-        <div class="alert info" style="margin-bottom:16px;">
-          <i class="ti ti-robot"></i>
-          <div><strong>Comparador inteligente con IA.</strong> Subí la planilla del organismo en cualquier formato (Excel, CSV). La IA interpreta las columnas automáticamente y cruza los nombres contra las facturas ya cargadas en Odoo. No importa el formato — funciona con cualquier planilla.</div>
-        </div>
 
         <div class="grid2" style="margin-bottom:16px;">
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="ti ti-file-spreadsheet"></i> Paso 1 — Subir planilla del organismo</div>
+              <div class="card-title"><i class="ti ti-file-spreadsheet"></i> Paso 1 — Configurar</div>
             </div>
             <div class="card-body">
               <div class="field">
                 <label>Carta a comparar</label>
-                <select>
-                  <option>SENASA.28.1 — Honorarios</option>
-                  <option>INIDEP.28 — Honorarios</option>
-                  <option>MAGyP.14 — Honorarios</option>
+                <select id="plan-sel-carta" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;">
+                  <option value="">Cargando cartas...</option>
                 </select>
               </div>
               <div class="field">
-                <label>Mes</label>
-                <select><option>Mayo 2026</option><option>Abril 2026</option></select>
+                <label>Planilla del organismo (Excel o CSV)</label>
+                <div class="dropzone" id="plan-dropzone" onclick="document.getElementById('plan-fileInput').click()" style="margin-bottom:8px;">
+                  <i class="ti ti-table-import"></i>
+                  <p>Arrastrá el archivo o hacé <span>clic para seleccionar</span></p>
+                  <p style="font-size:11px;margin-top:4px;">Excel (.xlsx, .xls) o CSV — debe tener columnas de CUIT y Nombre</p>
+                </div>
+                <input type="file" id="plan-fileInput" accept=".csv,.xlsx,.xls,.txt" style="display:none">
+                <div id="plan-fileInfo" style="display:none;padding:8px 12px;background:var(--success-bg);border-radius:7px;font-size:12px;color:var(--success);margin-bottom:8px;"></div>
               </div>
-              <div class="dropzone" style="margin-bottom:14px;">
-                <i class="ti ti-table-import"></i>
-                <p>Arrastrá el Excel o CSV del organismo</p>
-                <p style="font-size:11px;margin-top:4px;">Cualquier formato — la IA interpreta las columnas</p>
+              <div id="plan-col-section" style="display:none;">
+                <div class="field">
+                  <label>Columna CUIT <span style="color:var(--danger);">*</span></label>
+                  <select id="plan-col-cuit" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></select>
+                </div>
+                <div class="field">
+                  <label>Columna Nombre</label>
+                  <select id="plan-col-nombre" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></select>
+                </div>
               </div>
-              <button class="btn btn-primary" style="width:100%;justify-content:center;">
-                <i class="ti ti-robot"></i> Analizar y comparar
+              <button class="btn btn-primary" id="plan-btn-comparar" onclick="planComparar()" disabled style="width:100%;justify-content:center;padding:10px;">
+                <i class="ti ti-search"></i> Comparar con Odoo
               </button>
             </div>
           </div>
 
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="ti ti-info-circle"></i> ¿Cómo funciona?</div>
+              <div class="card-title"><i class="ti ti-info-circle"></i> Cómo funciona</div>
             </div>
             <div class="card-body">
               <div style="display:flex;flex-direction:column;gap:12px;">
                 <div style="display:flex;gap:10px;align-items:flex-start;">
                   <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">1</div>
-                  <div><div style="font-size:12px;font-weight:500;">Subís la planilla</div><div style="font-size:11px;color:var(--muted);">Excel, CSV, cualquier formato del organismo</div></div>
+                  <div><div style="font-size:12px;font-weight:500;">Seleccionás la carta</div><div style="font-size:11px;color:var(--muted);">Para filtrar las facturas de Odoo por esa carta analítica</div></div>
                 </div>
                 <div style="display:flex;gap:10px;align-items:flex-start;">
                   <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">2</div>
-                  <div><div style="font-size:12px;font-weight:500;">La IA la interpreta</div><div style="font-size:11px;color:var(--muted);">Detecta columnas de nombre, CUIT y monto sin importar el formato</div></div>
+                  <div><div style="font-size:12px;font-weight:500;">Subís la planilla</div><div style="font-size:11px;color:var(--muted);">Excel o CSV del organismo con CUIT y Nombre</div></div>
                 </div>
                 <div style="display:flex;gap:10px;align-items:flex-start;">
                   <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">3</div>
-                  <div><div style="font-size:12px;font-weight:500;">Cruce con Odoo</div><div style="font-size:11px;color:var(--muted);">Compara contra facturas ya cargadas en la carta seleccionada</div></div>
+                  <div><div style="font-size:12px;font-weight:500;">Cruce automático</div><div style="font-size:11px;color:var(--muted);">Cruza por CUIT contra facturas en Odoo</div></div>
                 </div>
                 <div style="display:flex;gap:10px;align-items:flex-start;">
                   <div style="width:24px;height:24px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">4</div>
-                  <div><div style="font-size:12px;font-weight:500;">Resultado visual</div><div style="font-size:11px;color:var(--muted);">✓ llegó / ✗ no llegó / ⚠ monto diferente</div></div>
+                  <div><div style="font-size:12px;font-weight:500;">Resultado por persona</div><div style="font-size:11px;color:var(--muted);">✓ Pagada · 🔄 En proceso · 📝 Borrador · ✗ Faltante</div></div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        <div id="plan-resultados" style="display:none;">
+          <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-bottom:16px;">
+            <div class="metric-card success"><div class="metric-label">Pagadas</div><div class="metric-value" id="plan-cnt-pagadas">0</div><div class="metric-sub">en Odoo</div></div>
+            <div class="metric-card info"><div class="metric-label">En proceso</div><div class="metric-value" id="plan-cnt-proceso">0</div><div class="metric-sub">en pago</div></div>
+            <div class="metric-card"><div class="metric-label">Borrador</div><div class="metric-value" id="plan-cnt-borrador">0</div><div class="metric-sub">sin confirmar</div></div>
+            <div class="metric-card danger"><div class="metric-label">Faltantes</div><div class="metric-value" id="plan-cnt-faltantes">0</div><div class="metric-sub">no están en Odoo</div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-table"></i> Detalle por persona</div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="text" id="plan-search" placeholder="Buscar..." oninput="planFiltrar()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;width:160px;">
+                <select id="plan-filtro-estado" onchange="planFiltrar()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;">
+                  <option value="">Todos</option>
+                  <option value="pagada">Pagadas</option>
+                  <option value="proceso">En proceso</option>
+                  <option value="borrador">Borrador</option>
+                  <option value="faltante">Faltantes</option>
+                </select>
+                <button class="btn btn-primary" onclick="planExcel()" style="font-size:11px;"><i class="ti ti-download"></i> Excel</button>
+              </div>
+            </div>
+            <div class="table-wrap" style="border:none;border-radius:0;max-height:500px;overflow-y:auto;">
+              <table>
+                <thead><tr><th>Nombre (planilla)</th><th>CUIT</th><th>Nro Factura</th><th>Monto</th><th>Fecha</th><th>Estado</th></tr></thead>
+                <tbody id="plan-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- ── DETALLE DE FACTURAS ── -->
@@ -2336,7 +2374,6 @@ async function honExtractWithClaude(file, intentos = 4) {
 }
 
 async function honCrearFactura(datos, cartaId) {
-  _odooUid = null; // forzar re-auth en cada factura
   const parseNum = v => parseFloat((v || '0').toString().replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
   const neto   = parseNum(datos.neto) || parseNum(datos.total);
   const iva    = parseNum(datos.iva);
@@ -2401,7 +2438,7 @@ async function honProcesar() {
 
   let okCount = 0, errCount = 0;
 
-  const BATCH_SIZE = 15;
+  const BATCH_SIZE = 25;
   const BATCH_DELAY = 5000; // 5s entre lotes — optimo con Haiku texto nivel 2
 
   for (let i = 0; i < honFiles.length; i += BATCH_SIZE) {
@@ -3212,6 +3249,231 @@ function ibRestart() {
 }
 
 </script>
+
+
+// ═══════════════════════════════════════════════════════
+// COMPARADOR DE PLANILLAS
+// ═══════════════════════════════════════════════════════
+let _planRows = [];       // filas de la planilla
+let _planHeaders = [];    // headers del CSV/Excel
+let _planResultados = []; // resultado del cruce
+
+// Cargar cartas en el selector de planilla
+async function planCargarCartas() {
+  var sel = document.getElementById('plan-sel-carta');
+  if (!sel || sel.options.length > 1) return;
+  try {
+    var cartas = await odooCall('account.analytic.account','search_read',[[['active','=',true]]],{fields:['id','name'],order:'name asc'});
+    var hon = cartas.filter(function(c){ return HON_CARTAS_FILTRO_DET && HON_CARTAS_FILTRO_DET.some(function(f){ return c.name && c.name.includes(f); }); });
+    sel.innerHTML = '<option value="">-- Seleccioná una carta --</option>' + hon.map(function(c){ return '<option value="'+c.id+'">'+c.name+'</option>'; }).join('');
+  } catch(e) { sel.innerHTML = '<option value="">Error cargando cartas</option>'; }
+}
+
+// Parsear CSV
+function planParseCSV(text) {
+  var lines = text.trim().split(/\r?\n/);
+  if (!lines.length) return { hdrs: [], rows: [] };
+  var sep = (lines[0].split(';').length > lines[0].split(',').length) ? ';' : ',';
+  function parseLine(line) {
+    var fields = [], cur = '', inQ = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === sep && !inQ) { fields.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    fields.push(cur.trim());
+    return fields;
+  }
+  var hdrs = parseLine(lines[0]);
+  var rows = [];
+  for (var i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    var vals = parseLine(lines[i]);
+    var obj = {};
+    hdrs.forEach(function(h, idx) { obj[h] = vals[idx] || ''; });
+    rows.push(obj);
+  }
+  return { hdrs: hdrs, rows: rows };
+}
+
+// Manejar archivo subido
+document.addEventListener('DOMContentLoaded', function() {
+  var dz = document.getElementById('plan-dropzone');
+  var fi = document.getElementById('plan-fileInput');
+  if (dz) {
+    dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', function(){ dz.classList.remove('drag-over'); });
+    dz.addEventListener('drop', function(e){ e.preventDefault(); dz.classList.remove('drag-over'); if(e.dataTransfer.files[0]) planHandleFile(e.dataTransfer.files[0]); });
+  }
+  if (fi) fi.addEventListener('change', function(e){ if(e.target.files[0]) planHandleFile(e.target.files[0]); });
+});
+
+function planHandleFile(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var text = e.target.result;
+    var parsed = planParseCSV(text);
+    _planHeaders = parsed.hdrs;
+    _planRows = parsed.rows;
+
+    var info = document.getElementById('plan-fileInfo');
+    info.style.display = 'block';
+    info.textContent = '✓ ' + file.name + ' — ' + _planRows.length + ' registros';
+
+    // Poblar selects de columnas
+    var colCuit   = document.getElementById('plan-col-cuit');
+    var colNombre = document.getElementById('plan-col-nombre');
+    var opts = '<option value="">-- seleccionar --</option>' + _planHeaders.map(function(h){ return '<option value="'+h+'">'+h+'</option>'; }).join('');
+    colCuit.innerHTML   = opts;
+    colNombre.innerHTML = opts;
+
+    // Autodetectar columnas
+    var guessCol = function(kws) { return _planHeaders.find(function(h){ return kws.some(function(k){ return h.toLowerCase().includes(k); }); }) || ''; };
+    colCuit.value   = guessCol(['cuit','cuil','vat','nit','tax']);
+    colNombre.value = guessCol(['nombre','name','razon','apellido','empresa']);
+
+    document.getElementById('plan-col-section').style.display = 'block';
+    document.getElementById('plan-btn-comparar').disabled = false;
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+async function planComparar() {
+  var cartaId = parseInt(document.getElementById('plan-sel-carta').value);
+  if (!cartaId) { showToast('Seleccioná una carta', 'err'); return; }
+  var colCuit   = document.getElementById('plan-col-cuit').value;
+  var colNombre = document.getElementById('plan-col-nombre').value;
+  if (!colCuit) { showToast('Seleccioná la columna CUIT', 'err'); return; }
+
+  var btn = document.getElementById('plan-btn-comparar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Consultando Odoo...';
+
+  try {
+    // Traer facturas de Odoo para esta carta
+    var desde = (typeof CICLO_ACT_DESDE !== 'undefined') ? CICLO_ACT_DESDE : new Date().toISOString().substring(0,7)+'-01';
+    var facturas = await odooCall('account.move','search_read',[[
+      ['move_type','=','in_invoice'],['date','>=',desde],['state','in',['draft','posted']]
+    ]],{fields:['id','name','partner_id','amount_total','invoice_date','payment_state'],limit:2000});
+
+    // Filtrar por carta analítica
+    var moveIds = facturas.map(function(f){ return f.id; });
+    var moveHon = new Set();
+    if (moveIds.length > 0) {
+      var lineas = await odooCall('account.move.line','search_read',[[
+        ['move_id','in',moveIds],['analytic_distribution','!=',false]
+      ]],{fields:['move_id','analytic_distribution'],limit:5000});
+      lineas.forEach(function(l){
+        if (!l.analytic_distribution) return;
+        if (Object.keys(l.analytic_distribution).map(Number).some(function(id){ return id === cartaId; }))
+          moveHon.add(l.move_id[0]);
+      });
+    }
+    var facturasHon = facturas.filter(function(f){ return moveHon.has(f.id); });
+
+    // Traer CUIT de cada partner
+    var pids = Array.from(new Set(facturasHon.map(function(f){ return f.partner_id && f.partner_id[0]; }).filter(Boolean)));
+    var cuitMap = {};
+    if (pids.length > 0) {
+      var partners = await odooCall('res.partner','search_read',[[['id','in',pids]]],{fields:['id','vat'],limit:500});
+      partners.forEach(function(p){ cuitMap[p.id] = (p.vat || '').replace(/\D/g,''); });
+    }
+
+    // Indexar facturas por CUIT
+    var facturasPorCuit = {};
+    facturasHon.forEach(function(f) {
+      var cuit = cuitMap[f.partner_id && f.partner_id[0]] || '';
+      if (cuit) facturasPorCuit[cuit] = f;
+    });
+
+    // Cruzar planilla con Odoo
+    _planResultados = _planRows.map(function(row) {
+      var cuitRaw  = (row[colCuit] || '').replace(/\D/g,'');
+      var nombre   = colNombre ? (row[colNombre] || '—') : '—';
+      var factura  = facturasPorCuit[cuitRaw];
+      var estado, estadoKey;
+      if (!cuitRaw) {
+        estado = '⚠ Sin CUIT'; estadoKey = 'faltante';
+      } else if (!factura) {
+        estado = '✗ Faltante'; estadoKey = 'faltante';
+      } else if (factura.state === 'draft') {
+        estado = '📝 Borrador'; estadoKey = 'borrador';
+      } else if (factura.payment_state === 'paid') {
+        estado = '✓ Pagada'; estadoKey = 'pagada';
+      } else if (factura.payment_state === 'in_payment') {
+        estado = '🔄 En proceso'; estadoKey = 'proceso';
+      } else {
+        estado = '📋 Confirmada'; estadoKey = 'proceso';
+      }
+      return {
+        nombre: nombre,
+        cuit: cuitRaw || row[colCuit] || '—',
+        nro_factura: factura ? (factura.name || '—') : '—',
+        monto: factura ? factura.amount_total : 0,
+        fecha: factura ? (factura.invoice_date || '—') : '—',
+        estado: estado,
+        estadoKey: estadoKey
+      };
+    });
+
+    planRenderResultados(_planResultados);
+
+  } catch(e) {
+    showToast('Error: ' + e.message, 'err');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-search"></i> Comparar con Odoo';
+}
+
+function planRenderResultados(data) {
+  var cnt = { pagada:0, proceso:0, borrador:0, faltante:0 };
+  data.forEach(function(r){ if(cnt[r.estadoKey]!==undefined) cnt[r.estadoKey]++; });
+
+  document.getElementById('plan-cnt-pagadas').textContent  = cnt.pagada;
+  document.getElementById('plan-cnt-proceso').textContent  = cnt.proceso;
+  document.getElementById('plan-cnt-borrador').textContent = cnt.borrador;
+  document.getElementById('plan-cnt-faltantes').textContent= cnt.faltante;
+
+  var fmt = function(n){ return n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—'; };
+  var tbody = document.getElementById('plan-tbody');
+  tbody.innerHTML = data.map(function(r){
+    var cls = r.estadoKey === 'pagada' ? 'badge-ok' : r.estadoKey === 'proceso' ? 'badge-info' : r.estadoKey === 'borrador' ? 'badge-muted' : 'badge-danger';
+    return '<tr><td style="font-weight:500;">'+r.nombre+'</td><td class="mono" style="font-size:11px;">'+r.cuit+'</td><td class="mono" style="font-size:11px;">'+r.nro_factura+'</td><td class="mono">'+fmt(r.monto)+'</td><td style="color:var(--muted);font-size:11px;">'+r.fecha+'</td><td><span class="badge '+cls+'">'+r.estado+'</span></td></tr>';
+  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">Sin resultados</td></tr>';
+
+  document.getElementById('plan-resultados').style.display = 'block';
+}
+
+function planFiltrar() {
+  var q    = (document.getElementById('plan-search').value || '').toLowerCase();
+  var est  = document.getElementById('plan-filtro-estado').value;
+  var data = _planResultados.filter(function(r){
+    var matchQ   = !q   || r.nombre.toLowerCase().includes(q) || r.cuit.includes(q);
+    var matchEst = !est || r.estadoKey === est;
+    return matchQ && matchEst;
+  });
+  planRenderResultados(data);
+}
+
+function planExcel() {
+  if (!_planResultados.length) { showToast('Sin datos', 'err'); return; }
+  var q   = (document.getElementById('plan-search').value || '').toLowerCase();
+  var est = document.getElementById('plan-filtro-estado').value;
+  var data = _planResultados.filter(function(r){
+    return (!q || r.nombre.toLowerCase().includes(q) || r.cuit.includes(q)) && (!est || r.estadoKey === est);
+  });
+  var csv = '\uFEFF' + ['Nombre,CUIT,Nro Factura,Monto,Fecha,Estado'].concat(
+    data.map(function(r){ return ['"'+r.nombre+'"', r.cuit, r.nro_factura, r.monto, r.fecha, r.estado].join(','); })
+  ).join('\n');
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
+  a.download = 'comparacion_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+  showToast(data.length + ' filas exportadas', 'ok');
+}
+
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
