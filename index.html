@@ -1462,7 +1462,7 @@ tbody tr:hover td { background: #f8faf9; }
       <div id="c29-empty" style="display:none;" class="empty">
         <i class="ti ti-inbox"></i>
         <div>No hay subconvenios registrados para este período.</div>
-        <div style="font-size:11px;margin-top:4px;">Verificá que existan cartas <strong>10.SENASA.29.*</strong> en Odoo.</div>
+        <div style="font-size:11px;margin-top:4px;">Verificá que existan cartas <strong>10.SENASA.CA29.*</strong> en Odoo.</div>
       </div>
 
       <!-- CARDS POR FRIGORIFICO -->
@@ -1910,7 +1910,7 @@ async function c29Cargar() {
     // 1. Cartas hijas de la 29
     if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Buscando subconvenios...';
     var todasCartas = await odooCall('account.analytic.account','search_read',[[['active','=',true]]],{fields:['id','name'],order:'name asc'});
-    var cartas29 = todasCartas.filter(function(ca){ return ca.name && ca.name.indexOf('10.SENASA.29') >= 0 && ca.name !== '10.SENASA.29'; });
+    var cartas29 = todasCartas.filter(function(ca){ return ca.name && ca.name.indexOf('10.SENASA.CA29') >= 0; });
 
     if (!cartas29.length) {
       if (loading) loading.style.display='none';
