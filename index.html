@@ -5069,10 +5069,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-// FONDOS PROPIOS FA — account.analytic.line account_id=116
+// FONDOS PROPIOS FA — Saldo DEVENGADO (income + expense)
+// account.analytic.line — account_id=116 — company_id=1
 // ═══════════════════════════════════════════════════════════════
-var _fpData    = null;
-var _fpFiltrado= null;
+var _fpData     = null;
+var _fpFiltrado = null;
 var _fpChartEvol  = null;
 var _fpChartDonut = null;
 var _fpChartSaldo = null;
@@ -5080,39 +5081,65 @@ var _fpChartSaldo = null;
 var FP_CUENTA_ID  = 116;
 var FP_COMPANY_ID = 1;
 
-function fpClasificar(nombre, accountType) {
-  var nom = (nombre||'').toLowerCase();
-  var typ = (accountType||'');
-  if (nom.indexOf('outstanding receipts') >= 0 || nom.indexOf('1.1.1.02.003') >= 0) return 'transito_ing';
-  if (nom.indexOf('outstanding payments') >= 0 || nom.indexOf('1.1.1.02.004') >= 0) return 'transito_egr';
-  if (nom.indexOf('retencion') >= 0 || nom.indexOf('retención') >= 0 || nom.indexOf('211208') >= 0) return 'retencion';
-  if (typ === 'asset_cash' || typ === 'asset_current') return 'financiero';
-  if (typ === 'liability_current' || typ === 'liability_payable') return 'pasivo';
-  if (nom.indexOf('551') >= 0 || typ === 'expense') return 'gasto';
-  if (typ === 'income' || typ === 'income_other') return 'ingreso_dev';
-  return 'otro';
-}
+// Solo income y expense = devengado real
+var FP_TIPOS_DEV = ['income','expense'];
 
-var FP_TIPO_LABEL = {
-  financiero:   'Financiero',
-  transito_ing: 'En tránsito (ingreso)',
-  transito_egr: 'En tránsito (egreso)',
-  retencion:    'Retenciones',
-  pasivo:       'Pasivo',
-  gasto:        'Gasto devengado',
-  ingreso_dev:  'Ingreso devengado',
-  otro:         'Otro'
+// Categorías de gasto para el donut
+var FP_GASTO_GRUPOS = {
+  'honorarios':   ['honorarios'],
+  'cargas_soc':   ['cargas sociales','contribuciones','aportes'],
+  'viáticos':     ['viáticos','viaticos'],
+  'mantenimiento':['mantenimiento','rodados','seguros','patentes'],
+  'gastos_gral':  ['gastos generales','gastos varios','librería','papelería','membresía','ceremonial'],
+  'bancarios':    ['bancarios','comisiones'],
+  'capacitacion': ['capacitación','capacitacion'],
+  'otros_imp':    ['impuestos','otros impuestos'],
+  'servicios':    ['servicios profesionales','técnicos'],
+  'contingencias':['contingencia','previsión'],
+  'alquileres':   ['alquiler'],
 };
-var FP_TIPO_COLOR = {
-  financiero:   '#2ecc71',
-  transito_ing: '#3498db',
-  transito_egr: '#e67e22',
-  retencion:    '#9b59b6',
-  pasivo:       '#e74c3c',
-  gasto:        '#e05252',
-  ingreso_dev:  '#27ae60',
-  otro:         '#95a5a6'
+
+var FP_GRUPO_LABEL = {
+  honorarios:   'Honorarios',
+  cargas_soc:   'Cargas sociales',
+  'viáticos':   'Viáticos',
+  mantenimiento:'Mantenimiento',
+  gastos_gral:  'Gastos generales',
+  bancarios:    'Gastos bancarios',
+  capacitacion: 'Capacitación',
+  otros_imp:    'Impuestos',
+  servicios:    'Servicios prof.',
+  contingencias:'Contingencias',
+  alquileres:   'Alquileres',
+  ingreso:      'Ingresos (COGAYT/intereses)',
+  otros:        'Otros gastos',
 };
+
+var FP_GRUPO_COLOR = {
+  honorarios:   '#3498db',
+  cargas_soc:   '#2980b9',
+  'viáticos':   '#e67e22',
+  mantenimiento:'#e74c3c',
+  gastos_gral:  '#95a5a6',
+  bancarios:    '#7f8c8d',
+  capacitacion: '#9b59b6',
+  otros_imp:    '#c0392b',
+  servicios:    '#1abc9c',
+  contingencias:'#e05252',
+  alquileres:   '#f39c12',
+  ingreso:      '#2ecc71',
+  otros:        '#bdc3c7',
+};
+
+function fpGrupo(cuentaNombre, accountType) {
+  if (accountType === 'income') return 'ingreso';
+  var nom = (cuentaNombre||'').toLowerCase();
+  for (var g in FP_GASTO_GRUPOS) {
+    var kws = FP_GASTO_GRUPOS[g];
+    if (kws.some(function(k){ return nom.indexOf(k) >= 0; })) return g;
+  }
+  return 'otros';
+}
 
 async function fpCargar() {
   var anioSel = (document.getElementById('fp-anio')||{value:'2026'}).value || '2026';
@@ -5126,10 +5153,12 @@ async function fpCargar() {
   ['fp-k-saldo','fp-k-ing','fp-k-egr','fp-k-ret','fp-k-mov'].forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent='—'; });
 
   try {
-    // Traer líneas analíticas paginando
-    var lineas = [];
-    var total  = await odooCall('account.analytic.line','search_count',
+    // Contar total
+    var total = await odooCall('account.analytic.line','search_count',
       [[['account_id','=',FP_CUENTA_ID],['company_id','=',FP_COMPANY_ID],['date','>=',desde],['date','<=',hasta]]]);
+
+    // Paginar
+    var lineas = [];
     var PAGE = 8000, off = 0;
     while (off < total) {
       if (loading) loading.querySelector('#fp-loading-msg').textContent = 'Cargando... ' + Math.min(off+PAGE,total) + ' / ' + total;
@@ -5146,40 +5175,42 @@ async function fpCargar() {
     var cuentaInfo = {};
     if (cuentaIds.length > 0) {
       var cList = await odooCall('account.account','search_read',
-        [[['id','in',cuentaIds]]],
-        {fields:['id','name','account_type'],limit:500});
+        [[['id','in',cuentaIds]]],{fields:['id','name','account_type'],limit:500});
       cList.forEach(function(c){
-        var nom = typeof c.name==='object'?(c.name.es_AR||c.name.en_US||''):c.name;
+        var nom = typeof c.name==='object'?(c.name.es_AR||c.name.en_US||JSON.stringify(c.name)):c.name;
         cuentaInfo[c.id] = {nombre:nom, tipo:c.account_type};
       });
     }
 
-    // Procesar líneas
+    // Procesar — solo income y expense
     _fpData = lineas.map(function(l) {
-      var cid   = l.general_account_id&&l.general_account_id[0];
-      var ci    = cuentaInfo[cid]||{};
-      var tipo  = fpClasificar(ci.nombre||'', ci.tipo||'');
-      var esF   = tipo==='financiero'||tipo==='transito_ing'||tipo==='transito_egr';
-      // amount negativo en Odoo = ingreso real, positivo = egreso real (signo invertido)
+      var cid  = l.general_account_id && l.general_account_id[0];
+      var ci   = cuentaInfo[cid] || {};
+      var tipo = ci.tipo || '';
+      var esDev= FP_TIPOS_DEV.indexOf(tipo) >= 0;
+      var grupo= esDev ? fpGrupo(ci.nombre, tipo) : null;
+      // Signo: amount negativo en Odoo = ingreso real (× -1 para mostrar positivo)
+      // expense: amount positivo en Odoo = gasto real
+      var montoReal = tipo === 'income' ? (l.amount * -1) : l.amount;
       return {
-        id:     l.id,
-        fecha:  l.date,
-        mes:    l.date.substring(0,7),
-        nombre: l.name||'',
-        cuenta: ci.nombre||'',
-        tipo:   tipo,
-        amount: l.amount,
-        // Para saldo financiero: amount * -1 (signo corregido)
-        saldoAporte: esF ? (l.amount * -1) : 0,
-        esIngreso: l.amount < 0,  // negativo en Odoo = ingreso
-        esFinanciero: tipo==='financiero'
+        id:       l.id,
+        fecha:    l.date,
+        mes:      l.date.substring(0,7),
+        nombre:   l.name || '',
+        cuenta:   ci.nombre || '',
+        tipo:     tipo,
+        grupo:    grupo,
+        esDev:    esDev,
+        esIngreso:tipo === 'income',
+        amount:   l.amount,
+        montoReal:montoReal,
       };
-    });
+    }).filter(function(l){ return l.esDev; }); // SOLO DEVENGADO
 
     _fpFiltrado = _fpData;
-    fpRender();
     if (loading) loading.style.display='none';
     if (charts)  charts.style.display='block';
+    fpRender();
 
   } catch(e) {
     if (loading) loading.innerHTML='<div class="alert danger" style="margin:16px;"><i class="ti ti-x"></i><div>Error: '+e.message+'</div></div>';
@@ -5195,7 +5226,7 @@ function fpFiltrar() {
     var matchTipo = !tipo ||
       (tipo==='ingreso' && l.esIngreso) ||
       (tipo==='egreso'  && !l.esIngreso) ||
-      (tipo==='financiero' && l.esFinanciero);
+      (tipo==='financiero' && false); // no aplica para devengado
     return matchQ && matchTipo;
   });
   fpRender();
@@ -5203,136 +5234,153 @@ function fpFiltrar() {
 
 function fpRender() {
   var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
-  var data = _fpFiltrado || [];
+  var all  = _fpData    || [];
+  var data = _fpFiltrado|| [];
 
-  // KPIs (siempre sobre datos completos para saldo)
-  var allData = _fpData || [];
-  var saldoFin = allData.filter(function(l){return l.esFinanciero;}).reduce(function(s,l){return s+l.saldoAporte;},0);
-  var totalIng = allData.filter(function(l){return l.esIngreso&&l.esFinanciero;}).reduce(function(s,l){return s+Math.abs(l.amount);},0);
-  var totalEgr = allData.filter(function(l){return !l.esIngreso&&l.esFinanciero;}).reduce(function(s,l){return s+l.amount;},0);
-  var totalRet = allData.filter(function(l){return l.tipo==='retencion';}).reduce(function(s,l){return s+Math.abs(l.amount);},0);
+  // KPIs sobre datos completos
+  var totalIng  = all.filter(function(l){return l.esIngreso;}).reduce(function(s,l){return s+l.montoReal;},0);
+  var totalGasto= all.filter(function(l){return !l.esIngreso;}).reduce(function(s,l){return s+l.montoReal;},0);
+  var neto      = totalIng - totalGasto;
 
   var kSaldo = document.getElementById('fp-k-saldo');
   var kIng   = document.getElementById('fp-k-ing');
   var kEgr   = document.getElementById('fp-k-egr');
   var kRet   = document.getElementById('fp-k-ret');
   var kMov   = document.getElementById('fp-k-mov');
-  if (kSaldo) { kSaldo.textContent=fmt(saldoFin); kSaldo.style.color=saldoFin>=0?'var(--success)':'var(--danger)'; }
+  if (kSaldo) { kSaldo.textContent=fmt(neto);      kSaldo.style.color=neto>=0?'var(--success)':'var(--danger)'; }
   if (kIng)   kIng.textContent=fmt(totalIng);
-  if (kEgr)   kEgr.textContent=fmt(totalEgr);
-  if (kRet)   kRet.textContent=fmt(totalRet);
+  if (kEgr)   kEgr.textContent=fmt(totalGasto);
+  if (kRet)   { kRet.textContent=all.length.toLocaleString('es-AR'); }
   if (kMov)   kMov.textContent=data.length.toLocaleString('es-AR');
 
-  // Tabla (filtrada)
-  var tbody  = document.getElementById('fp-tbody');
-  var count  = document.getElementById('fp-tabla-count');
-  if (count) count.textContent = data.length.toLocaleString('es-AR') + ' movimientos';
+  // Actualizar labels de KPI strip para devengado
+  var kpiLabels = document.querySelectorAll('#fp-kpis .c29-kpi-lbl');
+  if (kpiLabels[0]) kpiLabels[0].textContent = 'Resultado neto';
+  if (kpiLabels[1]) kpiLabels[1].textContent = 'Ingresos YTD';
+  if (kpiLabels[2]) kpiLabels[2].textContent = 'Gastos YTD';
+  if (kpiLabels[3]) kpiLabels[3].textContent = 'Total movimientos';
+  if (kpiLabels[4]) kpiLabels[4].textContent = 'Filtrados';
 
-  // Calcular saldo acumulado para la tabla (solo datos filtrados)
+  // Tabla
+  var tbody = document.getElementById('fp-tbody');
+  var count = document.getElementById('fp-tabla-count');
+  if (count) count.textContent = data.length.toLocaleString('es-AR') + ' movimientos devengados';
+
   var acum = 0;
-  var rowsHtml = '';
-  var MAX_ROWS = 500;
-  data.slice(0,MAX_ROWS).forEach(function(l){
-    if (l.esFinanciero) acum += l.saldoAporte;
-    var montoColor = l.esIngreso ? 'var(--success)' : 'var(--danger)';
-    var montoStr   = (l.esIngreso?'+':'-') + fmt(Math.abs(l.amount));
-    var tipoBadge  = '<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:'+(FP_TIPO_COLOR[l.tipo]||'#ccc')+'22;color:'+(FP_TIPO_COLOR[l.tipo]||'#666')+';">'+FP_TIPO_LABEL[l.tipo]+'</span>';
-    rowsHtml += '<tr>' +
-      '<td style="white-space:nowrap;color:var(--muted);">'+l.fecha+'</td>' +
-      '<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+l.nombre+'">'+l.nombre+'</td>' +
-      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--muted);" title="'+l.cuenta+'">'+l.cuenta+'</td>' +
-      '<td>'+tipoBadge+'</td>' +
-      '<td class="mono" style="text-align:right;color:'+montoColor+';font-weight:500;">'+montoStr+'</td>' +
-      '<td class="mono" style="text-align:right;color:'+(acum>=0?'var(--success)':'var(--danger)')+';">'+fmt(acum)+'</td>' +
+  var MAX  = 500;
+  var rows = '';
+  data.slice(0,MAX).forEach(function(l){
+    acum += l.esIngreso ? l.montoReal : -l.montoReal;
+    var mc  = l.esIngreso ? 'var(--success)' : 'var(--danger)';
+    var ms  = (l.esIngreso?'+':'-') + fmt(l.montoReal);
+    var gl  = FP_GRUPO_LABEL[l.grupo]||l.grupo||'—';
+    var gc  = FP_GRUPO_COLOR[l.grupo]||'#ccc';
+    var badge = '<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:'+gc+'22;color:'+gc+';">'+gl+'</span>';
+    rows += '<tr>'+
+      '<td style="white-space:nowrap;color:var(--muted);">'+l.fecha+'</td>'+
+      '<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+l.nombre+'">'+l.nombre+'</td>'+
+      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--muted);">'+l.cuenta+'</td>'+
+      '<td>'+badge+'</td>'+
+      '<td class="mono" style="text-align:right;color:'+mc+';font-weight:500;">'+ms+'</td>'+
+      '<td class="mono" style="text-align:right;color:'+(acum>=0?'var(--success)':'var(--danger)')+';">'+fmt(acum)+'</td>'+
     '</tr>';
   });
-  if (data.length > MAX_ROWS) rowsHtml += '<tr><td colspan="6" style="text-align:center;padding:10px;color:var(--muted);font-size:11px;">Mostrando primeros '+MAX_ROWS+' de '+data.length+' — usá el filtro para acotar</td></tr>';
-  if (tbody) tbody.innerHTML = rowsHtml || '<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--muted);">Sin movimientos</td></tr>';
+  if (data.length>MAX) rows += '<tr><td colspan="6" style="text-align:center;padding:10px;color:var(--muted);font-size:11px;">Primeros '+MAX+' de '+data.length+' — usá el filtro para acotar</td></tr>';
+  if (tbody) tbody.innerHTML = rows || '<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--muted);">Sin movimientos devengados</td></tr>';
 
-  // Datos por mes para gráficos
+  // Datos por mes
   var meses = {};
-  allData.forEach(function(l){
-    if (!meses[l.mes]) meses[l.mes]={mes:l.mes, ing:0, egr:0, ret:0, otros:0};
-    if (l.esFinanciero && l.esIngreso)   meses[l.mes].ing += Math.abs(l.amount);
-    if (l.esFinanciero && !l.esIngreso)  meses[l.mes].egr += l.amount;
-    if (l.tipo==='retencion')            meses[l.mes].ret += Math.abs(l.amount);
+  all.forEach(function(l){
+    if (!meses[l.mes]) meses[l.mes]={ing:0,gasto:0};
+    if (l.esIngreso)  meses[l.mes].ing   += l.montoReal;
+    else              meses[l.mes].gasto += l.montoReal;
   });
   var mesesOrden = Object.keys(meses).sort();
-
-  // Saldo acumulado por mes
-  var saldoAcum = 0;
-  var saldoMes  = mesesOrden.map(function(m){
-    saldoAcum += (meses[m].ing - meses[m].egr);
-    return saldoAcum;
-  });
-
   var labels = mesesOrden.map(function(m){
     return new Date(m+'-15').toLocaleString('es-AR',{month:'short'}).toUpperCase();
   });
 
-  // Gráfico evolución (barras apiladas)
+  // Resultado acumulado por mes
+  var acumMes = 0;
+  var saldoMes = mesesOrden.map(function(m){
+    acumMes += meses[m].ing - meses[m].gasto;
+    return acumMes;
+  });
+
+  // Chart evolución
   var ctxEvol = document.getElementById('fp-chart-evol');
-  if (ctxEvol) {
+  if (ctxEvol && typeof Chart !== 'undefined') {
     if (_fpChartEvol) _fpChartEvol.destroy();
     _fpChartEvol = new Chart(ctxEvol, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [
-          { label:'Ingresos', data:mesesOrden.map(function(m){return meses[m].ing;}), backgroundColor:'rgba(46,204,113,.7)', borderRadius:3, order:2 },
-          { label:'Egresos',  data:mesesOrden.map(function(m){return meses[m].egr;}), backgroundColor:'rgba(231,76,60,.7)',  borderRadius:3, order:2 }
-        ]
-      },
-      options: {
+      type:'bar',
+      data:{ labels:labels, datasets:[
+        {label:'Ingresos', data:mesesOrden.map(function(m){return meses[m].ing;}),   backgroundColor:'rgba(46,204,113,.75)',  borderRadius:3},
+        {label:'Gastos',   data:mesesOrden.map(function(m){return meses[m].gasto;}), backgroundColor:'rgba(231,76,60,.75)',   borderRadius:3}
+      ]},
+      options:{
         responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{position:'bottom',labels:{font:{size:10}}}, tooltip:{callbacks:{label:function(ctx){ return ctx.dataset.label+': $'+ctx.raw.toLocaleString('es-AR',{maximumFractionDigits:0}); }}} },
-        scales:{ x:{grid:{display:false}}, y:{ticks:{callback:function(v){return '$'+v.toLocaleString('es-AR',{notation:'compact',maximumFractionDigits:0});}}} }
+        plugins:{legend:{position:'bottom',labels:{font:{size:10}}},
+          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmt(ctx.raw);}}}},
+        scales:{x:{grid:{display:false}}, y:{ticks:{callback:function(v){return '$'+v.toLocaleString('es-AR',{notation:'compact',maximumFractionDigits:1});}}}}
       }
     });
   }
 
-  // Gráfico saldo acumulado (línea)
+  // Chart resultado acumulado
   var ctxSaldo = document.getElementById('fp-chart-saldo');
-  if (ctxSaldo) {
+  if (ctxSaldo && typeof Chart !== 'undefined') {
     if (_fpChartSaldo) _fpChartSaldo.destroy();
     _fpChartSaldo = new Chart(ctxSaldo, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{ label:'Saldo financiero', data:saldoMes, borderColor:'#2ecc71', backgroundColor:'rgba(46,204,113,.08)', fill:true, tension:.3, pointRadius:4, pointBackgroundColor:'#2ecc71' }]
-      },
-      options: {
+      type:'line',
+      data:{ labels:labels, datasets:[{
+        label:'Resultado acumulado', data:saldoMes,
+        borderColor: saldoMes[saldoMes.length-1]>=0?'#2ecc71':'#e74c3c',
+        backgroundColor: saldoMes[saldoMes.length-1]>=0?'rgba(46,204,113,.08)':'rgba(231,76,60,.08)',
+        fill:true, tension:.3, pointRadius:4
+      }]},
+      options:{
         responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:function(ctx){ return '$'+ctx.raw.toLocaleString('es-AR',{maximumFractionDigits:0}); }}} },
-        scales:{ x:{grid:{display:false}}, y:{ticks:{callback:function(v){return '$'+v.toLocaleString('es-AR',{notation:'compact',maximumFractionDigits:0});}}} }
+        plugins:{legend:{display:false}, tooltip:{callbacks:{label:function(ctx){return fmt(ctx.raw);}}}},
+        scales:{x:{grid:{display:false}}, y:{ticks:{callback:function(v){return '$'+v.toLocaleString('es-AR',{notation:'compact',maximumFractionDigits:1});}}}}
       }
     });
   }
 
-  // Gráfico donut composición
+  // Donut por grupo de gasto/ingreso
   var ctxDonut = document.getElementById('fp-chart-donut');
   var leyenda  = document.getElementById('fp-donut-legend');
-  if (ctxDonut) {
-    var tipoTotales = {};
-    allData.forEach(function(l){ if(!tipoTotales[l.tipo]) tipoTotales[l.tipo]=0; tipoTotales[l.tipo]+=Math.abs(l.amount); });
-    var tipoKeys   = Object.keys(tipoTotales).sort(function(a,b){return tipoTotales[b]-tipoTotales[a];});
-    var donutData  = tipoKeys.map(function(k){return tipoTotales[k];});
-    var donutColor = tipoKeys.map(function(k){return FP_TIPO_COLOR[k]||'#ccc';});
-    var total      = donutData.reduce(function(s,v){return s+v;},0);
+  if (ctxDonut && typeof Chart !== 'undefined') {
+    var grupos = {};
+    all.forEach(function(l){
+      var g = l.grupo||'otros';
+      if (!grupos[g]) grupos[g]=0;
+      grupos[g] += l.montoReal;
+    });
+    var gKeys   = Object.keys(grupos).sort(function(a,b){return grupos[b]-grupos[a];});
+    var gData   = gKeys.map(function(k){return Math.abs(grupos[k]);});
+    var gColors = gKeys.map(function(k){return FP_GRUPO_COLOR[k]||'#ccc';});
+    var gTotal  = gData.reduce(function(s,v){return s+v;},0);
 
     if (_fpChartDonut) _fpChartDonut.destroy();
     _fpChartDonut = new Chart(ctxDonut, {
       type:'doughnut',
-      data:{ labels:tipoKeys.map(function(k){return FP_TIPO_LABEL[k]||k;}), datasets:[{data:donutData, backgroundColor:donutColor, borderWidth:2}] },
-      options:{ responsive:false, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:function(ctx){ return ctx.label+': $'+ctx.raw.toLocaleString('es-AR',{maximumFractionDigits:0})+' ('+(ctx.raw/total*100).toFixed(1)+'%)'; }}} } }
+      data:{ labels:gKeys.map(function(k){return FP_GRUPO_LABEL[k]||k;}), datasets:[{data:gData, backgroundColor:gColors, borderWidth:2, hoverOffset:6}] },
+      options:{ responsive:false, cutout:'65%',
+        plugins:{ legend:{display:false},
+          tooltip:{callbacks:{label:function(ctx){return ctx.label+': '+fmt(ctx.raw)+' ('+(ctx.raw/gTotal*100).toFixed(1)+'%)';}}}}
+      }
     });
 
     if (leyenda) {
-      leyenda.innerHTML = tipoKeys.map(function(k){
-        var pct=(tipoTotales[k]/total*100).toFixed(0);
-        return '<div style="display:flex;justify-content:space-between;margin-bottom:4px;align-items:center;">'+
-          '<div style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+FP_TIPO_COLOR[k]+'"></span><span>'+FP_TIPO_LABEL[k]+'</span></div>'+
-          '<strong>'+pct+'%</strong>'+
+      leyenda.innerHTML = gKeys.slice(0,8).map(function(k){
+        var pct=(Math.abs(grupos[k])/gTotal*100).toFixed(0);
+        var color=FP_GRUPO_COLOR[k]||'#ccc';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
+          '<div style="display:flex;align-items:center;gap:5px;min-width:0;">'+
+            '<span style="flex-shrink:0;display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';"></span>'+
+            '<span style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(FP_GRUPO_LABEL[k]||k)+'</span>'+
+          '</div>'+
+          '<strong style="font-size:10px;margin-left:6px;flex-shrink:0;">'+pct+'%</strong>'+
         '</div>';
       }).join('');
     }
@@ -5340,31 +5388,21 @@ function fpRender() {
 }
 
 async function fpExportarPDF() {
+  showToast('Generando PDF...','ok');
+  if (!window.html2canvas) {
+    await new Promise(function(res){ var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; s.onload=res; document.head.appendChild(s); });
+  }
   if (!window.jspdf) {
-    // Load jsPDF on demand
-    await new Promise(function(res){
-      var s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-      s.onload=res; document.head.appendChild(s);
-    });
-    await new Promise(function(res){
-      var s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-      s.onload=res; document.head.appendChild(s);
-    });
+    await new Promise(function(res){ var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; s.onload=res; document.head.appendChild(s); });
   }
   var anio=(document.getElementById('fp-anio')||{value:'2026'}).value||'2026';
-  showToast('Generando PDF...','ok');
   var el = document.getElementById('page-fondos');
-  html2canvas(el,{scale:1.5,useCORS:true,backgroundColor:'#ffffff'}).then(function(canvas){
-    var imgData=canvas.toDataURL('image/png');
-    var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
-    var pw=pdf.internal.pageSize.getWidth();
-    var ph=pdf.internal.pageSize.getHeight();
-    var ratio=Math.min(pw/canvas.width,ph/canvas.height)*96;
-    pdf.addImage(imgData,'PNG',5,5,pw-10,(canvas.height*(pw-10)/canvas.width));
-    pdf.save('FondosPropios_FA_'+anio+'.pdf');
-    showToast('PDF generado','ok');
+  html2canvas(el,{scale:1.5,useCORS:true,backgroundColor:'#f8f9fa'}).then(function(canvas){
+    var pdf = new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    var pw  = pdf.internal.pageSize.getWidth();
+    pdf.addImage(canvas.toDataURL('image/png'),'PNG',5,5,pw-10,(canvas.height*(pw-10)/canvas.width));
+    pdf.save('FondosPropios_Devengado_'+anio+'.pdf');
+    showToast('PDF exportado','ok');
   });
 }
 </script>
