@@ -3038,7 +3038,7 @@ function c29AbrirDetalle(idx) {
   // ── TAB INGRESOS ──────────────────────────────────────────────────
   var cheqRows = d.actual.cheques.map(fRow).join('');
   var cogRows  = d.actual.cogayt.map(fRow).join('');
-  var debRows  = d.actual.debito.map(fRow).join('');
+  var debRows  = ((d.actual.debito||[]).map(fRow)).join('');
 
   var cogResumen = '';
   if (d.tieneChecque) {
@@ -3054,7 +3054,7 @@ function c29AbrirDetalle(idx) {
   var tabIngresos =
     sec('Cheque depositado') + tbl(cheqRows,'Sin cheque registrado') +
     sec('COGAYT 6% — Fundación ArgenINTA') + tbl(cogRows,'Sin COGAYT registrado') + cogResumen +
-    sec('Débito a Fundación (contra-asiento)') + tbl(debRows,'Sin débito registrado');
+    '';
 
   // ── TAB HONORARIOS ────────────────────────────────────────────────
   var honRows = d.actual.honores.map(fRow).join('');
@@ -4653,35 +4653,57 @@ function planParseCSV(text) {
   });
 })();
 
+function planApplyParsed(file, hdrs, rows) {
+  _planHeaders = hdrs;
+  _planRows    = rows;
+  var info = document.getElementById('plan-fileInfo');
+  if (info) { info.style.display='block'; info.textContent=file.name+' — '+_planRows.length+' registros'; }
+  var colCuit   = document.getElementById('plan-col-cuit');
+  var colNombre = document.getElementById('plan-col-nombre');
+  var opts = '<option value="">-- seleccionar --</option>';
+  _planHeaders.forEach(function(h){ opts += '<option value="'+h+'">'+h+'</option>'; });
+  if (colCuit)   colCuit.innerHTML   = opts;
+  if (colNombre) colNombre.innerHTML = opts;
+  function guessCol(kws){ return _planHeaders.find(function(h){ return kws.some(function(k){ return h.toLowerCase().indexOf(k)>=0; }); })||''; }
+  if (colCuit)   colCuit.value   = guessCol(['cuit','cuil','vat','nit','tax']);
+  if (colNombre) colNombre.value = guessCol(['nombre','name','razon','apellido','empresa']);
+  var sec = document.getElementById('plan-col-section');
+  if (sec) sec.style.display='block';
+  var btn = document.getElementById('plan-btn-comparar');
+  if (btn) btn.disabled=false;
+}
+
 function planHandleFile(file) {
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var parsed = planParseCSV(e.target.result);
-    _planHeaders = parsed.hdrs;
-    _planRows    = parsed.rows;
-
-    var info = document.getElementById('plan-fileInfo');
-    if (info) { info.style.display = 'block'; info.textContent = file.name + ' — ' + _planRows.length + ' registros'; }
-
-    var colCuit   = document.getElementById('plan-col-cuit');
-    var colNombre = document.getElementById('plan-col-nombre');
-    var opts = '<option value="">-- seleccionar --</option>';
-    _planHeaders.forEach(function(h){ opts += '<option value="' + h + '">' + h + '</option>'; });
-    if (colCuit)   colCuit.innerHTML   = opts;
-    if (colNombre) colNombre.innerHTML = opts;
-
-    function guessCol(kws) {
-      return _planHeaders.find(function(h){ return kws.some(function(k){ return h.toLowerCase().indexOf(k) >= 0; }); }) || '';
-    }
-    if (colCuit)   colCuit.value   = guessCol(['cuit','cuil','vat','nit','tax']);
-    if (colNombre) colNombre.value = guessCol(['nombre','name','razon','apellido','empresa']);
-
-    var sec = document.getElementById('plan-col-section');
-    if (sec) sec.style.display = 'block';
-    var btn = document.getElementById('plan-btn-comparar');
-    if (btn) btn.disabled = false;
-  };
-  reader.readAsText(file, 'UTF-8');
+  var ext = file.name.split('.').pop().toLowerCase();
+  if (ext==='xlsx'||ext==='xls') {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var wb  = XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        var ws  = wb.Sheets[wb.SheetNames[0]];
+        var raw = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        if (!raw||raw.length<2) { showToast('Archivo Excel vacío','err'); return; }
+        var hdrs = raw[0].map(function(h){return String(h).trim();});
+        var rows = [];
+        for (var i=1;i<raw.length;i++) {
+          var allEmpty=raw[i].every(function(v){return v===''||v===null||v===undefined;});
+          if (allEmpty) continue;
+          var obj={};
+          hdrs.forEach(function(h,idx){obj[h]=raw[i][idx]!==undefined?String(raw[i][idx]).trim():'';});
+          rows.push(obj);
+        }
+        planApplyParsed(file, hdrs, rows);
+      } catch(err){ showToast('Error Excel: '+err.message,'err'); }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var parsed = planParseCSV(e.target.result);
+      planApplyParsed(file, parsed.hdrs, parsed.rows);
+    };
+    reader.readAsText(file,'UTF-8');
+  }
 }
 
 async function planComparar() {
@@ -4906,6 +4928,7 @@ function honDetalleExcel(){
 
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
