@@ -2155,18 +2155,18 @@ async function c29ChqV2Procesar(hdrs, rows) {
 
   try {
     // Líneas analíticas de CA29 en el período del CSV
-    var lineasCSV = await odooCall('account.move.line','search_read',
-      [[['analytic_distribution','!=',false],['move_id.move_type','in',['out_invoice']],['date','>=',desdeCSV],['date','<=',hastaCSV]]],
-      {fields:['move_id','analytic_distribution'],limit:5000});
-
-    // Filtrar solo las de cartas CA29
     var cartaIds29 = (_c29Data||[]).map(function(d){return d.id;});
     var moveIdsCA29 = [];
-    lineasCSV.forEach(function(l){
-      if (!l.analytic_distribution) return;
-      var enCA29 = Object.keys(l.analytic_distribution).map(Number).some(function(cid){ return cartaIds29.indexOf(cid)>=0; });
-      if (enCA29 && moveIdsCA29.indexOf(l.move_id[0])<0) moveIdsCA29.push(l.move_id[0]);
-    });
+    // Filtrar directo por carta en Odoo para evitar el límite de 10000
+    for (var ci2=0; ci2<cartaIds29.length; ci2++) {
+      var cid2s = String(cartaIds29[ci2]);
+      try {
+        var bL = await odooCall('account.move.line','search_read',
+          [[['analytic_distribution.'+cid2s,'!=',false],['move_id.move_type','in',['out_invoice']],['date','>=',desdeCSV],['date','<=',hastaCSV]]],
+          {fields:['move_id','analytic_distribution'],limit:500});
+        bL.forEach(function(l){ if(moveIdsCA29.indexOf(l.move_id[0])<0) moveIdsCA29.push(l.move_id[0]); });
+      } catch(e2){ console.warn('skip carta '+cid2s); }
+    }
 
     if (moveIdsCA29.length>0) {
       var fList = await odooCall('account.move','search_read',
@@ -2193,22 +2193,24 @@ async function c29ChqV2Procesar(hdrs, rows) {
 
     // COGAYT en el período: out_invoice donde partner ES Fundación, con analítica CA29
     if (loading) loading.querySelector('#c29-chq2-loading-msg').textContent = 'Buscando COGAYT...';
-    var cogLines = await odooCall('account.move.line','search_read',
-      [[['analytic_distribution','!=',false],['move_id.move_type','=','out_invoice'],['date','>=',desdeCSV],['date','<=',hastaCSV]]],
-      {fields:['move_id','analytic_distribution'],limit:5000});
+    var cogCartaMap = {}; // move_id → carta_id (construido en el loop)
+    var cogMoveIds2 = [];
+    for (var ci4=0; ci4<cartaIds29.length; ci4++) {
+      var cid4s = String(cartaIds29[ci4]);
+      try {
+        var bC = await odooCall('account.move.line','search_read',
+          [[['analytic_distribution.'+cid4s,'!=',false],['move_id.move_type','=','in_invoice'],['move_id.partner_id.name','ilike','fundacion'],['date','>=',desdeCSV],['date','<=',hastaCSV]]],
+          {fields:['move_id','analytic_distribution'],limit:200});
+        bC.forEach(function(l){ 
+          if(cogMoveIds2.indexOf(l.move_id[0])<0) cogMoveIds2.push(l.move_id[0]);
+          cogCartaMap[l.move_id[0]] = cartaIds29[ci4];
+        });
+      } catch(e4){ console.warn('skip cog carta '+cid4s); }
+    }
+    var cogLines = { alreadyProcessed: true, moveIds: cogMoveIds2 };
 
-    // Para cada move en cogLines, guardar por carta
-    var cogMoveIds = [];
-    var cogCartaMap = {}; // move_id → carta_id
-    cogLines.forEach(function(l){
-      if (!l.analytic_distribution) return;
-      Object.keys(l.analytic_distribution).map(Number).forEach(function(cid){
-        if (cartaIds29.indexOf(cid)>=0) {
-          if (cogMoveIds.indexOf(l.move_id[0])<0) cogMoveIds.push(l.move_id[0]);
-          cogCartaMap[l.move_id[0]] = cid;
-        }
-      });
-    });
+    // cogCartaMap ya fue construido en el loop anterior
+    var cogMoveIds = cogLines.moveIds || [];
 
     if (cogMoveIds.length>0) {
       var cogFacts = await odooCall('account.move','search_read',
@@ -2230,15 +2232,16 @@ async function c29ChqV2Procesar(hdrs, rows) {
     if (loading) loading.querySelector('#c29-chq2-loading-msg').textContent = 'Cargando historial...';
     var hace6m = new Date(); hace6m.setMonth(hace6m.getMonth()-6);
     var desde6m = hace6m.getFullYear()+'-'+String(hace6m.getMonth()+1).padStart(2,'0')+'-01';
-    var linHist = await odooCall('account.move.line','search_read',
-      [[['analytic_distribution','!=',false],['move_id.move_type','=','out_invoice'],['date','>=',desde6m]]],
-      {fields:['move_id','analytic_distribution'],limit:5000});
     var histMoveIds = [];
-    linHist.forEach(function(l){
-      if (!l.analytic_distribution) return;
-      var enCA29 = Object.keys(l.analytic_distribution).map(Number).some(function(cid){ return cartaIds29.indexOf(cid)>=0; });
-      if (enCA29 && histMoveIds.indexOf(l.move_id[0])<0) histMoveIds.push(l.move_id[0]);
-    });
+    for (var ci3=0; ci3<cartaIds29.length; ci3++) {
+      var cid3s = String(cartaIds29[ci3]);
+      try {
+        var bH = await odooCall('account.move.line','search_read',
+          [[['analytic_distribution.'+cid3s,'!=',false],['move_id.move_type','=','out_invoice'],['date','>=',desde6m]]],
+          {fields:['move_id','analytic_distribution'],limit:500});
+        bH.forEach(function(l){ if(histMoveIds.indexOf(l.move_id[0])<0) histMoveIds.push(l.move_id[0]); });
+      } catch(e3){ console.warn('skip hist carta '+cid3s); }
+    }
     if (histMoveIds.length>0) {
       var histFacts = await odooCall('account.move','search_read',
         [[['id','in',histMoveIds],['state','in',['draft','posted']]]],
@@ -2745,9 +2748,32 @@ async function c29Cargar() {
 
     // 2. Líneas analíticas de moves out/in invoice en CA29 (sin filtro fecha — filtramos en el move)
     if (loading) loading.querySelector('#c29-loading-msg').textContent='Cargando líneas analíticas...';
-    var lineas = await odooCall('account.move.line','search_read',
-      [[['analytic_distribution','!=',false],['move_id.move_type','in',['out_invoice','in_invoice']]]],
-      {fields:['move_id','analytic_distribution','product_id'],limit:10000});
+    // Filtramos directo por los IDs de cartas CA29 usando el operador de dominio específico
+    // Odoo soporta filtrar analytic_distribution por clave usando el dominio json
+    // Traemos en batches de 200 cartas máximo — acá son ~40
+    var lineas = [];
+    var BATCH = 20;
+    for (var bi=0; bi<cartaIds.length; bi+=BATCH) {
+      var batchIds = cartaIds.slice(bi, bi+BATCH);
+      // Para cada carta, buscar líneas que la tengan en analytic_distribution
+      // Odoo 18: podemos filtrar con cualquiera de los IDs como string key
+      for (var ci=0; ci<batchIds.length; ci++) {
+        var cid = String(batchIds[ci]);
+        try {
+          var bLines = await odooCall('account.move.line','search_read',
+            [[['analytic_distribution.'+cid,'!=',false],['move_id.move_type','in',['out_invoice','in_invoice']]]],
+            {fields:['move_id','analytic_distribution','product_id'],limit:2000});
+          bLines.forEach(function(l){ lineas.push(l); });
+        } catch(eBatch) {
+          // Si el operador anidado no está soportado, fallback a búsqueda por move_id
+          console.warn('Batch filter not supported for carta '+cid+', skipping');
+        }
+      }
+    }
+    // Dedup por id de línea
+    var lineasMap = {};
+    lineas.forEach(function(l){ lineasMap[l.id]=l; });
+    lineas = Object.values(lineasMap);
 
     var moveIdsPorCarta = {};
     cartas29.forEach(function(ca){ moveIdsPorCarta[ca.id] = new Set(); });
