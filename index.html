@@ -2810,6 +2810,69 @@ async function c29Cargar() {
       });
     }
 
+    // 5b. Buscar COGAYT directamente: in_invoice + partner Fundación + analítica CA29
+    //     Y cheques: out_invoice + partner != Fundación con analítica CA29
+    //     Hacemos esto independientemente de las líneas, buscando moves directamente
+    if (loading) loading.querySelector('#c29-loading-msg').textContent = 'Buscando COGAYT y cheques (búsqueda directa)...';
+
+    // IDs de partner Fundación
+    var fundacionIds = Object.keys(esFundacion).filter(function(pid){ return esFundacion[pid]; }).map(Number);
+
+    // COGAYT del período: in_invoice a Fundación en el rango desde5 hasta hoy
+    var cogaytDirectos = {};  // carta_id -> [facturas]
+    if (fundacionIds.length > 0) {
+      try {
+        var cogMovesAll = await odooCall('account.move','search_read',
+          [[['move_type','=','in_invoice'],['partner_id','in',fundacionIds],
+            ['invoice_date','>=',desde5],['state','in',['draft','posted']]]],
+          {fields:['id','name','move_type','partner_id','amount_total','invoice_date','date','payment_state','state'],limit:2000});
+
+        // Para cada factura COGAYT, ver qué carta CA29 tiene en sus líneas
+        if (cogMovesAll.length > 0) {
+          var cogMoveIds = cogMovesAll.map(function(f){return f.id;});
+          var cogLinesByCarta = await odooCall('account.move.line','search_read',
+            [[['move_id','in',cogMoveIds],['analytic_distribution','!=',false]]],
+            {fields:['move_id','analytic_distribution'],limit:5000});
+
+          var moveCartaMap = {};  // move_id -> carta_id
+          cogLinesByCarta.forEach(function(l){
+            Object.keys(l.analytic_distribution).map(Number).forEach(function(cid){
+              if (cartaIds.indexOf(cid) >= 0) moveCartaMap[l.move_id[0]] = cid;
+            });
+          });
+
+          cogMovesAll.forEach(function(f){
+            var cartaId = moveCartaMap[f.id];
+            if (cartaId) {
+              if (!cogaytDirectos[cartaId]) cogaytDirectos[cartaId] = [];
+              cogaytDirectos[cartaId].push(f);
+            }
+          });
+        }
+      } catch(eCog){ console.warn('COGAYT directo error:', eCog.message); }
+    }
+
+    // Cheques del período: out_invoice a NO-Fundación con analítica CA29
+    // Buscar por líneas de los move_ids que ya tenemos, o buscar moves de los partners de cada carta
+    // Los move_ids de CA29 ya los tenemos en allMoveIds (de la paginación de líneas)
+    // Pero si allMoveIds está vacío, buscar directamente los moves del período filtrando por las cartas
+    var chequesDirectos = {};  // carta_id -> [facturas]
+    if (allMoveIds.length > 0) {
+      // Usar los que ya tenemos
+      Object.values(facturasMes).forEach(function(f){
+        if (f.move_type !== 'out_invoice') return;
+        var pid = f.partner_id && f.partner_id[0];
+        if (esFundacion[pid]) return;
+        // Ver a qué carta pertenece
+        cartaIds.forEach(function(cid){
+          if (moveIdsPorCarta[cid] && moveIdsPorCarta[cid].has(f.id)) {
+            if (!chequesDirectos[cid]) chequesDirectos[cid] = [];
+            if (!chequesDirectos[cid].some(function(x){return x.id===f.id;})) chequesDirectos[cid].push(f);
+          }
+        });
+      });
+    }
+
     // 5. Saldos financieros (account.analytic.line + x_plan2_id)
     if (loading) loading.querySelector('#c29-loading-msg').textContent='Cargando saldos financieros...';
     var saldosPorCarta = {};
@@ -2845,12 +2908,10 @@ async function c29Cargar() {
     function clasificar(moveSet, facturasObj) {
       var moves = Array.from(moveSet).map(function(mid){ return facturasObj[mid]; }).filter(Boolean);
       var cheques = moves.filter(function(f){ return f.move_type==='out_invoice' && !esFundacion[f.partner_id&&f.partner_id[0]]; });
-      var cogayt  = moves.filter(function(f){ return f.move_type==='out_invoice' && esFundacion[f.partner_id&&f.partner_id[0]]; });
-      // Débito COGAYT: in_invoice donde partner ES Fundación (le saca el 6% a la carta)
-      var debito  = moves.filter(function(f){ return f.move_type==='in_invoice' && esFundacion[f.partner_id&&f.partner_id[0]]; });
-      // Honorarios: in_invoice donde partner NO es Fundación (veterinarios)
+      // COGAYT: in_invoice a Fundación — se sobreescribe con cogaytDirectos si está disponible
+      var cogayt  = moves.filter(function(f){ return f.move_type==='in_invoice' && esFundacion[f.partner_id&&f.partner_id[0]]; });
       var honores = moves.filter(function(f){ return f.move_type==='in_invoice' && !esFundacion[f.partner_id&&f.partner_id[0]]; });
-      return { cheques:cheques, cogayt:cogayt, debito:debito, honores:honores };
+      return { cheques:cheques, cogayt:cogayt, honores:honores };
     }
 
     _c29Data = cartas29.map(function(ca) {
@@ -2858,9 +2919,14 @@ async function c29Cargar() {
 
       // Mes actual
       var actual = clasificar(moveSet, facturasMes);
+      // COGAYT directo: in_invoice + Fundación + analítica CA29 (más confiable)
+      var cogMes = (cogaytDirectos[ca.id]||[]).filter(function(f){
+        var fd = f.invoice_date||f.date||''; return fd>=desde && fd<=hasta;
+      });
+      if (cogMes.length > 0) actual.cogayt = cogMes;
 
       // Patrón histórico: agrupar por mes los últimos 5 meses
-      var patron = {};  // 'YYYY-MM' -> {cheques, cogayt, honores}
+      var patron = {};
       for (var i=1; i<=5; i++) {
         var dm = new Date(anio, mesNum-1-i, 1);
         var km = dm.getFullYear()+'-'+String(dm.getMonth()+1).padStart(2,'0');
@@ -2873,7 +2939,12 @@ async function c29Cargar() {
           var fd = f.invoice_date||f.date||'';
           if (fd>=ds&&fd<=hs) fMes[mid]=f;
         });
-        patron[km] = clasificar(moveSet, fMes);
+        var pClasif = clasificar(moveSet, fMes);
+        // COGAYT histórico también de búsqueda directa
+        pClasif.cogayt = (cogaytDirectos[ca.id]||[]).filter(function(f){
+          var fd = f.invoice_date||f.date||''; return fd>=ds&&fd<=hs;
+        });
+        patron[km] = pClasif;
       }
 
       // Promedios históricos
@@ -2885,14 +2956,13 @@ async function c29Cargar() {
 
       var totalCheque = actual.cheques.reduce(function(s,f){ return s+f.amount_total; },0);
       var totalCogayt = actual.cogayt.reduce(function(s,f){ return s+f.amount_total; },0);
-      var totalDebito = actual.debito.reduce(function(s,f){ return s+f.amount_total; },0);
       var totalHon    = actual.honores.reduce(function(s,f){ return s+f.amount_total; },0);
       var cogaytEsp   = totalCheque * 0.06;
       var cogaytOk    = totalCogayt>0 && Math.abs(totalCogayt-cogaytEsp)<cogaytEsp*0.05;
 
       var estadoKey = 'ok';
       if (!actual.cheques.length) estadoKey='danger';
-      else if (!actual.cogayt.length||!actual.debito.length) estadoKey='warn';
+      else if (!actual.cogayt.length) estadoKey='warn';
 
       return {
         id:ca.id, nombre:ca.name,
