@@ -565,7 +565,37 @@ tbody tr:hover td { background: #f8faf9; }
   color: var(--muted);
 }
 .empty i { font-size: 36px; opacity: 0.3; display: block; margin-bottom: 10px; }
-</style>
+
+    /* ── CARTA 29 KPI STRIP ─────────────────────────────────────── */
+    .c29-kpi { background:var(--surface); border:1px solid var(--border); border-radius:7px; padding:10px 12px; }
+    .c29-kpi-val { font-size:18px; font-weight:700; font-family:'JetBrains Mono',monospace; color:var(--text); line-height:1; margin-bottom:3px; }
+    .c29-kpi-lbl { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .c29-kpi-ok    { border-color:rgba(26,92,56,.25);  background:rgba(26,92,56,.04); }
+    .c29-kpi-ok    .c29-kpi-val { color:var(--success); }
+    .c29-kpi-warn  { border-color:rgba(180,120,0,.25); background:rgba(180,120,0,.04); }
+    .c29-kpi-warn  .c29-kpi-val { color:var(--warn); }
+    .c29-kpi-danger{ border-color:rgba(192,57,43,.25); background:rgba(192,57,43,.04); }
+    .c29-kpi-danger .c29-kpi-val{ color:var(--danger); }
+    .c29-kpi-info  { border-color:rgba(41,98,168,.25); background:rgba(41,98,168,.04); }
+    .c29-kpi-info  .c29-kpi-val { color:var(--info); }
+
+    /* ── CARTA 29 TABLE ─────────────────────────────────────────── */
+    #c29-tabla tbody tr { cursor:pointer; transition:background .12s; }
+    #c29-tabla tbody tr:hover { background:var(--surface-hover,rgba(0,0,0,.03)); }
+    #c29-tabla .c29-saldo-pos { color:var(--success); font-weight:600; }
+    #c29-tabla .c29-saldo-neg { color:var(--danger);  font-weight:600; }
+    #c29-tabla .c29-na        { color:var(--muted); }
+
+    /* ── PANEL KPI ROW ──────────────────────────────────────────── */
+    .c29-pkpi { background:var(--surface-alt,#f8faf9); border:1px solid var(--border); border-radius:6px; padding:8px 10px; }
+    .c29-pkpi-val { font-size:15px; font-weight:700; font-family:'JetBrains Mono',monospace; line-height:1; margin-bottom:2px; }
+    .c29-pkpi-lbl { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+
+    /* ── DETAIL SECTION TITLE ───────────────────────────────────── */
+    .c29-section { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding-bottom:6px; border-bottom:1px solid var(--border); margin-bottom:10px; margin-top:18px; }
+    .c29-section:first-child { margin-top:0; }
+
+  </style>
 </head>
 <body>
 
@@ -1412,96 +1442,88 @@ tbody tr:hover td { background: #f8faf9; }
     <!-- ══════════ CARTA 29 ══════════ -->
     <div id="page-carta29" class="page">
 
-      <!-- TOPBAR -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+      <!-- ── COMMAND BAR ───────────────────────────────────────── -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
         <div style="display:flex;gap:8px;align-items:center;">
-          <select id="c29-mes" onchange="c29Cargar()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;font-family:'Inter',sans-serif;color:var(--text);background:var(--surface);"></select>
-          <button class="btn btn-primary" id="c29-btn-reload" onclick="c29Cargar()"><i class="ti ti-refresh"></i> Actualizar</button>
+          <select id="c29-mes" onchange="c29Cargar()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;color:var(--text);background:var(--surface);font-weight:500;"></select>
+          <button class="btn btn-primary" id="c29-btn-reload" onclick="c29Cargar()" style="padding:5px 12px;font-size:12px;"><i class="ti ti-refresh"></i> Actualizar</button>
+          <input type="text" id="c29-buscar" placeholder="Buscar..." oninput="c29FiltrarTabla()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:140px;font-family:'Inter',sans-serif;color:var(--text);background:var(--surface);">
         </div>
-        <div id="c29-last-update" style="font-size:11px;color:var(--muted);"></div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div id="c29-last-update" style="font-size:10px;color:var(--muted);"></div>
+          <label style="font-size:11px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px;">
+            <input type="file" id="c29-chq-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="c29ChqHandleFile(this.files[0])">
+            <span onclick="document.getElementById('c29-chq-input').click()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:5px;">
+              <i class="ti ti-upload" style="font-size:13px;"></i> Subir Interbanking CSV
+            </span>
+          </label>
+        </div>
       </div>
 
-      <!-- MÉTRICAS -->
-      <div class="metrics-grid" style="margin-bottom:16px;">
-        <div class="metric-card success"><div class="metric-label">Completos</div><div class="metric-value" id="c29-cnt-ok">—</div><div class="metric-sub">cheque + COGAYT + débito</div></div>
-        <div class="metric-card warn"><div class="metric-label">Parciales</div><div class="metric-value" id="c29-cnt-warn">—</div><div class="metric-sub">falta algún movimiento</div></div>
-        <div class="metric-card danger"><div class="metric-label">Sin ingreso</div><div class="metric-value" id="c29-cnt-danger">—</div><div class="metric-sub">sin cheque registrado</div></div>
-        <div class="metric-card info"><div class="metric-label">Total ingresado</div><div class="metric-value" id="c29-total">—</div><div class="metric-sub">suma facturas cliente</div></div>
+      <!-- ── KPI STRIP ──────────────────────────────────────────── -->
+      <div id="c29-kpi-strip" style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px;">
+        <div class="c29-kpi"><div class="c29-kpi-val" id="c29-k-total">—</div><div class="c29-kpi-lbl">Total ingresado</div></div>
+        <div class="c29-kpi"><div class="c29-kpi-val" id="c29-k-saldo">—</div><div class="c29-kpi-lbl">Saldo financiero</div></div>
+        <div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val" id="c29-k-ok">—</div><div class="c29-kpi-lbl">Completos</div></div>
+        <div class="c29-kpi c29-kpi-warn"><div class="c29-kpi-val" id="c29-k-warn">—</div><div class="c29-kpi-lbl">Parciales</div></div>
+        <div class="c29-kpi c29-kpi-danger"><div class="c29-kpi-val" id="c29-k-danger">—</div><div class="c29-kpi-lbl">Sin ingreso</div></div>
+        <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="c29-k-hon">—</div><div class="c29-kpi-lbl">Hon. pagados</div></div>
       </div>
 
-      <!-- ALERTAS -->
-      <div id="c29-alertas" style="margin-bottom:12px;"></div>
+      <!-- ── ALERT BAR ──────────────────────────────────────────── -->
+      <div id="c29-alertas" style="margin-bottom:10px;"></div>
 
-      <!-- LOADING -->
+      <!-- ── LOADING ────────────────────────────────────────────── -->
       <div id="c29-loading" style="text-align:center;padding:60px;color:var(--muted);display:none;">
-        <i class="ti ti-loader" style="font-size:32px;display:block;margin-bottom:12px;"></i>
-        <div id="c29-loading-msg">Consultando Odoo...</div>
+        <i class="ti ti-loader" style="font-size:28px;display:block;margin-bottom:10px;"></i>
+        <div id="c29-loading-msg" style="font-size:12px;">Consultando Odoo...</div>
       </div>
 
-      <!-- TABLA RESUMEN -->
+      <!-- ── MAIN TABLE ─────────────────────────────────────────── -->
       <div id="c29-tabla-wrap" style="display:none;">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-list"></i> Subconvenios CA29 — <span id="c29-tabla-mes-label"></span></div>
-            <input type="text" id="c29-buscar" placeholder="Buscar frigorífico..." oninput="c29FiltrarTabla()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;width:180px;font-family:'Inter',sans-serif;">
-          </div>
-          <div class="card-body" style="padding:0;">
-            <div class="table-wrap" style="border:none;border-radius:0;">
-              <table id="c29-tabla">
-                <thead>
-                  <tr>
-                    <th>Subconv.</th>
-                    <th>Nombre</th>
-                    <th>Cheque ingresado</th>
-                    <th>COGAYT 6%</th>
-                    <th>Honorarios</th>
-                    <th>Saldo</th>
-                    <th>Estado</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="c29-tbody"></tbody>
-              </table>
-            </div>
-          </div>
+        <div class="table-wrap" style="border-radius:8px;">
+          <table id="c29-tabla" style="font-size:12px;">
+            <thead>
+              <tr>
+                <th style="width:70px;">Código</th>
+                <th>Frigorífico</th>
+                <th style="text-align:right;width:130px;">Saldo financiero</th>
+                <th style="text-align:right;width:120px;">Cheque mes</th>
+                <th style="text-align:center;width:80px;">COGAYT</th>
+                <th style="text-align:right;width:110px;">Honorarios</th>
+                <th style="text-align:center;width:70px;">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="c29-tbody"></tbody>
+          </table>
         </div>
       </div>
 
-      <!-- CHEQUES POR INGRESAR -->
-      <div id="c29-cheques-wrap" style="margin-top:20px;">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-clock"></i> Cheques depositados — pendientes de ingreso en Odoo</div>
-          </div>
-          <div class="card-body">
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-              <div id="c29-chq-dropzone" onclick="document.getElementById('c29-chq-input').click()"
-                style="border:2px dashed var(--border);border-radius:8px;padding:12px 20px;cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;transition:border-color .2s;"
-                ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
-                ondragleave="this.style.borderColor='var(--border)'"
-                ondrop="event.preventDefault();this.style.borderColor='var(--border)';c29ChqHandleFile(event.dataTransfer.files[0])">
-                <i class="ti ti-upload"></i> Subir CSV Interbanking (Depósitos)
-              </div>
-              <input type="file" id="c29-chq-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="c29ChqHandleFile(this.files[0])">
-              <div id="c29-chq-file-info" style="font-size:11px;color:var(--muted);display:none;"></div>
-            </div>
-            <div id="c29-chq-loading" style="display:none;font-size:12px;color:var(--muted);padding:8px 0;"><i class="ti ti-loader"></i> Cruzando contra Odoo...</div>
-            <div id="c29-chq-resultado"></div>
-          </div>
-        </div>
-      </div>
+      <!-- ── CHEQUES PENDIENTES (resultado CSV) ─────────────────── -->
+      <div id="c29-chq-resultado" style="margin-top:14px;"></div>
 
-      <!-- PANEL DETALLE (modal lateral) -->
-      <div id="c29-overlay" onclick="c29CerrarDetalle()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:200;"></div>
-      <div id="c29-panel" style="display:none;position:fixed;top:0;right:0;width:680px;max-width:95vw;height:100vh;background:var(--surface);z-index:201;box-shadow:-4px 0 24px rgba(0,0,0,0.15);overflow-y:auto;flex-direction:column;">
-        <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1;">
-          <div>
-            <div id="c29-panel-titulo" style="font-size:14px;font-weight:600;color:var(--text);"></div>
-            <div id="c29-panel-sub" style="font-size:11px;color:var(--muted);margin-top:2px;"></div>
+      <!-- ── DETAIL PANEL ───────────────────────────────────────── -->
+      <div id="c29-overlay" onclick="c29CerrarDetalle()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.25);z-index:200;backdrop-filter:blur(2px);"></div>
+      <div id="c29-panel" style="display:none;position:fixed;top:0;right:0;width:720px;max-width:96vw;height:100vh;background:var(--surface);z-index:201;box-shadow:-6px 0 32px rgba(0,0,0,0.12);flex-direction:column;">
+        <div id="c29-panel-header" style="padding:14px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+            <div>
+              <div id="c29-panel-titulo" style="font-size:13px;font-weight:600;color:var(--text);line-height:1.3;"></div>
+              <div id="c29-panel-sub" style="font-size:11px;color:var(--muted);margin-top:3px;"></div>
+            </div>
+            <button onclick="c29CerrarDetalle()" class="btn" style="padding:4px 8px;flex-shrink:0;"><i class="ti ti-x"></i></button>
           </div>
-          <button onclick="c29CerrarDetalle()" class="btn" style="padding:5px 10px;"><i class="ti ti-x"></i></button>
+          <!-- KPI row inside panel -->
+          <div id="c29-panel-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px;"></div>
+          <!-- Tabs -->
+          <div class="tab-row" style="margin-top:10px;margin-bottom:0;" id="c29det-tabs">
+            <button class="tab-btn active" onclick="c29DetTab(this,'ingresos')">Ingresos</button>
+            <button class="tab-btn" onclick="c29DetTab(this,'honorarios')">Honorarios</button>
+            <button class="tab-btn" onclick="c29DetTab(this,'saldo')">Saldo</button>
+            <button class="tab-btn" onclick="c29DetTab(this,'historial')">Historial</button>
+          </div>
         </div>
-        <div id="c29-panel-body" style="padding:20px;"></div>
+        <div id="c29-panel-body" style="padding:16px 20px;overflow-y:auto;flex:1;"></div>
       </div>
 
     </div>
@@ -2414,75 +2436,113 @@ async function c29Cargar() {
 }
 
 function c29FiltrarTabla() {
-  var q = (document.getElementById('c29-buscar')||{}).value||'';
-  q = q.toLowerCase();
-  var data = q ? _c29Data.filter(function(d){ return d.nombre.toLowerCase().indexOf(q)>=0; }) : _c29Data;
-  _c29DataFiltrada = data;
+  var q = ((document.getElementById('c29-buscar')||{}).value||'').toLowerCase();
+  _c29DataFiltrada = q ? _c29Data.filter(function(d){ return d.nombre.toLowerCase().indexOf(q)>=0; }) : _c29Data;
   var sel = document.getElementById('c29-mes');
-  c29RenderTabla(data, sel?sel.value:'');
+  c29RenderTabla(_c29DataFiltrada, sel?sel.value:'');
 }
+
+function c29SetMetrica(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; }
 
 function c29RenderTabla(data, mes) {
   var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
   var sel = document.getElementById('c29-mes');
   var mesLabel = sel&&sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:mes;
-  var lbl = document.getElementById('c29-tabla-mes-label');
-  if (lbl) lbl.textContent = mesLabel;
 
-  var cntOk=0,cntWarn=0,cntDanger=0,total=0;
-  data.forEach(function(d){ if(d.estadoKey==='ok')cntOk++; else if(d.estadoKey==='warn')cntWarn++; else cntDanger++; total+=d.totalCheque; });
-  c29SetMetrica('c29-cnt-ok',cntOk); c29SetMetrica('c29-cnt-warn',cntWarn);
-  c29SetMetrica('c29-cnt-danger',cntDanger); c29SetMetrica('c29-total',fmt(total));
+  // KPI strip totals
+  var cntOk=0, cntWarn=0, cntDanger=0, totalCheque=0, totalSaldo=0, totalHon=0;
+  data.forEach(function(d){
+    if(d.estadoKey==='ok') cntOk++;
+    else if(d.estadoKey==='warn') cntWarn++;
+    else cntDanger++;
+    totalCheque += d.totalCheque;
+    if(d.saldo!==null) totalSaldo += d.saldo;
+    totalHon += d.totalHon;
+  });
+  c29SetMetrica('c29-k-total',   fmt(totalCheque));
+  c29SetMetrica('c29-k-saldo',   fmt(totalSaldo));
+  c29SetMetrica('c29-k-ok',      cntOk);
+  c29SetMetrica('c29-k-warn',    cntWarn);
+  c29SetMetrica('c29-k-danger',  cntDanger);
+  c29SetMetrica('c29-k-hon',     fmt(totalHon));
 
-  // Alertas críticas
-  var alertas=document.getElementById('c29-alertas');
+  // Alertas — solo críticos, máx 3 líneas
+  var alertas = document.getElementById('c29-alertas');
   if (alertas) {
-    var html='';
-    data.filter(function(d){ return d.estadoKey!=='ok'; }).slice(0,5).forEach(function(d) {
-      var msgs=[];
-      if(!d.tieneChecque) msgs.push('sin cheque');
-      if(d.tieneChecque&&!d.tieneCogayt) msgs.push('COGAYT no registrado ('+fmt(d.cogaytEsp)+')');
-      if(d.tieneChecque&&!d.tieneDebito) msgs.push('débito COGAYT pendiente');
-      var cls=d.estadoKey==='danger'?'danger':'warn';
-      var icn=d.estadoKey==='danger'?'ti-x':'ti-alert-circle';
-      html+='<div class="alert '+cls+'" style="margin-bottom:6px;"><i class="ti '+icn+'"></i><div><strong>'+d.nombre+':</strong> '+msgs.join(' · ')+'</div></div>';
-    });
-    if (data.filter(function(d){return d.estadoKey!=='ok';}).length>5) html+='<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">...y '+(data.filter(function(d){return d.estadoKey!=='ok';}).length-5)+' más con advertencias.</div>';
-    alertas.innerHTML=html;
+    var criticos = data.filter(function(d){ return d.estadoKey==='danger'; });
+    var parciales = data.filter(function(d){ return d.estadoKey==='warn' && d.tieneChecque && !d.tieneCogayt; });
+    var html = '';
+    if (criticos.length) {
+      html += '<div class="alert danger" style="margin-bottom:6px;padding:6px 12px;font-size:11px;">' +
+        '<i class="ti ti-x"></i><div><strong>'+criticos.length+' sin cheque:</strong> ' +
+        criticos.slice(0,4).map(function(d){ return d.nombre.split(' - ').pop(); }).join(', ') +
+        (criticos.length>4?' y '+(criticos.length-4)+' más.':'') +
+        '</div></div>';
+    }
+    if (parciales.length) {
+      html += '<div class="alert warn" style="margin-bottom:6px;padding:6px 12px;font-size:11px;">' +
+        '<i class="ti ti-alert-circle"></i><div><strong>'+parciales.length+' sin COGAYT:</strong> ' +
+        parciales.slice(0,4).map(function(d){ return d.nombre.split(' - ').pop(); }).join(', ') +
+        (parciales.length>4?' y '+(parciales.length-4)+' más.':'') +
+        '</div></div>';
+    }
+    alertas.innerHTML = html;
   }
 
-  // Tabla
-  var tbody=document.getElementById('c29-tbody');
+  // Table rows
+  var tbody = document.getElementById('c29-tbody');
   if (!tbody) return;
-  var rows='';
-  data.forEach(function(d,idx) {
-    var dot=d.estadoKey==='ok'?'ok':d.estadoKey==='warn'?'warn':'danger';
-    var subconv=d.nombre.replace('10.SENASA.CA29.','').split(' ')[0];
-    var shortname=d.nombre.indexOf(' - ')>=0?d.nombre.split(' - ').slice(1).join(' - '):d.nombre;
-    // Truncar nombre largo
-    if(shortname.length>38) shortname=shortname.substring(0,36)+'...';
-    var cheqCell = d.tieneChecque?('<span style="color:var(--success);font-weight:500;">'+fmt(d.totalCheque)+'</span>'):'<span style="color:var(--danger);">—</span>';
-    var cogCell  = !d.tieneChecque?'—':d.cogaytOk?('<span style="color:var(--success);">'+fmt(d.totalCogayt)+'</span>'):d.tieneCogayt?('<span style="color:var(--warn);">'+fmt(d.totalCogayt)+'</span>'):'<span style="color:var(--danger);">Falta</span>';
-    var debCell  = d.tieneDebito?('<span style="color:var(--success);">'+fmt(d.totalDebito)+'</span>'):'<span style="color:var(--muted);">—</span>';
-    var honCell  = d.cantHon>0?(d.cantHon+' / '+fmt(d.totalHon)):'<span style="color:var(--muted);">—</span>';
-    var saldoCell= d.saldo===null?'<span style="color:var(--muted);">—</span>':(d.saldo>=0?'<span style="color:var(--success);font-weight:500;">'+fmt(d.saldo)+'</span>':'<span style="color:var(--danger);font-weight:500;">'+fmt(d.saldo)+'</span>');
-    var badgeCls = d.estadoKey==='ok'?'badge-ok':d.estadoKey==='warn'?'badge-warn':'badge-danger';
-    var badgeTxt = d.estadoKey==='ok'?'Completo':d.estadoKey==='warn'?'Parcial':'Sin ingreso';
-    rows+='<tr style="cursor:pointer;" onclick="c29AbrirDetalle('+idx+')" title="Ver detalle">' +
-      '<td><span class="mono" style="font-weight:600;font-size:11px;">CA29.'+subconv+'</span></td>'+
-      '<td><span class="hdot '+dot+'"></span>'+shortname+'</td>'+
-      '<td class="mono" style="font-size:12px;">'+cheqCell+'</td>'+
-      '<td class="mono" style="font-size:12px;">'+cogCell+'</td>'+
-      '<td class="mono" style="font-size:12px;">'+honCell+'</td>'+
-      '<td class="mono" style="font-size:12px;">'+saldoCell+'</td>'+
-      '<td><span class="badge '+badgeCls+'">'+badgeTxt+'</span></td>'+
-      '<td style="color:var(--muted);font-size:13px;"><i class="ti ti-chevron-right"></i></td>'+
+  var rows = '';
+  data.forEach(function(d, idx) {
+    var code = d.nombre.replace('10.SENASA.CA29.','').split(' ')[0];
+    var name = d.nombre.indexOf(' - ')>=0 ? d.nombre.split(' - ').slice(1).join(' - ') : d.nombre;
+    if (name.length>42) name = name.substring(0,40)+'…';
+
+    // Saldo — celda principal
+    var saldoHtml = d.saldo===null
+      ? '<span class="c29-na">—</span>'
+      : '<span class="'+(d.saldo>=0?'c29-saldo-pos':'c29-saldo-neg')+'">'+fmt(d.saldo)+'</span>';
+
+    // Cheque
+    var cheqHtml = d.tieneChecque
+      ? '<span style="color:var(--text);font-weight:500;">'+fmt(d.totalCheque)+'</span>'
+      : '<span class="c29-na">—</span>';
+
+    // COGAYT — icono compacto
+    var cogHtml = !d.tieneChecque
+      ? '<span class="c29-na">n/a</span>'
+      : d.cogaytOk
+        ? '<span style="color:var(--success);">✓ '+fmt(d.totalCogayt)+'</span>'
+        : d.tieneCogayt
+          ? '<span style="color:var(--warn);">~ '+fmt(d.totalCogayt)+'</span>'
+          : '<span style="color:var(--danger);font-weight:600;">FALTA</span>';
+
+    // Honorarios
+    var honHtml = d.cantHon>0
+      ? '<span style="color:var(--text);">'+d.cantHon+'&thinsp;·&thinsp;'+fmt(d.totalHon)+'</span>'
+      : '<span class="c29-na">—</span>';
+
+    // Estado pill
+    var pill = d.estadoKey==='ok'
+      ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--success);"></span>'
+      : d.estadoKey==='warn'
+        ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);"></span>'
+        : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--danger);"></span>';
+
+    rows += '<tr onclick="c29AbrirDetalle('+idx+')">' +
+      '<td><code style="font-size:10px;font-weight:600;color:var(--muted);">'+code+'</code></td>' +
+      '<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+name+'</td>' +
+      '<td style="text-align:right;" class="mono">'+saldoHtml+'</td>' +
+      '<td style="text-align:right;" class="mono">'+cheqHtml+'</td>' +
+      '<td style="text-align:center;" class="mono">'+cogHtml+'</td>' +
+      '<td style="text-align:right;" class="mono">'+honHtml+'</td>' +
+      '<td style="text-align:center;">'+pill+'</td>' +
     '</tr>';
   });
-  tbody.innerHTML=rows||'<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted);">Sin resultados</td></tr>';
+  tbody.innerHTML = rows || '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted);">Sin resultados</td></tr>';
 
-  var tablaW=document.getElementById('c29-tabla-wrap');
-  if (tablaW) tablaW.style.display='block';
+  var wrap = document.getElementById('c29-tabla-wrap');
+  if (wrap) wrap.style.display = 'block';
 }
 
 function c29AbrirDetalle(idx) {
@@ -2493,171 +2553,155 @@ function c29AbrirDetalle(idx) {
   var overlay = document.getElementById('c29-overlay');
   var titulo  = document.getElementById('c29-panel-titulo');
   var sub     = document.getElementById('c29-panel-sub');
+  var kpisEl  = document.getElementById('c29-panel-kpis');
   var body    = document.getElementById('c29-panel-body');
   if (!panel) return;
 
-  var fmt  = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
-  var fmtF = function(f){
-    var cls = f.payment_state==='paid'?'badge-ok':f.payment_state==='in_payment'?'badge-info':'badge-muted';
-    var txt = f.payment_state==='paid'?'Pagada':f.payment_state==='in_payment'?'En proceso':'Pendiente';
-    return '<span class="badge '+cls+'">'+txt+'</span>';
+  var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+  var fmtF= function(f){
+    var m = {'paid':'Pagada','in_payment':'En proceso'};
+    var c2 = {'paid':'badge-ok','in_payment':'badge-info'};
+    var s = f.payment_state||'';
+    return '<span class="badge '+(c2[s]||'badge-muted')+'">'+(m[s]||'Pendiente')+'</span>';
   };
   var fRow = function(f){
     return '<tr>' +
-      '<td style="font-size:10px;color:var(--muted);">'+(f.invoice_date||f.date||'—')+'</td>' +
-      '<td class="mono" style="font-size:11px;">'+(f.name||'—')+'</td>' +
-      '<td class="mono">'+fmt(f.amount_total)+'</td>' +
+      '<td style="font-size:10px;color:var(--muted);white-space:nowrap;">'+(f.invoice_date||f.date||'—')+'</td>' +
+      '<td class="mono" style="font-size:10px;">'+(f.name||'—')+'</td>' +
+      '<td class="mono" style="text-align:right;">'+fmt(f.amount_total)+'</td>' +
       '<td>'+fmtF(f)+'</td>' +
-      '<td style="font-size:10px;color:var(--muted);">'+(f.partner_id&&f.partner_id[1]||'—')+'</td>' +
+      '<td style="font-size:10px;color:var(--muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;">'+(f.partner_id&&f.partner_id[1]||'—')+'</td>' +
     '</tr>';
   };
   var tbl = function(rows, empty){
-    return '<div class="table-wrap" style="margin-top:8px;">' +
-      '<table><thead><tr><th>Fecha</th><th>Comprobante</th><th>Monto</th><th>Estado</th><th>Partner</th></tr></thead>' +
-      '<tbody>'+(rows||'<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--muted);">'+empty+'</td></tr>')+'</tbody></table></div>';
+    return '<div class="table-wrap" style="margin-top:8px;margin-bottom:0;">' +
+      '<table style="font-size:11px;"><thead><tr><th>Fecha</th><th>Comprobante</th><th style="text-align:right;">Monto</th><th>Estado</th><th>Partner</th></tr></thead>' +
+      '<tbody>'+(rows||'<tr><td colspan="5" style="text-align:center;padding:10px;color:var(--muted);">'+empty+'</td></tr>')+'</tbody></table></div>';
   };
+  var sec = function(label){ return '<div class="c29-section">'+label+'</div>'; };
 
-  // Nombre corto para el header
-  var shortname = d.nombre.indexOf(' - ')>=0 ? d.nombre.split(' - ').slice(1).join(' - ') : d.nombre;
+  // Header
+  var name = d.nombre.indexOf(' - ')>=0 ? d.nombre.split(' - ').slice(1).join(' - ') : d.nombre;
+  titulo.textContent = name;
+  sub.textContent    = d.nombre;
 
-  titulo.textContent = shortname;
-  sub.innerHTML = '<span class="badge '+(d.estadoKey==='ok'?'badge-ok':d.estadoKey==='warn'?'badge-warn':'badge-danger')+'">'+
-    (d.estadoKey==='ok'?'Completo':d.estadoKey==='warn'?'Parcial':'Sin ingreso')+'</span>' +
-    ' &nbsp;<span style="font-size:11px;color:var(--muted);">'+d.nombre+'</span>';
+  // Panel KPIs (4 boxes)
+  var saldoColor = d.saldo===null?'var(--text)':d.saldo>=0?'var(--success)':'var(--danger)';
+  var cogaytColor= d.cogaytOk?'var(--success)':d.tieneCogayt?'var(--warn)':'var(--danger)';
+  var honPct = d.promHon>0?Math.round(d.totalHon/d.promHon*100):null;
+  kpisEl.innerHTML =
+    '<div class="c29-pkpi"><div class="c29-pkpi-val" style="color:'+saldoColor+';">'+(d.saldo===null?'—':fmt(d.saldo))+'</div><div class="c29-pkpi-lbl">Saldo financiero</div></div>' +
+    '<div class="c29-pkpi"><div class="c29-pkpi-val">'+(d.tieneChecque?fmt(d.totalCheque):'—')+'</div><div class="c29-pkpi-lbl">Cheque '+( document.getElementById('c29-mes')?document.getElementById('c29-mes').options[document.getElementById('c29-mes').selectedIndex].text.split(' ')[0]:'')+'</div></div>' +
+    '<div class="c29-pkpi"><div class="c29-pkpi-val" style="color:'+cogaytColor+';">'+(d.tieneCogayt?fmt(d.totalCogayt):'FALTA')+'</div><div class="c29-pkpi-lbl">COGAYT (esp. '+fmt(d.cogaytEsp)+')</div></div>' +
+    '<div class="c29-pkpi"><div class="c29-pkpi-val">'+(d.cantHon>0?d.cantHon+' · '+fmt(d.totalHon):'—')+'</div><div class="c29-pkpi-lbl">Hon.'+(honPct!==null?' ('+honPct+'% vs prom.)':'')+'</div></div>';
 
-  // ── TAB: INGRESOS ────────────────────────────────────────────────
-  var tabIngresos = '';
-
-  // Cheque
+  // ── TAB INGRESOS ──────────────────────────────────────────────────
   var cheqRows = d.actual.cheques.map(fRow).join('');
-  tabIngresos += '<div class="section-title">Cheque depositado</div>';
-  tabIngresos += tbl(cheqRows, 'Sin cheque registrado en el período');
+  var cogRows  = d.actual.cogayt.map(fRow).join('');
+  var debRows  = d.actual.debito.map(fRow).join('');
+
+  var cogResumen = '';
   if (d.tieneChecque) {
-    tabIngresos += '<div style="margin-top:6px;padding:8px 12px;background:var(--surface-alt);border-radius:6px;font-size:11px;">' +
-      'Total ingresado: <strong>'+fmt(d.totalCheque)+'</strong>' +
+    var diff = d.totalCogayt - d.cogaytEsp;
+    var dc   = Math.abs(diff)<d.cogaytEsp*0.05?'var(--success)':diff<0?'var(--danger)':'var(--warn)';
+    cogResumen = '<div style="margin-top:6px;padding:7px 12px;background:var(--surface-alt,#f8faf9);border-radius:6px;font-size:11px;display:flex;gap:16px;">' +
+      '<span>Esperado: <strong>'+fmt(d.cogaytEsp)+'</strong></span>' +
+      '<span>Registrado: <strong style="color:'+dc+';">'+fmt(d.totalCogayt)+'</strong></span>' +
+      (Math.abs(diff)>100?'<span>Diferencia: <strong style="color:'+dc+';">'+fmt(Math.abs(diff))+'</strong></span>':'<span style="color:var(--success);">✓ Correcto</span>') +
     '</div>';
   }
 
-  // COGAYT
-  var cogRows = d.actual.cogayt.map(fRow).join('');
-  tabIngresos += '<div class="section-title" style="margin-top:16px;">COGAYT 6% — Fundación ArgenINTA</div>';
-  tabIngresos += tbl(cogRows, 'Sin COGAYT registrado');
-  if (d.tieneChecque) {
-    var diff  = d.totalCogayt - d.cogaytEsp;
-    var dc    = Math.abs(diff)<d.cogaytEsp*0.05?'var(--success)':diff<0?'var(--danger)':'var(--warn)';
-    tabIngresos += '<div style="margin-top:6px;padding:8px 12px;background:var(--surface-alt);border-radius:6px;font-size:11px;">' +
-      'Esperado (6%): <strong>'+fmt(d.cogaytEsp)+'</strong>' +
-      ' &nbsp;·&nbsp; Registrado: <strong style="color:'+dc+';">'+fmt(d.totalCogayt)+'</strong>' +
-      (Math.abs(diff)>100 ? ' &nbsp;·&nbsp; Diferencia: <strong style="color:'+dc+';">'+fmt(Math.abs(diff))+'</strong>' : ' &nbsp;<span style="color:var(--success);">✓</span>') +
-    '</div>';
-  }
+  var tabIngresos =
+    sec('Cheque depositado') + tbl(cheqRows,'Sin cheque registrado') +
+    sec('COGAYT 6% — Fundación ArgenINTA') + tbl(cogRows,'Sin COGAYT registrado') + cogResumen +
+    sec('Débito a Fundación (contra-asiento)') + tbl(debRows,'Sin débito registrado');
 
-  // Débito (solo info, no como columna principal)
-  var debRows = d.actual.debito.map(fRow).join('');
-  tabIngresos += '<div class="section-title" style="margin-top:16px;">Débito a Fundación (contra-asiento)</div>';
-  tabIngresos += tbl(debRows, 'Sin débito registrado');
-
-  // ── TAB: HONORARIOS ──────────────────────────────────────────────
-  var tabHonorarios = '';
-
+  // ── TAB HONORARIOS ────────────────────────────────────────────────
   var honRows = d.actual.honores.map(fRow).join('');
-  tabHonorarios += '<div class="section-title">Honorarios pagados — ' + (d.cantHon||0) + ' comprobantes</div>';
-  tabHonorarios += tbl(honRows, 'Sin honorarios en este período');
-
-  if (d.totalHon > 0 || d.promHon > 0) {
-    var honPct = d.promHon > 0 ? Math.round(d.totalHon / d.promHon * 100) : null;
-    var honColor = honPct === null ? 'var(--muted)' : honPct >= 90 ? 'var(--success)' : honPct >= 50 ? 'var(--warn)' : 'var(--danger)';
-    tabHonorarios += '<div style="margin-top:10px;padding:10px 14px;background:var(--surface-alt);border-radius:6px;font-size:11px;display:flex;gap:20px;flex-wrap:wrap;">';
-    tabHonorarios += '<div><div style="color:var(--muted);margin-bottom:2px;">Este mes</div><strong style="font-size:14px;">'+fmt(d.totalHon)+'</strong></div>';
-    if (d.promHon > 0) {
-      tabHonorarios += '<div><div style="color:var(--muted);margin-bottom:2px;">Promedio histórico</div><strong style="font-size:14px;">'+fmt(d.promHon)+'</strong></div>';
-      if (honPct !== null) tabHonorarios += '<div><div style="color:var(--muted);margin-bottom:2px;">vs promedio</div><strong style="font-size:14px;color:'+honColor+';">'+honPct+'%</strong></div>';
-    }
-    if (d.promCantHon > 0) tabHonorarios += '<div><div style="color:var(--muted);margin-bottom:2px;">Prof./mes (prom.)</div><strong style="font-size:14px;">'+d.promCantHon+'</strong></div>';
-    tabHonorarios += '</div>';
+  var honMetrics = '';
+  if (d.totalHon>0||d.promHon>0) {
+    var hpct = d.promHon>0?Math.round(d.totalHon/d.promHon*100):null;
+    var hc   = hpct===null?'var(--text)':hpct>=90?'var(--success)':hpct>=50?'var(--warn)':'var(--danger)';
+    honMetrics = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;">' +
+      '<div class="c29-pkpi"><div class="c29-pkpi-val">'+fmt(d.totalHon)+'</div><div class="c29-pkpi-lbl">Este mes</div></div>' +
+      '<div class="c29-pkpi"><div class="c29-pkpi-val">'+d.cantHon+'</div><div class="c29-pkpi-lbl">Comprobantes</div></div>' +
+      (d.promHon>0?'<div class="c29-pkpi"><div class="c29-pkpi-val">'+fmt(d.promHon)+'</div><div class="c29-pkpi-lbl">Prom. histórico</div></div>':'') +
+      (hpct!==null?'<div class="c29-pkpi"><div class="c29-pkpi-val" style="color:'+hc+';">'+hpct+'%</div><div class="c29-pkpi-lbl">vs promedio</div></div>':'') +
+    '</div>';
   }
+  var tabHonorarios = sec('Honorarios pagados — '+d.cantHon+' comprobantes') + honMetrics + tbl(honRows,'Sin honorarios en este período');
 
-  // ── TAB: SALDO ───────────────────────────────────────────────────
-  var tabSaldo = '';
-
-  var saldoBg    = d.saldo===null?'var(--surface-alt)':d.saldo>=0?'rgba(26,92,56,0.07)':'rgba(192,57,43,0.07)';
-  var saldoColor = d.saldo===null?'var(--muted)':d.saldo>=0?'var(--success)':'var(--danger)';
-  tabSaldo += '<div class="section-title">Saldo financiero acumulado</div>';
-  tabSaldo += '<div style="padding:20px 24px;background:'+saldoBg+';border-radius:10px;border:1px solid var(--border);margin-bottom:16px;">' +
-    '<div style="font-size:28px;font-weight:700;font-family:\'JetBrains Mono\',monospace;color:'+saldoColor+';">' +
-      (d.saldo===null ? 'Sin datos' : fmt(d.saldo)) +
-    '</div>' +
-    '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Suma histórica · cuentas asset_cash y asset_current · excluyendo anticipos</div>' +
-  '</div>';
-
-  tabSaldo += '<div class="section-title">Composición del período</div>';
-  tabSaldo += '<div class="table-wrap"><table><thead><tr><th>Concepto</th><th>Monto</th><th>Estado</th></tr></thead><tbody>';
-  tabSaldo += '<tr><td>Cheque ingresado</td><td class="mono">'+(d.tieneChecque?fmt(d.totalCheque):'—')+'</td><td>'+(d.tieneChecque?'<span class="badge badge-ok">✓</span>':'<span class="badge badge-danger">Falta</span>')+'</td></tr>';
-  tabSaldo += '<tr><td>COGAYT 6% (salida)</td><td class="mono" style="color:var(--danger);">'+(d.tieneCogayt?'- '+fmt(d.totalCogayt):'—')+'</td><td>'+(d.tieneCogayt?'<span class="badge badge-ok">✓</span>':'<span class="badge badge-danger">Falta</span>')+'</td></tr>';
-  tabSaldo += '<tr><td>Honorarios pagados (salida)</td><td class="mono" style="color:var(--danger);">'+(d.cantHon>0?'- '+fmt(d.totalHon):'—')+'</td><td>'+(d.cantHon>0?'<span class="badge badge-ok">✓</span>':'<span class="badge badge-muted">Sin pagar</span>')+'</td></tr>';
+  // ── TAB SALDO ─────────────────────────────────────────────────────
+  var sc = d.saldo===null?'var(--muted)':d.saldo>=0?'var(--success)':'var(--danger)';
   var neto = d.totalCheque - d.totalCogayt - d.totalHon;
-  tabSaldo += '<tr style="font-weight:600;border-top:2px solid var(--border);"><td>Neto del período</td><td class="mono" style="color:'+(neto>=0?'var(--success)':'var(--danger)')+';">'+fmt(neto)+'</td><td></td></tr>';
-  tabSaldo += '</tbody></table></div>';
+  var tabSaldo =
+    sec('Saldo financiero acumulado') +
+    '<div style="padding:16px 20px;background:var(--surface-alt,#f8faf9);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;">' +
+      '<div style="font-size:26px;font-weight:700;font-family:\'JetBrains Mono\',monospace;color:'+sc+';">'+(d.saldo===null?'Sin datos':fmt(d.saldo))+'</div>' +
+      '<div style="font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.04em;">asset_cash + asset_current · excl. anticipos · signo invertido</div>' +
+    '</div>' +
+    sec('Composición del período') +
+    '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th>Concepto</th><th style="text-align:right;">Monto</th><th style="text-align:center;">Estado</th></tr></thead><tbody>' +
+      '<tr><td>Cheque ingresado</td><td class="mono" style="text-align:right;">'+(d.tieneChecque?fmt(d.totalCheque):'—')+'</td><td style="text-align:center;">'+(d.tieneChecque?'<span class="badge badge-ok">✓</span>':'<span class="badge badge-danger">Falta</span>')+'</td></tr>' +
+      '<tr><td>COGAYT 6% (egreso)</td><td class="mono" style="text-align:right;color:var(--danger);">'+(d.tieneCogayt?'- '+fmt(d.totalCogayt):'—')+'</td><td style="text-align:center;">'+(d.tieneCogayt?'<span class="badge badge-ok">✓</span>':'<span class="badge badge-danger">Falta</span>')+'</td></tr>' +
+      '<tr><td>Honorarios (egreso)</td><td class="mono" style="text-align:right;color:var(--danger);">'+(d.cantHon>0?'- '+fmt(d.totalHon):'—')+'</td><td style="text-align:center;">'+(d.cantHon>0?'<span class="badge badge-ok">✓</span>':'<span class="badge badge-muted">Sin pagar</span>')+'</td></tr>' +
+      '<tr style="border-top:2px solid var(--border);font-weight:700;"><td>Neto del período</td><td class="mono" style="text-align:right;color:'+(neto>=0?'var(--success)':'var(--danger)')+';">'+fmt(neto)+'</td><td></td></tr>' +
+    '</tbody></table></div>';
 
-  // ── TAB: HISTORIAL ───────────────────────────────────────────────
-  var tabHistorial = '';
-  tabHistorial += '<div class="section-title">Últimos 5 meses</div>';
-  tabHistorial += '<div class="table-wrap"><table><thead><tr><th>Mes</th><th>Cheque</th><th>COGAYT</th><th>Honorarios</th><th>Cant.</th><th>Neto</th></tr></thead><tbody>';
-
-  var mesesOrden = Object.keys(d.patron).sort().reverse();
-  mesesOrden.forEach(function(km) {
+  // ── TAB HISTORIAL ─────────────────────────────────────────────────
+  var histRows = '';
+  Object.keys(d.patron).sort().reverse().forEach(function(km){
     var p  = d.patron[km];
     var tc = p.cheques.reduce(function(s,f){return s+f.amount_total;},0);
     var tco= p.cogayt.reduce(function(s,f){return s+f.amount_total;},0);
     var th = p.honores.reduce(function(s,f){return s+f.amount_total;},0);
     var nt = tc - tco - th;
-    var label = new Date(km+'-15').toLocaleString('es-AR',{month:'long',year:'numeric'});
-    label = label.charAt(0).toUpperCase()+label.slice(1);
-    var hasData = tc>0||tco>0||th>0;
-    tabHistorial += '<tr style="'+(hasData?'':'opacity:.4;')+'">' +
-      '<td style="font-size:11px;">'+label+'</td>' +
-      '<td class="mono" style="font-size:11px;">'+(tc>0?fmt(tc):'—')+'</td>' +
-      '<td class="mono" style="font-size:11px;">'+(tco>0?fmt(tco):'—')+'</td>' +
-      '<td class="mono" style="font-size:11px;">'+(th>0?fmt(th):'—')+'</td>' +
-      '<td class="mono" style="font-size:11px;">'+(p.honores.length||'—')+'</td>' +
-      '<td class="mono" style="font-size:11px;color:'+(nt>=0?'var(--success)':'var(--danger)')+';">'+(hasData?fmt(nt):'—')+'</td>' +
+    var label = new Date(km+'-15').toLocaleString('es-AR',{month:'short',year:'2-digit'});
+    var has = tc>0||tco>0||th>0;
+    histRows += '<tr style="'+(has?'':'opacity:.35;')+'">' +
+      '<td style="font-weight:500;white-space:nowrap;">'+label+'</td>' +
+      '<td class="mono" style="text-align:right;">'+(tc>0?fmt(tc):'—')+'</td>' +
+      '<td class="mono" style="text-align:right;color:'+(tco>0&&tc>0&&Math.abs(tco-tc*.06)<tc*.003?'var(--success)':'var(--danger)')+';">'+(tco>0?fmt(tco):'—')+'</td>' +
+      '<td class="mono" style="text-align:right;">'+(p.honores.length||'—')+'</td>' +
+      '<td class="mono" style="text-align:right;">'+(th>0?fmt(th):'—')+'</td>' +
+      '<td class="mono" style="text-align:right;color:'+(nt>=0?'var(--success)':'var(--danger)')+';">'+(has?fmt(nt):'—')+'</td>' +
     '</tr>';
   });
-
-  tabHistorial += '</tbody></table></div>';
-
-  // Promedios
+  var promHtml = '';
   if (d.promCheque>0||d.promHon>0) {
-    tabHistorial += '<div style="margin-top:10px;padding:8px 14px;background:var(--surface-alt);border-radius:6px;font-size:11px;color:var(--muted);">';
-    if (d.promCheque>0) tabHistorial += 'Promedio cheque: <strong style="color:var(--text);">'+fmt(d.promCheque)+'</strong> ('+d.mesesConCheque+' meses con ingreso)&nbsp;&nbsp;';
-    if (d.promHon>0)    tabHistorial += 'Promedio honorarios: <strong style="color:var(--text);">'+fmt(d.promHon)+'</strong> · '+d.promCantHon+' prof./mes';
-    tabHistorial += '</div>';
+    promHtml = '<div style="margin-top:8px;padding:6px 12px;background:var(--surface-alt,#f8faf9);border-radius:6px;font-size:10px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap;">' +
+      (d.promCheque>0?'<span>Prom. cheque: <strong style="color:var(--text);">'+fmt(d.promCheque)+'</strong> ('+d.mesesConCheque+' meses)</span>':'') +
+      (d.promHon>0?'<span>Prom. honorarios: <strong style="color:var(--text);">'+fmt(d.promHon)+'</strong> · '+d.promCantHon+' prof./mes</span>':'') +
+    '</div>';
   }
+  var tabHistorial =
+    sec('Últimos 5 meses') +
+    '<div class="table-wrap"><table style="font-size:11px;"><thead><tr>' +
+      '<th>Mes</th><th style="text-align:right;">Cheque</th><th style="text-align:right;">COGAYT</th>' +
+      '<th style="text-align:right;">Hon. cant.</th><th style="text-align:right;">Hon. monto</th><th style="text-align:right;">Neto</th>' +
+    '</tr></thead><tbody>'+histRows+'</tbody></table></div>' + promHtml;
 
-  // ── ARMAR PANEL CON PESTAÑAS ─────────────────────────────────────
+  // ── BUILD PANEL ───────────────────────────────────────────────────
   body.innerHTML =
-    '<div class="tab-row" style="margin-bottom:16px;" id="c29det-tabs">' +
-      '<button class="tab-btn active" onclick="c29DetTab(this,\'ingresos\')"><i class="ti ti-arrow-down-circle"></i> Ingresos</button>' +
-      '<button class="tab-btn" onclick="c29DetTab(this,\'honorarios\')"><i class="ti ti-users"></i> Honorarios</button>' +
-      '<button class="tab-btn" onclick="c29DetTab(this,\'saldo\')"><i class="ti ti-coin"></i> Saldo</button>' +
-      '<button class="tab-btn" onclick="c29DetTab(this,\'historial\')"><i class="ti ti-chart-bar"></i> Historial</button>' +
-    '</div>' +
-    '<div id="c29det-ingresos">'  + tabIngresos   + '</div>' +
-    '<div id="c29det-honorarios" style="display:none;">' + tabHonorarios + '</div>' +
-    '<div id="c29det-saldo" style="display:none;">'      + tabSaldo      + '</div>' +
-    '<div id="c29det-historial" style="display:none;">'  + tabHistorial  + '</div>';
+    '<div id="c29det-ingresos">'  +tabIngresos  +'</div>' +
+    '<div id="c29det-honorarios" style="display:none;">'+tabHonorarios+'</div>' +
+    '<div id="c29det-saldo" style="display:none;">'     +tabSaldo     +'</div>' +
+    '<div id="c29det-historial" style="display:none;">' +tabHistorial +'</div>';
 
-  panel.style.display='flex';
-  overlay.style.display='block';
-  document.body.style.overflow='hidden';
+  // Reset tabs
+  document.querySelectorAll('#c29det-tabs .tab-btn').forEach(function(b,i){ b.classList.toggle('active',i===0); });
+
+  panel.style.display  = 'flex';
+  overlay.style.display= 'block';
+  document.body.style.overflow = 'hidden';
 }
 
 function c29DetTab(btn, tab) {
   document.querySelectorAll('#c29det-tabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
   btn.classList.add('active');
   ['ingresos','honorarios','saldo','historial'].forEach(function(t){
-    var el = document.getElementById('c29det-'+t);
-    if (el) el.style.display = t===tab ? 'block' : 'none';
+    var el=document.getElementById('c29det-'+t);
+    if(el) el.style.display=t===tab?'block':'none';
   });
 }
 function c29CerrarDetalle() {
@@ -2666,10 +2710,6 @@ function c29CerrarDetalle() {
   if (panel)   panel.style.display='none';
   if (overlay) overlay.style.display='none';
   document.body.style.overflow='';
-}
-function c29SetMetrica(id, val) {
-  var el = document.getElementById(id);
-  if (el) el.textContent = val;
 }
 
 function c29Render(data, mes) {
