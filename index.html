@@ -2746,34 +2746,22 @@ async function c29Cargar() {
     }
     var cartaIds = cartas29.map(function(ca){ return ca.id; });
 
-    // 2. Líneas analíticas de moves out/in invoice en CA29 (sin filtro fecha — filtramos en el move)
+    // 2. Líneas analíticas de moves out/in invoice — paginar de a 8000 para cubrir las 25000+
     if (loading) loading.querySelector('#c29-loading-msg').textContent='Cargando líneas analíticas...';
-    // Filtramos directo por los IDs de cartas CA29 usando el operador de dominio específico
-    // Odoo soporta filtrar analytic_distribution por clave usando el dominio json
-    // Traemos en batches de 200 cartas máximo — acá son ~40
     var lineas = [];
-    var BATCH = 20;
-    for (var bi=0; bi<cartaIds.length; bi+=BATCH) {
-      var batchIds = cartaIds.slice(bi, bi+BATCH);
-      // Para cada carta, buscar líneas que la tengan en analytic_distribution
-      // Odoo 18: podemos filtrar con cualquiera de los IDs como string key
-      for (var ci=0; ci<batchIds.length; ci++) {
-        var cid = String(batchIds[ci]);
-        try {
-          var bLines = await odooCall('account.move.line','search_read',
-            [[['analytic_distribution.'+cid,'!=',false],['move_id.move_type','in',['out_invoice','in_invoice']]]],
-            {fields:['move_id','analytic_distribution','product_id'],limit:2000});
-          bLines.forEach(function(l){ lineas.push(l); });
-        } catch(eBatch) {
-          // Si el operador anidado no está soportado, fallback a búsqueda por move_id
-          console.warn('Batch filter not supported for carta '+cid+', skipping');
-        }
-      }
+    var PAGE_SIZE = 8000;
+    var pgOffset = 0;
+    var totalLineas = await odooCall('account.move.line','search_count',
+      [[['analytic_distribution','!=',false],['move_id.move_type','in',['out_invoice','in_invoice']]]]);
+    while (pgOffset < totalLineas) {
+      if (loading) loading.querySelector('#c29-loading-msg').textContent =
+        'Líneas analíticas: ' + pgOffset + ' / ' + totalLineas + '...';
+      var pgRes = await odooCall('account.move.line','search_read',
+        [[['analytic_distribution','!=',false],['move_id.move_type','in',['out_invoice','in_invoice']]]],
+        {fields:['move_id','analytic_distribution','product_id'],limit:PAGE_SIZE,offset:pgOffset,order:'id asc'});
+      pgRes.forEach(function(l){ lineas.push(l); });
+      pgOffset += PAGE_SIZE;
     }
-    // Dedup por id de línea
-    var lineasMap = {};
-    lineas.forEach(function(l){ lineasMap[l.id]=l; });
-    lineas = Object.values(lineasMap);
 
     var moveIdsPorCarta = {};
     cartas29.forEach(function(ca){ moveIdsPorCarta[ca.id] = new Set(); });
