@@ -4372,24 +4372,39 @@ function compSetFile(f) {
 
 async function compGetFolderId() {
   if (_compFolderId) return _compFolderId;
-  const folders = await odooCall('documents.folder', 'search_read',
-    [[['name', 'ilike', 'comprobantes de pago']]],
+  // En Odoo 18 las carpetas son registros de documents.document con type='folder'
+  // (documents.folder no existe como modelo separado)
+  const folders = await odooCall('documents.document', 'search_read',
+    [[['name', 'ilike', 'comprobantes de pago'], ['type', '=', 'folder']]],
     { fields: ['id', 'name'], limit: 5 }
   );
-  if (!folders?.length) throw new Error('No se encontró carpeta "comprobantes de pago"');
+  if (!folders?.length) throw new Error('No se encontró carpeta "comprobantes de pago" en Odoo Documents');
   _compFolderId = folders[0].id;
   return _compFolderId;
 }
 
+// Encode base64 seguro para PDFs grandes (evita stack overflow con spread operator)
+function compSafeBase64(pdfBytes) {
+  const uint8 = new Uint8Array(pdfBytes);
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < uint8.length; i += chunk) {
+    binary += String.fromCharCode(...uint8.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 async function compSubirOdoo(filename, pdfBytes) {
   const folderId = await compGetFolderId();
+  const b64 = compSafeBase64(pdfBytes);
+  // Crear documento con contenido en un solo llamado (más confiable que create + write)
   const docId = await odooCall('documents.document', 'create', [{
     name: filename,
     folder_id: folderId,
     mimetype: 'application/pdf',
+    type: 'binary',
+    datas: b64,
   }]);
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
-  await odooCall('documents.document', 'write', [[docId], { datas: b64 }]);
   return docId;
 }
 
@@ -4466,7 +4481,7 @@ async function procesarComprobantes() {
       const pb = await sd.save();
       zip.file(fn, pb);
       let odooStatus = 'pendiente', odooId = null;
-      try { odooId=await compSubirOdoo(fn,pb); odooStatus='ok'; } catch(e) { odooStatus='error'; }
+      try { odooId=await compSubirOdoo(fn,pb); odooStatus='ok'; } catch(e) { odooStatus='error'; console.error('compSubirOdoo error:', e.message, e); }
       results.push({page:i+1, filename:fn, hasError, odooStatus, odooId});
       await new Promise(r=>setTimeout(r,0));
     }
