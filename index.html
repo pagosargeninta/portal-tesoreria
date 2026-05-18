@@ -1063,6 +1063,15 @@ tbody tr:hover td { background: #f8faf9; }
                   <select id="plan-col-nombre" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></select>
                 </div>
               </div>
+              <div class="field">
+                <label>Período a buscar en Odoo</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <input type="date" id="plan-desde" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+                  <span style="color:var(--muted);font-size:12px;">→</span>
+                  <input type="date" id="plan-hasta" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+                </div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">Dejá vacío para buscar en todos los períodos</div>
+              </div>
               <button class="btn btn-primary" id="plan-btn-comparar" onclick="planComparar()" disabled style="width:100%;justify-content:center;padding:10px;">
                 <i class="ti ti-search"></i> Comparar con Odoo
               </button>
@@ -1959,6 +1968,13 @@ function showPage(id, el) {
   document.getElementById('topbar-title').textContent = t[0];
   document.getElementById('topbar-sub').textContent = t[1];
   if (id === 'carta29') { c29IniciarMeses(); c29Cargar(); }
+  if (id === 'plan') {
+    var hoy = new Date();
+    var d1  = document.getElementById('plan-desde');
+    var d2  = document.getElementById('plan-hasta');
+    if (d1 && !d1.value) d1.value = hoy.getFullYear() + '-01-01';
+    if (d2 && !d2.value) d2.value = hoy.toISOString().substring(0,10);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -4718,8 +4734,14 @@ async function planComparar() {
   btn.innerHTML = '<i class="ti ti-loader"></i> Consultando Odoo...';
 
   try {
-    var desde = (typeof CICLO_ACT_DESDE !== 'undefined') ? CICLO_ACT_DESDE : new Date().toISOString().substring(0,7) + '-01';
-    var facturas = await odooCall('account.move','search_read',[[['move_type','=','in_invoice'],['date','>=',desde],['state','in',['draft','posted']]]],{fields:['id','name','partner_id','amount_total','invoice_date','payment_state','state'],limit:2000});
+    var desdeInput = document.getElementById('plan-desde');
+    var hastaInput = document.getElementById('plan-hasta');
+    var planDesde  = desdeInput && desdeInput.value ? desdeInput.value : null;
+    var planHasta  = hastaInput && hastaInput.value ? hastaInput.value : null;
+    var domFact = [['move_type','=','in_invoice'],['state','in',['draft','posted']]];
+    if (planDesde) domFact.push(['date','>=',planDesde]);
+    if (planHasta) domFact.push(['date','<=',planHasta]);
+    var facturas = await odooCall('account.move','search_read',[domFact],{fields:['id','name','partner_id','amount_total','invoice_date','payment_state','state'],limit:5000});
 
     var moveIds = facturas.map(function(f){ return f.id; });
     var moveHon = new Set();
@@ -4861,7 +4883,7 @@ async function honDetalleCargar() {
     var todasCartas = await odooCall('account.analytic.account','search_read',[[['active','=',true]]],{fields:['id','name']});
     var cartaIds = [];
     todasCartas.forEach(function(ca){ if(HON_CARTAS_FILTRO_DET.some(function(f){ return ca.name && ca.name.indexOf(f)>=0; })) cartaIds.push(ca.id); });
-    var desde = (typeof CICLO_ACT_DESDE !== 'undefined') ? CICLO_ACT_DESDE : new Date().toISOString().substring(0,7)+'-01';
+    var planDesde = document.getElementById('plan-desde')&&document.getElementById('plan-desde').value||null;
     var facturas = await odooCall('account.move','search_read',[[['move_type','=','in_invoice'],['date','>=',desde],['state','=','posted']]],{fields:['id','name','partner_id','amount_total','invoice_date','date','l10n_ar_afip_auth_code','payment_state'],limit:1000,order:'date desc'});
     var moveIds = facturas.map(function(f){ return f.id; });
     var moveHon = new Set(moveIds);
