@@ -1695,7 +1695,7 @@ tbody tr:hover td { background: #f8faf9; }
       <!-- PAGE TABS -->
       <div class="tab-row" id="fp-page-tabs" style="margin-bottom:14px;">
         <button class="tab-btn active" onclick="fpPageTab(this,'gastos')"><i class="ti ti-chart-bar"></i> Gastos</button>
-        <button class="tab-btn" onclick="fpPageTab(this,'ingresos')"><i class="ti ti-arrow-down-circle"></i> Ingresos</button>
+        <button class="tab-btn" onclick="fpPageTab(this,'ingresos')"><i class="ti ti-building-bank"></i> Colocaciones</button>
         <button class="tab-btn" onclick="fpPageTab(this,'indicadores')"><i class="ti ti-gauge"></i> Indicadores</button>
       </div>
 
@@ -1780,73 +1780,100 @@ tbody tr:hover td { background: #f8faf9; }
 
       </div><!-- end fp-tab-gastos -->
 
-      <!-- ══ TAB INGRESOS ══ -->
+      <!-- ══ TAB COLOCACIONES ══ -->
       <div id="fp-tab-ingresos" style="display:none;">
 
-        <!-- KPIs ingresos -->
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;" id="fp-ing-kpis">
-          <div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val" id="fp-ing-k-total">—</div><div class="c29-kpi-lbl">Total ingresos</div></div>
-          <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="fp-ing-k-cogayt">—</div><div class="c29-kpi-lbl">COGAYT (Odoo)</div></div>
-          <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="fp-ing-k-int">—</div><div class="c29-kpi-lbl">Intereses</div></div>
-          <div class="c29-kpi"><div class="c29-kpi-val" id="fp-ing-k-col">—</div><div class="c29-kpi-lbl">Total colocado</div></div>
-          <div class="c29-kpi"><div class="c29-kpi-val" id="fp-ing-k-pres">—</div><div class="c29-kpi-lbl">% vs presup.</div></div>
+        <!-- KPIs -->
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;">
+          <div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val" id="fp-col-k-total">—</div><div class="c29-kpi-lbl">Total colocado (FA)</div></div>
+          <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="fp-col-k-pf">—</div><div class="c29-kpi-lbl">Plazo Fijo</div></div>
+          <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="fp-col-k-fci">—</div><div class="c29-kpi-lbl">FCI</div></div>
+          <div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val" id="fp-col-k-int">—</div><div class="c29-kpi-lbl">Intereses YTD (FA)</div></div>
+          <div class="c29-kpi c29-kpi-warn"><div class="c29-kpi-val" id="fp-col-k-pct">—</div><div class="c29-kpi-lbl">% vs presupuesto</div></div>
         </div>
 
-        <!-- Alertas ingresos -->
-        <div id="fp-ing-alertas" style="margin-bottom:12px;"></div>
+        <!-- Variación mes anterior -->
+        <div id="fp-col-variacion" style="margin-bottom:14px;"></div>
 
-        <!-- Upload zone -->
+        <!-- Upload -->
         <div class="card" style="margin-bottom:14px;">
           <div class="card-header">
-            <div class="card-title"><i class="ti ti-upload"></i> Cargar reporte de colocaciones</div>
+            <div class="card-title"><i class="ti ti-upload"></i> Cargar reporte de colocaciones financieras</div>
           </div>
-          <div class="card-body">
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-              <div id="fp-ing-dropzone" onclick="document.getElementById('fp-ing-input').click()"
-                ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
-                ondragleave="this.style.borderColor='var(--border)'"
-                ondrop="event.preventDefault();this.style.borderColor='var(--border)';fpIngHandleFile(event.dataTransfer.files[0])"
-                style="border:2px dashed var(--border);border-radius:8px;padding:10px 20px;cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;">
-                <i class="ti ti-file-spreadsheet"></i> Subir Excel de colocaciones financieras
+          <div class="card-body" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <div id="fp-ing-dropzone" onclick="document.getElementById('fp-ing-input').click()"
+              ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
+              ondragleave="this.style.borderColor='var(--border)'"
+              ondrop="event.preventDefault();this.style.borderColor='var(--border)';fpIngHandleFile(event.dataTransfer.files[0])"
+              style="border:2px dashed var(--border);border-radius:8px;padding:10px 20px;cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;">
+              <i class="ti ti-file-spreadsheet"></i> Subir Excel — Colocaciones Financieras (Resumen)
+            </div>
+            <input type="file" id="fp-ing-input" accept=".xlsx,.xls" style="display:none" onchange="fpIngHandleFile(this.files[0])">
+            <div id="fp-ing-file-info" style="font-size:11px;color:var(--muted);"></div>
+          </div>
+        </div>
+
+        <!-- Charts: donut + barras intereses -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 300px;gap:12px;margin-bottom:14px;">
+
+          <div class="card" style="margin:0;">
+            <div class="card-header"><div class="card-title"><i class="ti ti-chart-donut"></i> Composición de colocaciones (FA)</div></div>
+            <div class="card-body" style="padding:12px;display:flex;gap:12px;align-items:center;">
+              <canvas id="fp-col-donut" width="160" height="160" style="flex-shrink:0;"></canvas>
+              <div id="fp-col-donut-legend" style="font-size:10px;flex:1;"></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin:0;">
+            <div class="card-header"><div class="card-title"><i class="ti ti-chart-bar"></i> Intereses — cerrados vs en curso</div></div>
+            <div class="card-body" style="padding:12px;"><canvas id="fp-col-bar-int" height="160"></canvas></div>
+          </div>
+
+          <div class="card" style="margin:0;">
+            <div class="card-header"><div class="card-title"><i class="ti ti-gauge"></i> Ejecución presupuesto intereses</div></div>
+            <div class="card-body" style="padding:16px;">
+              <div style="margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
+                  <span>Intereses ganados FA</span>
+                  <strong id="fp-col-gauge-val">—</strong>
+                </div>
+                <div style="background:var(--surface-alt);border-radius:4px;height:10px;overflow:hidden;">
+                  <div id="fp-col-gauge-bar" style="height:10px;border-radius:4px;background:var(--success);transition:width .4s;width:0%;"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px;">
+                  <span id="fp-col-gauge-pct">0%</span>
+                  <span id="fp-col-gauge-pres">Presup.: —</span>
+                </div>
               </div>
-              <input type="file" id="fp-ing-input" accept=".xlsx,.xls" style="display:none" onchange="fpIngHandleFile(this.files[0])">
-              <div id="fp-ing-file-info" style="font-size:11px;color:var(--muted);"></div>
+              <div style="font-size:11px;padding:10px;background:var(--surface-alt);border-radius:6px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:var(--muted);">Restante</span><strong id="fp-col-gauge-rest">—</strong></div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:var(--muted);">Fondos terceros</span><span id="fp-col-k-terc" style="color:var(--muted);">—</span></div>
+                <div style="display:flex;justify-content:space-between;border-top:0.5px solid var(--border);padding-top:6px;margin-top:4px;"><span style="color:var(--muted);">Total colocado (inc. terceros)</span><strong id="fp-col-k-total2">—</strong></div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Charts row -->
-        <div style="display:grid;grid-template-columns:1fr 320px;gap:12px;margin-bottom:14px;">
-          <div class="card" style="margin:0;">
-            <div class="card-header"><div class="card-title"><i class="ti ti-trending-up"></i> Intereses acumulados vs presupuesto</div></div>
-            <div class="card-body" style="padding:12px;"><canvas id="fp-ing-chart-evol" height="200"></canvas></div>
-          </div>
-          <div class="card" style="margin:0;">
-            <div class="card-header"><div class="card-title"><i class="ti ti-chart-donut"></i> Composición de colocaciones</div></div>
-            <div class="card-body" style="padding:12px;display:flex;flex-direction:column;align-items:center;">
-              <canvas id="fp-ing-chart-donut" width="180" height="180"></canvas>
-              <div id="fp-ing-donut-legend" style="margin-top:10px;font-size:10px;width:100%;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Tabla ingresos detalle -->
+        <!-- Tabla detalle -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title"><i class="ti ti-list"></i> Detalle de ingresos</div>
+            <div class="card-title"><i class="ti ti-list-details"></i> Detalle de colocaciones</div>
+            <div style="font-size:11px;color:var(--muted);" id="fp-col-fecha"></div>
           </div>
           <div class="card-body" style="padding:0;">
             <div class="table-wrap" style="border:none;border-radius:0;">
-              <table style="font-size:11px;">
+              <table style="font-size:11px;" id="fp-col-tabla">
                 <thead>
                   <tr>
-                    <th>Concepto</th>
-                    <th>Fuente</th>
-                    <th style="text-align:right;">Monto</th>
-                    <th>Detalle</th>
+                    <th>Categoría</th>
+                    <th>Instrumento</th>
+                    <th style="text-align:right;">Capital colocado</th>
+                    <th style="text-align:right;">Intereses</th>
+                    <th>Estado</th>
+                    <th style="text-align:right;">Vs mes ant.</th>
                   </tr>
                 </thead>
-                <tbody id="fp-ing-tbody"></tbody>
+                <tbody id="fp-col-tbody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">Subí el Excel para ver el detalle</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -5509,42 +5536,72 @@ function fpRender() {
     }
   }
 
-  // ── GRÁFICO EVOLUCIÓN MENSUAL ──────────────────────────────────────────────
+  // ── GRÁFICO EVOLUCIÓN MENSUAL — barras mes + acumulado ─────────────────────
   var ctxSaldo = document.getElementById('fp-chart-saldo');
   if (ctxSaldo && typeof Chart!=='undefined') {
     if (_fpChartSaldo) _fpChartSaldo.destroy();
-    var ejMes   = (_fpData&&_fpData._ejMesBloque)||{};
-    var meses   = Object.keys(ejMes).sort();
-    var labels2 = meses.map(function(m){
+    var ejMes  = (_fpData&&_fpData._ejMesBloque)||{};
+    var meses  = Object.keys(ejMes).sort();
+    var labels2= meses.map(function(m){
       return new Date(m+'-15').toLocaleString('es-AR',{month:'short'}).toUpperCase();
     });
-    var datasets = FP_BLOQUES.filter(function(b){return b.key!=='activable';}).map(function(b){
+
+    // Gasto mensual total (barras apiladas por bloque)
+    var stackDatasets = FP_BLOQUES.filter(function(b){return b.key!=='activable';}).map(function(b){
       return {
         label: b.label.replace('Gastos ',''),
         data:  meses.map(function(m){ return (ejMes[m]&&ejMes[m][b.key])||0; }),
-        backgroundColor: b.color+'bb',
-        borderRadius: 3,
-        stack: 'gasto'
+        backgroundColor: b.color+'cc',
+        borderRadius: 2,
+        stack: 'mes',
+        order: 2
       };
     });
-    // Línea presupuesto mensual
-    var presMensual = totPres/12;
-    datasets.push({
-      label:'Presup. ref.', type:'line',
-      data: Array(meses.length).fill(presMensual),
-      borderColor:'#e74c3c', borderDash:[6,3], borderWidth:2,
-      pointRadius:0, fill:false, stack:undefined
+
+    // Gasto acumulado (línea — siempre creciente)
+    var acum = 0;
+    var acumData = meses.map(function(m){
+      acum += (ejMes[m]&&ejMes[m].total)||0;
+      return acum;
     });
+
+    // Presupuesto acumulado proporcional al mes
+    var presAcumData = meses.map(function(m, i){
+      return totPres * (i+1) / 12;
+    });
+
+    stackDatasets.push({
+      label:'Acumulado real', type:'line',
+      data: acumData,
+      borderColor:'#2c3e50', borderWidth:2,
+      pointRadius:3, pointBackgroundColor:'#2c3e50',
+      fill:false, stack:undefined, order:1, yAxisID:'y2'
+    });
+    stackDatasets.push({
+      label:'Presup. acum.', type:'line',
+      data: presAcumData,
+      borderColor:'#e74c3c', borderDash:[5,4], borderWidth:1.5,
+      pointRadius:0, fill:false, stack:undefined, order:1, yAxisID:'y2'
+    });
+
     _fpChartSaldo = new Chart(ctxSaldo, {
       type:'bar',
-      data:{ labels:labels2, datasets:datasets },
+      data:{ labels:labels2, datasets:stackDatasets },
       options:{
         responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{position:'bottom',labels:{font:{size:10}}},
-          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtM(ctx.raw);}}}},
+        interaction:{mode:'index', intersect:false},
+        plugins:{
+          legend:{position:'bottom',labels:{font:{size:10},filter:function(item){ return item.text!==''; }}},
+          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtM(ctx.raw);}}}
+        },
         scales:{
           x:{stacked:true, grid:{display:false}},
-          y:{stacked:true, ticks:{callback:function(v){return '$'+(v/1000000).toFixed(0)+'M';}}}
+          y:{stacked:true, position:'left',
+             title:{display:true, text:'Mensual', font:{size:9}},
+             ticks:{callback:function(v){return '$'+(v/1000000).toFixed(0)+'M';}}},
+          y2:{position:'right', grid:{drawOnChartArea:false},
+              title:{display:true, text:'Acumulado', font:{size:9}},
+              ticks:{callback:function(v){return '$'+(v/1000000000).toFixed(1)+'B';}}}
         }
       }
     });
@@ -5589,14 +5646,14 @@ async function fpExportarPDF() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// FONDOS PROPIOS — PESTAÑA INGRESOS
+// FONDOS PROPIOS — PESTAÑA COLOCACIONES
+// Lee Excel "Colocaciones Financieras - Resumen"
+// Discrimina Recursos Propios FA vs Fondos de Terceros
 // ═══════════════════════════════════════════════════════════════
-var _fpIngData     = null;
-var _fpIngCogayt   = 0;
-var _fpIngChartEvol = null;
+var _fpIngData      = null;
 var _fpIngChartDonut= null;
-
-var FP_ING_PRESUPUESTO = 2043863014; // de la hoja Intereses del Excel
+var _fpIngChartBar  = null;
+var FP_ING_PRESUPUESTO = 2043863014;
 
 function fpPageTab(btn, tab) {
   document.querySelectorAll('#fp-page-tabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
@@ -5605,24 +5662,6 @@ function fpPageTab(btn, tab) {
     var el = document.getElementById('fp-tab-'+t);
     if (el) el.style.display = t===tab ? 'block' : 'none';
   });
-  if (tab==='ingresos' && _fpData) fpIngCargarCogayt();
-}
-
-async function fpIngCargarCogayt() {
-  // Traer COGAYT de Odoo (cuenta 411000 = income)
-  if (_fpIngCogayt > 0) { fpIngRender(); return; }
-  try {
-    var anio = (document.getElementById('fp-anio')||{value:'2026'}).value||'2026';
-    var desde = anio+'-01-01', hasta = anio+'-12-31';
-    var lineas = await odooCall('account.analytic.line','search_read',
-      [[['account_id','=',116],['company_id','=',1],
-        ['date','>=',desde],['date','<=',hasta],
-        ['general_account_id.account_type','=','income'],
-        ['move_line_id.move_id.journal_id','!=',184]]],
-      {fields:['amount','date','general_account_id'],limit:5000});
-    _fpIngCogayt = lineas.reduce(function(s,l){ return s + (l.amount * -1); }, 0);
-    fpIngRender();
-  } catch(e) { console.warn('COGAYT error:', e.message); fpIngRender(); }
 }
 
 function fpIngHandleFile(file) {
@@ -5633,68 +5672,90 @@ function fpIngHandleFile(file) {
   var reader = new FileReader();
   reader.onload = function(e) {
     try {
-      var wb  = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
 
-      // Leer hoja "Detalle inversiones"
-      var wsD = wb.Sheets['Detalle inversiones'];
+      // ── Hoja: Detalle inversiones ──────────────────────────────
+      var wsD  = wb.Sheets['Detalle inversiones'];
       var rawD = XLSX.utils.sheet_to_json(wsD, {header:1, defval:null});
 
-      // Leer hoja "Intereses"
-      var wsI = wb.Sheets['Intereses'];
+      // ── Hoja: Intereses ────────────────────────────────────────
+      var wsI  = wb.Sheets['Intereses'];
       var rawI = XLSX.utils.sheet_to_json(wsI, {header:1, defval:null});
 
-      // Leer hoja "Comparativo"
-      var wsC = wb.Sheets['Comparativo'];
+      // ── Hoja: Comparativo ──────────────────────────────────────
+      var wsC  = wb.Sheets['Comparativo'];
       var rawC = XLSX.utils.sheet_to_json(wsC, {header:1, defval:null});
 
-      // Extraer datos clave
-      var data = {};
+      var d = {};
 
-      // Fecha del reporte
-      data.fecha = rawD[1] && rawD[1][2] ? rawD[1][2] : '';
+      // Fecha
+      d.fecha = rawD[1]&&rawD[1][2] ? rawD[1][2] : '';
 
-      // Colocaciones PF
-      data.pfPropios   = rawD[8]  && rawD[8][4]  ? rawD[8][4]  : 0;  // F10 col E = 36.563M
-      data.pfTerceros  = rawD[12] && rawD[12][4] ? rawD[12][4] : 0;  // F14 col E = 2.665M
-      data.pfTotal     = rawD[14] && rawD[14][4] ? rawD[14][4] : (data.pfPropios + data.pfTerceros);
-      data.fciTotal    = rawD[19] && rawD[19][4] ? rawD[19][4] : 0;  // F21 col E = 1.107M
-      data.totalColo   = rawD[22] && rawD[22][4] ? rawD[22][4] : (data.pfTotal + data.fciTotal);
+      // ── COLOCACIONES ───────────────────────────────────────────
+      // PF Recursos Propios desglosado
+      d.pfPesosPropios  = rawD[6]&&rawD[6][2]  ? rawD[6][2]  : 0;  // $14.700M
+      d.pfEuros         = rawD[7]&&rawD[7][3]  ? rawD[7][3]  : 0;  // EUR 5.490M
+      d.pfUSD           = rawD[8]&&rawD[8][3]  ? rawD[8][3]  : 0;  // USD 16.373M
+      d.pfTotalPropios  = rawD[8]&&rawD[8][4]  ? rawD[8][4]  : (d.pfPesosPropios+d.pfEuros+d.pfUSD);
 
-      // Desglose FCI
-      data.fciFima      = rawD[19] && rawD[19][2] ? rawD[19][2] : 0;
-      data.fciPellegrini= rawD[19] && rawD[19][3] ? rawD[19][3] : 0;
+      // PF Fondos de Terceros (NO suma al total FA)
+      d.pfINIDEP        = rawD[12]&&rawD[12][2] ? rawD[12][2] : 0;
+      d.pfMAGYP         = rawD[12]&&rawD[12][3] ? rawD[12][3] : 0;
+      d.pfTotalTerceros = rawD[12]&&rawD[12][4] ? rawD[12][4] : (d.pfINIDEP+d.pfMAGYP);
 
-      // Presupuesto intereses
-      data.presupuesto = rawI[4] && rawI[4][8] ? rawI[4][8] : FP_ING_PRESUPUESTO;
+      d.pfTotalGeneral  = rawD[14]&&rawD[14][4] ? rawD[14][4] : (d.pfTotalPropios+d.pfTotalTerceros);
 
-      // Intereses ganados total
-      data.intTotal    = rawI[21] && rawI[21][2] ? rawI[21][2] : 0;
+      // FCI Recursos Propios
+      d.fciFima         = rawD[19]&&rawD[19][2] ? rawD[19][2] : 0;
+      d.fciPellegrini   = rawD[19]&&rawD[19][3] ? rawD[19][3] : 0;
+      d.fciTotal        = rawD[19]&&rawD[19][4] ? rawD[19][4] : (d.fciFima+d.fciPellegrini);
 
-      // Desglose intereses F.12 Recursos Propios
-      data.intPFcerrado  = rawI[14] && rawI[14][2] ? rawI[14][2] : 0;  // PF cerrado $
-      data.intPFcurso    = rawI[15] && rawI[15][2] ? rawI[15][2] : 0;  // PF en curso $
-      data.intMEcerrado  = rawI[16] && rawI[16][2] ? rawI[16][2] : 0;  // PF ME cerrado
-      data.intMEcurso    = rawI[17] && rawI[17][2] ? rawI[17][2] : 0;  // PF ME en curso
-      data.intFima       = rawI[18] && rawI[18][2] ? rawI[18][2] : 0;  // FCI FIMA
-      data.intPellegrini = rawI[19] && rawI[19][2] ? rawI[19][2] : 0;  // FCI Pellegrini
+      // Tenencias
+      d.pctPF           = rawD[19]&&rawD[19][8] ? rawD[19][8] : null;
+      d.pctFCI          = rawD[20]&&rawD[20][8] ? rawD[20][8] : null;
 
-      // Intereses terceros
-      data.intTerceros   = 0;
-      if (rawI[8]&&rawI[8][2]) data.intTerceros += rawI[8][2];
-      if (rawI[9]&&rawI[9][2]) data.intTerceros += rawI[9][2];
-      if (rawI[11]&&rawI[11][2]) data.intTerceros += rawI[11][2];
-      if (rawI[12]&&rawI[12][2]) data.intTerceros += rawI[12][2];
+      // Total FA (solo propios)
+      d.totalFA         = d.pfTotalPropios + d.fciTotal;
+      d.totalGeneral    = rawD[22]&&rawD[22][4] ? rawD[22][4] : (d.pfTotalGeneral+d.fciTotal);
 
-      // Comparativo mes anterior
-      data.totalColoMesAnt  = rawC[10] && rawC[10][3] ? rawC[10][3] : 0;
-      data.varColo          = rawC[10] && rawC[10][5] ? rawC[10][5] : null;
-      data.intMesAnt        = rawC[16] && rawC[16][3] ? rawC[16][3] : 0;
-      data.varInt           = rawC[16] && rawC[16][5] ? rawC[16][5] : null;
+      // ── INTERESES ──────────────────────────────────────────────
+      d.presupuesto     = rawI[4]&&rawI[4][8]  ? rawI[4][8]  : FP_ING_PRESUPUESTO;
+      d.intTotal        = rawI[21]&&rawI[21][2] ? rawI[21][2] : 0;
+      d.pctVsPres       = rawI[6]&&rawI[6][9]  ? rawI[6][9]  : (d.intTotal/(d.presupuesto||1));
 
-      _fpIngData = data;
+      // Desglose intereses FA
+      d.intPFcerrado    = rawI[14]&&rawI[14][2] ? rawI[14][2] : 0;
+      d.intPFcurso      = rawI[15]&&rawI[15][2] ? rawI[15][2] : 0;
+      d.intMEcerrado    = rawI[16]&&rawI[16][2] ? rawI[16][2] : 0;
+      d.intMEcurso      = rawI[17]&&rawI[17][2] ? rawI[17][2] : 0;
+      d.intFima         = rawI[18]&&rawI[18][2] ? rawI[18][2] : 0;
+      d.intPellegrini   = rawI[19]&&rawI[19][2] ? rawI[19][2] : 0;
+      d.intFA           = d.intPFcerrado+d.intPFcurso+d.intMEcerrado+d.intMEcurso+d.intFima+d.intPellegrini;
+
+      // Intereses terceros (informativo)
+      d.intMAGYP        = 0;
+      d.intINIDEP       = 0;
+      if (rawI[8]&&rawI[8][2])  d.intMAGYP  += rawI[8][2];
+      if (rawI[9]&&rawI[9][2])  d.intMAGYP  += rawI[9][2];
+      if (rawI[11]&&rawI[11][2])d.intINIDEP += rawI[11][2];
+      if (rawI[12]&&rawI[12][2])d.intINIDEP += rawI[12][2];
+      d.intTerceros     = d.intMAGYP + d.intINIDEP;
+      d.restante        = d.presupuesto - d.intTotal;
+
+      // ── COMPARATIVO ────────────────────────────────────────────
+      d.pfPropiosMesAnt = rawC[5]&&rawC[5][3]  ? rawC[5][3]  : 0;
+      d.fciMesAnt       = rawC[8]&&rawC[8][3]  ? rawC[8][3]  : 0;
+      d.totalFAMesAnt   = d.pfPropiosMesAnt + d.fciMesAnt;
+      d.totalGenMesAnt  = rawC[10]&&rawC[10][3] ? rawC[10][3] : 0;
+      d.intMesAnt       = rawC[16]&&rawC[16][3] ? rawC[16][3] : 0;
+      d.varTotalFA      = d.totalFA - d.totalFAMesAnt;
+      d.varInt          = d.intTotal - d.intMesAnt;
+      d.varPctFA        = d.totalFAMesAnt > 0 ? d.varTotalFA/d.totalFAMesAnt : null;
+
+      _fpIngData = d;
       fpIngRender();
     } catch(err) {
-      showToast('Error leyendo Excel: '+err.message, 'err');
+      showToast('Error: '+err.message, 'err');
       console.error(err);
     }
   };
@@ -5702,138 +5763,187 @@ function fpIngHandleFile(file) {
 }
 
 function fpIngRender() {
+  var d = _fpIngData;
+  if (!d) return;
+
   var fmt  = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
-  var fmtM = function(n){ return '$'+(parseFloat(n||0)/1000000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'B'; };
-  var fmtPct = function(n){ return (parseFloat(n||0)*100).toFixed(1)+'%'; };
+  var fmtB = function(n){ return '$'+(parseFloat(n||0)/1000000000).toLocaleString('es-AR',{maximumFractionDigits:2})+'B'; };
+  var fmtM = function(n){ return '$'+(parseFloat(n||0)/1000000).toLocaleString('es-AR',{maximumFractionDigits:0})+'M'; };
+  var fmtV = function(n){ return (n>=0?'+':'')+fmtB(n); };
 
-  var d    = _fpIngData || {};
-  var cog  = _fpIngCogayt || 0;
-  var int_ = d.intTotal || 0;
-  var totalIng = cog + int_;
-  var pctPres  = (d.presupuesto||FP_ING_PRESUPUESTO) > 0 ? int_ / (d.presupuesto||FP_ING_PRESUPUESTO) : 0;
+  // ── KPIs ────────────────────────────────────────────────────────
+  var setK = function(id,v,c){ var el=document.getElementById(id); if(el){el.textContent=v; if(c)el.style.color=c;}};
+  setK('fp-col-k-total', fmtB(d.totalFA));
+  setK('fp-col-k-pf',    fmtB(d.pfTotalPropios));
+  setK('fp-col-k-fci',   fmtM(d.fciTotal));
+  setK('fp-col-k-int',   fmtM(d.intFA));
+  setK('fp-col-k-pct',   (d.pctVsPres*100).toFixed(1)+'%',
+       d.pctVsPres>=1?'var(--success)':d.pctVsPres>=0.85?'var(--warn)':'var(--text)');
 
-  // KPIs
-  var setK = function(id, val, color){ var el=document.getElementById(id); if(el){ el.textContent=val; if(color) el.style.color=color; }};
-  setK('fp-ing-k-total',  fmt(totalIng));
-  setK('fp-ing-k-cogayt', fmt(cog));
-  setK('fp-ing-k-int',    fmt(int_));
-  setK('fp-ing-k-col',    d.totalColo ? fmtM(d.totalColo) : '—');
-  setK('fp-ing-k-pres',   int_>0 ? (pctPres*100).toFixed(1)+'%' : '—',
-       pctPres>=1?'var(--success)':pctPres>=0.85?'var(--warn)':'var(--text)');
+  // Fecha
+  var fechaEl = document.getElementById('fp-col-fecha');
+  if (fechaEl && d.fecha) {
+    var fd = d.fecha instanceof Date ? d.fecha : new Date(d.fecha);
+    fechaEl.textContent = 'Al ' + fd.toLocaleDateString('es-AR');
+  }
 
-  // Tabla detalle
-  var tbody = document.getElementById('fp-ing-tbody');
+  // ── VARIACIÓN MES ANTERIOR ──────────────────────────────────────
+  var varEl = document.getElementById('fp-col-variacion');
+  if (varEl) {
+    var varColor = d.varTotalFA >= 0 ? 'var(--success)' : 'var(--danger)';
+    var varIcon  = d.varTotalFA >= 0 ? 'ti-trending-up' : 'ti-trending-down';
+    varEl.innerHTML =
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+        '<div class="alert ' + (d.varTotalFA>=0?'ok':'warn') + '" style="flex:1;min-width:200px;padding:8px 14px;">' +
+          '<i class="ti ' + varIcon + '"></i>' +
+          '<div><strong>Colocaciones FA:</strong> ' + fmtV(d.varTotalFA) +
+          (d.varPctFA!==null?' <span style="color:var(--muted);font-size:10px;">('+( d.varPctFA*100).toFixed(1)+'%)</span>':'')+
+          ' vs mes anterior</div>' +
+        '</div>' +
+        '<div class="alert ' + (d.varInt>=0?'ok':'warn') + '" style="flex:1;min-width:200px;padding:8px 14px;">' +
+          '<i class="ti ' + (d.varInt>=0?'ti-trending-up':'ti-trending-down') + '"></i>' +
+          '<div><strong>Intereses:</strong> ' + (d.varInt>=0?'+':'')+fmtM(d.varInt) + ' vs mes anterior</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // ── GAUGE PRESUPUESTO ────────────────────────────────────────────
+  var pct = Math.min(d.pctVsPres||0, 1);
+  var gaugeBar = document.getElementById('fp-col-gauge-bar');
+  var gColor   = pct>=1?'var(--success)':pct>=0.85?'var(--warn)':'#3498db';
+  if (gaugeBar) { gaugeBar.style.width=(pct*100).toFixed(1)+'%'; gaugeBar.style.background=gColor; }
+  setK('fp-col-gauge-val',  fmt(d.intTotal));
+  setK('fp-col-gauge-pct',  (pct*100).toFixed(1)+'%', gColor);
+  setK('fp-col-gauge-pres', 'Presup.: '+fmtM(d.presupuesto));
+  setK('fp-col-gauge-rest', fmtM(d.restante), d.restante>=0?'var(--success)':'var(--danger)');
+  setK('fp-col-k-terc',     fmtM(d.intTerceros));
+  setK('fp-col-k-total2',   fmtB(d.totalGeneral));
+
+  // ── TABLA DETALLE ────────────────────────────────────────────────
+  var tbody = document.getElementById('fp-col-tbody');
   if (tbody) {
     var rows = '';
-    // Sección COGAYT
-    rows += '<tr style="background:rgba(46,204,113,.05);"><td colspan="4" style="font-weight:600;font-size:11px;padding:8px 10px;color:var(--success);">COGAYT — cuenta 411000 (Odoo)</td></tr>';
-    rows += '<tr><td style="padding-left:20px;">COGAYT cobrado</td><td><span class="badge badge-ok">Odoo</span></td><td class="mono" style="text-align:right;font-weight:500;color:var(--success);">'+fmt(cog)+'</td><td style="font-size:10px;color:var(--muted);">Extraído de account.analytic.line</td></tr>';
 
-    if (int_ > 0 || d.totalColo > 0) {
-      // Sección intereses
-      rows += '<tr style="background:rgba(52,152,219,.05);"><td colspan="4" style="font-weight:600;font-size:11px;padding:8px 10px;color:#2980b9;">INTERESES — Colocaciones financieras (Excel)</td></tr>';
-      if (d.intPFcerrado) rows += '<tr><td style="padding-left:20px;">PF pesos — colocaciones cerradas</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intPFcerrado)+'</td><td style="font-size:10px;color:var(--muted);">F.12 Recursos Propios</td></tr>';
-      if (d.intPFcurso)   rows += '<tr><td style="padding-left:20px;">PF pesos — en curso</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intPFcurso)+'</td><td style="font-size:10px;color:var(--muted);">F.12 Recursos Propios</td></tr>';
-      if (d.intMEcerrado) rows += '<tr><td style="padding-left:20px;">PF moneda extranjera — cerradas</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intMEcerrado)+'</td><td style="font-size:10px;color:var(--muted);">Euros + USD</td></tr>';
-      if (d.intMEcurso)   rows += '<tr><td style="padding-left:20px;">PF moneda extranjera — en curso</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intMEcurso)+'</td><td style="font-size:10px;color:var(--muted);">Euros + USD</td></tr>';
-      if (d.intFima)       rows += '<tr><td style="padding-left:20px;">FCI — FIMA</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intFima)+'</td><td></td></tr>';
-      if (d.intPellegrini) rows += '<tr><td style="padding-left:20px;">FCI — Pellegrini</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intPellegrini)+'</td><td></td></tr>';
-      if (d.intTerceros>0) rows += '<tr><td style="padding-left:20px;">Recursos de Terceros (MAGYP + INIDEP)</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intTerceros)+'</td><td></td></tr>';
+    // Sección PF Recursos Propios
+    var varPF = d.pfTotalPropios - d.pfPropiosMesAnt;
+    rows += '<tr style="background:rgba(41,128,185,.06);">' +
+      '<td colspan="6" style="font-weight:600;font-size:11px;padding:8px 10px;color:#2980b9;">' +
+        '<i class="ti ti-building-bank" style="margin-right:5px;"></i>Plazo Fijo — Recursos Propios FA' +
+      '</td></tr>';
+    rows += fpColRow('PF en pesos', 'Banco Nación (ARS)', d.pfPesosPropios, d.intPFcerrado+d.intPFcurso, '— / En curso', null, '#2980b9');
+    rows += fpColRow('PF en euros', 'Banco Nación (EUR 3.600.000)', d.pfEuros, d.intMEcerrado, 'Cerrado', null, '#2980b9');
+    rows += fpColRow('PF en USD', 'Banco Nación (U$D 12.300.000)', d.pfUSD, d.intMEcurso, 'En curso', null, '#2980b9');
+    rows += '<tr style="font-weight:600;background:rgba(41,128,185,.04);">' +
+      '<td colspan="2" style="padding:6px 10px;font-size:11px;">Subtotal PF Propios</td>' +
+      '<td class="mono" style="text-align:right;color:#2980b9;">' + fmtB(d.pfTotalPropios) + '</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">' + fmtM(d.intPFcerrado+d.intPFcurso+d.intMEcerrado+d.intMEcurso) + '</td>' +
+      '<td></td>' +
+      '<td class="mono" style="text-align:right;color:' + (varPF>=0?'var(--success)':'var(--danger)') + ';">' + (varPF>=0?'+':'') + fmtB(varPF) + '</td>' +
+    '</tr>';
 
-      // Total intereses
-      rows += '<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--surface-alt);"><td colspan="2">Total intereses</td><td class="mono" style="text-align:right;">'+fmt(int_)+'</td><td style="font-size:10px;color:var(--muted);"><span style="color:'+(pctPres>=1?'var(--success)':'var(--warn)')+';">'+(pctPres*100).toFixed(1)+'%</span> del presupuesto ('+fmt(d.presupuesto||FP_ING_PRESUPUESTO)+')</td></tr>';
+    // Sección FCI
+    var varFCI = d.fciTotal - d.fciMesAnt;
+    rows += '<tr style="background:rgba(155,89,182,.06);">' +
+      '<td colspan="6" style="font-weight:600;font-size:11px;padding:8px 10px;color:#9b59b6;">' +
+        '<i class="ti ti-currency-dollar" style="margin-right:5px;"></i>Fondos Comunes de Inversión — Recursos Propios FA' +
+      '</td></tr>';
+    rows += fpColRow('FCI FIMA', 'Banco Nación', d.fciFima, d.intFima, 'En curso', null, '#9b59b6');
+    rows += fpColRow('FCI Pellegrini', 'Banco Nación', d.fciPellegrini, d.intPellegrini, 'En curso', null, '#9b59b6');
+    rows += '<tr style="font-weight:600;background:rgba(155,89,182,.04);">' +
+      '<td colspan="2" style="padding:6px 10px;font-size:11px;">Subtotal FCI Propios</td>' +
+      '<td class="mono" style="text-align:right;color:#9b59b6;">' + fmtM(d.fciTotal) + '</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">' + fmtM(d.intFima+d.intPellegrini) + '</td>' +
+      '<td></td>' +
+      '<td class="mono" style="text-align:right;color:' + (varFCI>=0?'var(--success)':'var(--danger)') + ';">' + (varFCI>=0?'+':'') + fmtM(varFCI) + '</td>' +
+    '</tr>';
 
-      // Sección colocaciones
-      rows += '<tr style="background:rgba(155,89,182,.05);"><td colspan="4" style="font-weight:600;font-size:11px;padding:8px 10px;color:#9b59b6;">COLOCACIONES EN CURSO — al '+( d.fecha ? new Date(d.fecha).toLocaleDateString('es-AR') : 'fecha del Excel')+'</td></tr>';
-      if (d.pfPropios)    rows += '<tr><td style="padding-left:20px;">Plazo Fijo — Recursos Propios</td><td><span class="badge badge-muted">Excel</span></td><td class="mono" style="text-align:right;">'+fmtM(d.pfPropios)+'</td><td style="font-size:10px;color:var(--muted);">PF $ + Euros + USD</td></tr>';
-      if (d.pfTerceros)   rows += '<tr><td style="padding-left:20px;">Plazo Fijo — Recursos Terceros</td><td><span class="badge badge-muted">Excel</span></td><td class="mono" style="text-align:right;">'+fmtM(d.pfTerceros)+'</td><td style="font-size:10px;color:var(--muted);">INIDEP + MAGYP</td></tr>';
-      if (d.fciFima)      rows += '<tr><td style="padding-left:20px;">FCI — FIMA</td><td><span class="badge badge-muted">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.fciFima)+'</td><td></td></tr>';
-      if (d.fciPellegrini)rows += '<tr><td style="padding-left:20px;">FCI — Pellegrini</td><td><span class="badge badge-muted">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.fciPellegrini)+'</td><td></td></tr>';
-      if (d.varColo!==null) rows += '<tr style="font-weight:600;border-top:2px solid var(--border);background:var(--surface-alt);"><td colspan="2">Total colocado</td><td class="mono" style="text-align:right;">'+fmtM(d.totalColo)+'</td><td style="font-size:10px;color:'+(d.varColo<0?'var(--danger)':'var(--success)')+';">vs mes ant.: '+fmt(d.varColo)+'</td></tr>';
-    }
+    // TOTAL FA
+    rows += '<tr style="font-weight:700;font-size:12px;border-top:2px solid var(--border);background:rgba(39,174,96,.06);">' +
+      '<td colspan="2" style="padding:10px;color:var(--success);">TOTAL RECURSOS PROPIOS FA</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">' + fmtB(d.totalFA) + '</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">' + fmtM(d.intFA) + '</td>' +
+      '<td></td>' +
+      '<td class="mono" style="text-align:right;color:' + (d.varTotalFA>=0?'var(--success)':'var(--danger)') + ';">' + fmtV(d.varTotalFA) + '</td>' +
+    '</tr>';
 
-    // Total general
-    rows += '<tr style="font-weight:700;font-size:12px;border-top:2px solid var(--border);background:var(--surface-alt);"><td colspan="2">TOTAL INGRESOS</td><td class="mono" style="text-align:right;">'+fmt(totalIng)+'</td><td></td></tr>';
+    // SEPARADOR — Fondos de Terceros (informativo, no suma)
+    rows += '<tr><td colspan="6" style="padding:4px 10px;background:var(--surface-alt);font-size:10px;color:var(--muted);font-style:italic;">' +
+      '<i class="ti ti-info-circle" style="margin-right:4px;"></i>Los fondos de terceros son administrados por Fundación pero NO pertenecen a sus recursos propios — se muestran como referencia.' +
+    '</td></tr>';
+    rows += '<tr style="background:rgba(127,140,141,.05);opacity:.8;">' +
+      '<td colspan="6" style="font-weight:600;font-size:11px;padding:8px 10px;color:#7f8c8d;">' +
+        '<i class="ti ti-users" style="margin-right:5px;"></i>Fondos de Terceros (informativo — no suma)' +
+      '</td></tr>';
+    if (d.pfINIDEP) rows += fpColRow('INIDEP', 'Plazo Fijo', d.pfINIDEP, d.intINIDEP, '—', null, '#7f8c8d');
+    if (d.pfMAGYP)  rows += fpColRow('MAGYP',  'Plazo Fijo', d.pfMAGYP,  d.intMAGYP,  '—', null, '#7f8c8d');
+    rows += '<tr style="font-weight:600;opacity:.8;">' +
+      '<td colspan="2" style="padding:6px 10px;font-size:11px;color:#7f8c8d;">Subtotal Terceros (ref.)</td>' +
+      '<td class="mono" style="text-align:right;color:#7f8c8d;">' + fmtM(d.pfTotalTerceros) + '</td>' +
+      '<td class="mono" style="text-align:right;color:#7f8c8d;">' + fmtM(d.intTerceros) + '</td>' +
+      '<td></td><td></td></tr>';
+
     tbody.innerHTML = rows;
   }
 
-  if (!d.totalColo) return;
-
-  // Gráfico donut — composición colocaciones
-  var ctxD = document.getElementById('fp-ing-chart-donut');
-  var leyD  = document.getElementById('fp-ing-donut-legend');
+  // ── DONUT — composición colocaciones FA ──────────────────────────
+  var ctxD = document.getElementById('fp-col-donut');
+  var leyD  = document.getElementById('fp-col-donut-legend');
   if (ctxD && typeof Chart !== 'undefined') {
     if (_fpIngChartDonut) _fpIngChartDonut.destroy();
-    var donutItems = [
-      {label:'PF pesos propios', val:d.pfPropios - (d.pfPropios - 14700000000) || 14700000000, color:'#2980b9'},
-      {label:'PF euros',         val:5490000000,  color:'#3498db'},
-      {label:'PF USD',           val:16373000000, color:'#85c1e9'},
-      {label:'PF terceros',      val:d.pfTerceros||0, color:'#7f8c8d'},
-      {label:'FCI FIMA',         val:d.fciFima||0,    color:'#9b59b6'},
-      {label:'FCI Pellegrini',   val:d.fciPellegrini||0, color:'#c39bd3'},
-    ].filter(function(it){ return it.val > 0; });
-    var dTotal = donutItems.reduce(function(s,it){return s+it.val;},0);
-
+    var items = [
+      {label:'PF pesos',  val:d.pfPesosPropios, color:'#2980b9'},
+      {label:'PF euros',  val:d.pfEuros,         color:'#3498db'},
+      {label:'PF USD',    val:d.pfUSD,            color:'#85c1e9'},
+      {label:'FCI FIMA',  val:d.fciFima,          color:'#9b59b6'},
+      {label:'FCI Pelleg',val:d.fciPellegrini,    color:'#c39bd3'},
+    ].filter(function(it){return it.val>0;});
+    var tot = items.reduce(function(s,it){return s+it.val;},0);
     _fpIngChartDonut = new Chart(ctxD, {
       type:'doughnut',
-      data:{ labels:donutItems.map(function(it){return it.label;}),
-             datasets:[{data:donutItems.map(function(it){return it.val;}),
-               backgroundColor:donutItems.map(function(it){return it.color;}),
+      data:{ labels:items.map(function(it){return it.label;}),
+             datasets:[{data:items.map(function(it){return it.val;}),
+               backgroundColor:items.map(function(it){return it.color;}),
                borderWidth:2, hoverOffset:6}] },
-      options:{ responsive:false, cutout:'62%',
+      options:{ responsive:false, cutout:'65%',
         plugins:{ legend:{display:false},
-          tooltip:{callbacks:{label:function(ctx){return ctx.label+': '+fmtM(ctx.raw)+' ('+(ctx.raw/dTotal*100).toFixed(1)+'%)';}}}}
+          tooltip:{callbacks:{label:function(ctx){
+            return ctx.label+': '+fmtB(ctx.raw)+' ('+(ctx.raw/tot*100).toFixed(1)+'%)';
+          }}}}
       }
     });
     if (leyD) {
-      leyD.innerHTML = donutItems.map(function(it){
-        var pct=(it.val/dTotal*100).toFixed(0);
-        return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
+      leyD.innerHTML = items.map(function(it){
+        var pct=(it.val/tot*100).toFixed(0);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">'+
           '<div style="display:flex;align-items:center;gap:5px;">'+
             '<span style="width:8px;height:8px;border-radius:50%;background:'+it.color+';display:inline-block;flex-shrink:0;"></span>'+
             '<span style="font-size:10px;">'+it.label+'</span>'+
-          '</div><strong style="font-size:10px;margin-left:4px;">'+pct+'%</strong></div>';
+          '</div><span style="font-size:10px;font-weight:500;">'+pct+'%</span></div>';
       }).join('');
     }
   }
 
-  // Gráfico evolución intereses acumulados — construir con datos disponibles
-  var ctxE = document.getElementById('fp-ing-chart-evol');
-  if (ctxE && typeof Chart !== 'undefined') {
-    if (_fpIngChartEvol) _fpIngChartEvol.destroy();
-    // Usar datos mensuales de Odoo si están disponibles
-    var mesesData = {};
-    (_fpData||[]).forEach(function(l){
-      if (!l.esIngreso) return;
-      if (!mesesData[l.mes]) mesesData[l.mes] = 0;
-      mesesData[l.mes] += l.montoReal;
-    });
-    var meses  = Object.keys(mesesData).sort();
-    // Construir acumulado
-    var acum = 0;
-    var acumData = meses.map(function(m){ acum+=mesesData[m]; return acum; });
-    // Línea presupuesto acumulado proporcional
-    var today    = new Date();
-    var mesActual= today.getMonth()+1;
-    var presAcum = meses.map(function(m,i){ return ((i+1)/12)*( d.presupuesto||FP_ING_PRESUPUESTO); });
-    var labels   = meses.map(function(m){ return new Date(m+'-15').toLocaleString('es-AR',{month:'short'}).toUpperCase(); });
-
-    _fpIngChartEvol = new Chart(ctxE, {
+  // ── BARRAS — intereses cerrados vs en curso ──────────────────────
+  var ctxB = document.getElementById('fp-col-bar-int');
+  if (ctxB && typeof Chart !== 'undefined') {
+    if (_fpIngChartBar) _fpIngChartBar.destroy();
+    _fpIngChartBar = new Chart(ctxB, {
       type:'bar',
-      data:{ labels:labels, datasets:[
-        {label:'COGAYT mensual', data:meses.map(function(m){return mesesData[m]||0;}),
-         backgroundColor:'rgba(46,204,113,.7)', borderRadius:3},
-        {label:'Int. acumulados', data:Array(meses.length).fill(null).map(function(_,i){
-           return i===meses.length-1 ? int_ : null; }),
-         type:'line', borderColor:'#2980b9', borderWidth:2, pointRadius:6,
-         pointBackgroundColor:'#2980b9', showLine:false},
-        {label:'Presup. intereses', data:presAcum,
-         type:'line', borderColor:'#e74c3c', borderDash:[5,3], borderWidth:1.5, pointRadius:0, fill:false}
-      ]},
+      data:{
+        labels:['PF $','PF ME','FCI'],
+        datasets:[
+          {label:'Cerrado/Liquidado',
+           data:[d.intPFcerrado, d.intMEcerrado, 0],
+           backgroundColor:'rgba(39,174,96,.8)', borderRadius:3},
+          {label:'En curso',
+           data:[d.intPFcurso, d.intMEcurso, d.intFima+d.intPellegrini],
+           backgroundColor:'rgba(52,152,219,.8)', borderRadius:3},
+        ]
+      },
       options:{
         responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{position:'bottom',labels:{font:{size:10}}},
-          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': $'+ctx.raw.toLocaleString('es-AR',{maximumFractionDigits:0});}}}},
+        plugins:{legend:{position:'bottom',labels:{font:{size:10}}},
+          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmt(ctx.raw);}}}},
         scales:{
           x:{grid:{display:false}},
           y:{ticks:{callback:function(v){return '$'+(v/1000000).toFixed(0)+'M';}}}
@@ -5841,6 +5951,20 @@ function fpIngRender() {
       }
     });
   }
+}
+
+function fpColRow(nombre, detalle, capital, intereses, estado, varMes, color) {
+  var fmt  = function(n){ if(!n||n===0) return '—'; return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+  var fmtB = function(n){ if(!n||n===0) return '—'; return '$'+(parseFloat(n||0)/1000000000).toLocaleString('es-AR',{maximumFractionDigits:2})+'B'; };
+  var cap  = capital > 1000000000 ? fmtB(capital) : fmt(capital);
+  return '<tr>' +
+    '<td style="padding-left:20px;font-size:11px;font-weight:500;">'+nombre+'</td>' +
+    '<td style="font-size:10px;color:var(--muted);">'+detalle+'</td>' +
+    '<td class="mono" style="text-align:right;font-size:11px;">'+cap+'</td>' +
+    '<td class="mono" style="text-align:right;font-size:11px;color:var(--success);">'+(intereses?fmt(intereses):'—')+'</td>' +
+    '<td><span style="font-size:9px;padding:2px 6px;border-radius:10px;background:'+(estado==='Cerrado'?'rgba(39,174,96,.15)':'rgba(52,152,219,.15)')+';color:'+(estado==='Cerrado'?'var(--success)':'#2980b9')+';">'+estado+'</span></td>' +
+    '<td class="mono" style="text-align:right;font-size:10px;color:var(--muted);">'+(varMes!==null&&varMes!==undefined?fmt(varMes):'')+'</td>' +
+  '</tr>';
 }
 </script>
 </body>
