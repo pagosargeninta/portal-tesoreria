@@ -1768,6 +1768,90 @@ tbody tr:hover td { background: #f8faf9; }
         </div>
       </div>
 
+      </div><!-- end fp-tab-gastos -->
+
+      <!-- ══ TAB INGRESOS ══ -->
+      <div id="fp-tab-ingresos" style="display:none;">
+
+        <!-- KPIs ingresos -->
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;" id="fp-ing-kpis">
+          <div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val" id="fp-ing-k-total">—</div><div class="c29-kpi-lbl">Total ingresos</div></div>
+          <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="fp-ing-k-cogayt">—</div><div class="c29-kpi-lbl">COGAYT (Odoo)</div></div>
+          <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="fp-ing-k-int">—</div><div class="c29-kpi-lbl">Intereses</div></div>
+          <div class="c29-kpi"><div class="c29-kpi-val" id="fp-ing-k-col">—</div><div class="c29-kpi-lbl">Total colocado</div></div>
+          <div class="c29-kpi"><div class="c29-kpi-val" id="fp-ing-k-pres">—</div><div class="c29-kpi-lbl">% vs presup.</div></div>
+        </div>
+
+        <!-- Alertas ingresos -->
+        <div id="fp-ing-alertas" style="margin-bottom:12px;"></div>
+
+        <!-- Upload zone -->
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-upload"></i> Cargar reporte de colocaciones</div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <div id="fp-ing-dropzone" onclick="document.getElementById('fp-ing-input').click()"
+                ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
+                ondragleave="this.style.borderColor='var(--border)'"
+                ondrop="event.preventDefault();this.style.borderColor='var(--border)';fpIngHandleFile(event.dataTransfer.files[0])"
+                style="border:2px dashed var(--border);border-radius:8px;padding:10px 20px;cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;">
+                <i class="ti ti-file-spreadsheet"></i> Subir Excel de colocaciones financieras
+              </div>
+              <input type="file" id="fp-ing-input" accept=".xlsx,.xls" style="display:none" onchange="fpIngHandleFile(this.files[0])">
+              <div id="fp-ing-file-info" style="font-size:11px;color:var(--muted);"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts row -->
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:12px;margin-bottom:14px;">
+          <div class="card" style="margin:0;">
+            <div class="card-header"><div class="card-title"><i class="ti ti-trending-up"></i> Intereses acumulados vs presupuesto</div></div>
+            <div class="card-body" style="padding:12px;"><canvas id="fp-ing-chart-evol" height="200"></canvas></div>
+          </div>
+          <div class="card" style="margin:0;">
+            <div class="card-header"><div class="card-title"><i class="ti ti-chart-donut"></i> Composición de colocaciones</div></div>
+            <div class="card-body" style="padding:12px;display:flex;flex-direction:column;align-items:center;">
+              <canvas id="fp-ing-chart-donut" width="180" height="180"></canvas>
+              <div id="fp-ing-donut-legend" style="margin-top:10px;font-size:10px;width:100%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla ingresos detalle -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-list"></i> Detalle de ingresos</div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrap" style="border:none;border-radius:0;">
+              <table style="font-size:11px;">
+                <thead>
+                  <tr>
+                    <th>Concepto</th>
+                    <th>Fuente</th>
+                    <th style="text-align:right;">Monto</th>
+                    <th>Detalle</th>
+                  </tr>
+                </thead>
+                <tbody id="fp-ing-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end fp-tab-ingresos -->
+
+      <!-- ══ TAB INDICADORES ══ -->
+      <div id="fp-tab-indicadores" style="display:none;">
+        <div class="alert warn" style="margin:20px 0;">
+          <i class="ti ti-clock"></i>
+          <div>Pestaña en construcción — disponible próximamente.</div>
+        </div>
+      </div><!-- end fp-tab-indicadores -->
+
     </div>
 
     <!-- ══════════ CONFIG ══════════ -->
@@ -5492,6 +5576,261 @@ async function fpExportarPDF() {
     pdf.save('EjecucionPresupuestaria_FA_'+anio+'.pdf');
     showToast('PDF exportado','ok');
   });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FONDOS PROPIOS — PESTAÑA INGRESOS
+// ═══════════════════════════════════════════════════════════════
+var _fpIngData     = null;
+var _fpIngCogayt   = 0;
+var _fpIngChartEvol = null;
+var _fpIngChartDonut= null;
+
+var FP_ING_PRESUPUESTO = 2043863014; // de la hoja Intereses del Excel
+
+function fpPageTab(btn, tab) {
+  document.querySelectorAll('#fp-page-tabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  ['gastos','ingresos','indicadores'].forEach(function(t){
+    var el = document.getElementById('fp-tab-'+t);
+    if (el) el.style.display = t===tab ? 'block' : 'none';
+  });
+  if (tab==='ingresos' && _fpData) fpIngCargarCogayt();
+}
+
+async function fpIngCargarCogayt() {
+  // Traer COGAYT de Odoo (cuenta 411000 = income)
+  if (_fpIngCogayt > 0) { fpIngRender(); return; }
+  try {
+    var anio = (document.getElementById('fp-anio')||{value:'2026'}).value||'2026';
+    var desde = anio+'-01-01', hasta = anio+'-12-31';
+    var lineas = await odooCall('account.analytic.line','search_read',
+      [[['account_id','=',116],['company_id','=',1],
+        ['date','>=',desde],['date','<=',hasta],
+        ['general_account_id.account_type','=','income'],
+        ['move_line_id.move_id.journal_id','!=',184]]],
+      {fields:['amount','date','general_account_id'],limit:5000});
+    _fpIngCogayt = lineas.reduce(function(s,l){ return s + (l.amount * -1); }, 0);
+    fpIngRender();
+  } catch(e) { console.warn('COGAYT error:', e.message); fpIngRender(); }
+}
+
+function fpIngHandleFile(file) {
+  if (!file) return;
+  var info = document.getElementById('fp-ing-file-info');
+  if (info) info.textContent = file.name;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb  = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+
+      // Leer hoja "Detalle inversiones"
+      var wsD = wb.Sheets['Detalle inversiones'];
+      var rawD = XLSX.utils.sheet_to_json(wsD, {header:1, defval:null});
+
+      // Leer hoja "Intereses"
+      var wsI = wb.Sheets['Intereses'];
+      var rawI = XLSX.utils.sheet_to_json(wsI, {header:1, defval:null});
+
+      // Leer hoja "Comparativo"
+      var wsC = wb.Sheets['Comparativo'];
+      var rawC = XLSX.utils.sheet_to_json(wsC, {header:1, defval:null});
+
+      // Extraer datos clave
+      var data = {};
+
+      // Fecha del reporte
+      data.fecha = rawD[1] && rawD[1][2] ? rawD[1][2] : '';
+
+      // Colocaciones PF
+      data.pfPropios   = rawD[8]  && rawD[8][4]  ? rawD[8][4]  : 0;  // F10 col E = 36.563M
+      data.pfTerceros  = rawD[12] && rawD[12][4] ? rawD[12][4] : 0;  // F14 col E = 2.665M
+      data.pfTotal     = rawD[14] && rawD[14][4] ? rawD[14][4] : (data.pfPropios + data.pfTerceros);
+      data.fciTotal    = rawD[19] && rawD[19][4] ? rawD[19][4] : 0;  // F21 col E = 1.107M
+      data.totalColo   = rawD[22] && rawD[22][4] ? rawD[22][4] : (data.pfTotal + data.fciTotal);
+
+      // Desglose FCI
+      data.fciFima      = rawD[19] && rawD[19][2] ? rawD[19][2] : 0;
+      data.fciPellegrini= rawD[19] && rawD[19][3] ? rawD[19][3] : 0;
+
+      // Presupuesto intereses
+      data.presupuesto = rawI[4] && rawI[4][8] ? rawI[4][8] : FP_ING_PRESUPUESTO;
+
+      // Intereses ganados total
+      data.intTotal    = rawI[21] && rawI[21][2] ? rawI[21][2] : 0;
+
+      // Desglose intereses F.12 Recursos Propios
+      data.intPFcerrado  = rawI[14] && rawI[14][2] ? rawI[14][2] : 0;  // PF cerrado $
+      data.intPFcurso    = rawI[15] && rawI[15][2] ? rawI[15][2] : 0;  // PF en curso $
+      data.intMEcerrado  = rawI[16] && rawI[16][2] ? rawI[16][2] : 0;  // PF ME cerrado
+      data.intMEcurso    = rawI[17] && rawI[17][2] ? rawI[17][2] : 0;  // PF ME en curso
+      data.intFima       = rawI[18] && rawI[18][2] ? rawI[18][2] : 0;  // FCI FIMA
+      data.intPellegrini = rawI[19] && rawI[19][2] ? rawI[19][2] : 0;  // FCI Pellegrini
+
+      // Intereses terceros
+      data.intTerceros   = 0;
+      if (rawI[8]&&rawI[8][2]) data.intTerceros += rawI[8][2];
+      if (rawI[9]&&rawI[9][2]) data.intTerceros += rawI[9][2];
+      if (rawI[11]&&rawI[11][2]) data.intTerceros += rawI[11][2];
+      if (rawI[12]&&rawI[12][2]) data.intTerceros += rawI[12][2];
+
+      // Comparativo mes anterior
+      data.totalColoMesAnt  = rawC[10] && rawC[10][3] ? rawC[10][3] : 0;
+      data.varColo          = rawC[10] && rawC[10][5] ? rawC[10][5] : null;
+      data.intMesAnt        = rawC[16] && rawC[16][3] ? rawC[16][3] : 0;
+      data.varInt           = rawC[16] && rawC[16][5] ? rawC[16][5] : null;
+
+      _fpIngData = data;
+      fpIngRender();
+    } catch(err) {
+      showToast('Error leyendo Excel: '+err.message, 'err');
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function fpIngRender() {
+  var fmt  = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+  var fmtM = function(n){ return '$'+(parseFloat(n||0)/1000000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'B'; };
+  var fmtPct = function(n){ return (parseFloat(n||0)*100).toFixed(1)+'%'; };
+
+  var d    = _fpIngData || {};
+  var cog  = _fpIngCogayt || 0;
+  var int_ = d.intTotal || 0;
+  var totalIng = cog + int_;
+  var pctPres  = (d.presupuesto||FP_ING_PRESUPUESTO) > 0 ? int_ / (d.presupuesto||FP_ING_PRESUPUESTO) : 0;
+
+  // KPIs
+  var setK = function(id, val, color){ var el=document.getElementById(id); if(el){ el.textContent=val; if(color) el.style.color=color; }};
+  setK('fp-ing-k-total',  fmt(totalIng));
+  setK('fp-ing-k-cogayt', fmt(cog));
+  setK('fp-ing-k-int',    fmt(int_));
+  setK('fp-ing-k-col',    d.totalColo ? fmtM(d.totalColo) : '—');
+  setK('fp-ing-k-pres',   int_>0 ? (pctPres*100).toFixed(1)+'%' : '—',
+       pctPres>=1?'var(--success)':pctPres>=0.85?'var(--warn)':'var(--text)');
+
+  // Tabla detalle
+  var tbody = document.getElementById('fp-ing-tbody');
+  if (tbody) {
+    var rows = '';
+    // Sección COGAYT
+    rows += '<tr style="background:rgba(46,204,113,.05);"><td colspan="4" style="font-weight:600;font-size:11px;padding:8px 10px;color:var(--success);">COGAYT — cuenta 411000 (Odoo)</td></tr>';
+    rows += '<tr><td style="padding-left:20px;">COGAYT cobrado</td><td><span class="badge badge-ok">Odoo</span></td><td class="mono" style="text-align:right;font-weight:500;color:var(--success);">'+fmt(cog)+'</td><td style="font-size:10px;color:var(--muted);">Extraído de account.analytic.line</td></tr>';
+
+    if (int_ > 0 || d.totalColo > 0) {
+      // Sección intereses
+      rows += '<tr style="background:rgba(52,152,219,.05);"><td colspan="4" style="font-weight:600;font-size:11px;padding:8px 10px;color:#2980b9;">INTERESES — Colocaciones financieras (Excel)</td></tr>';
+      if (d.intPFcerrado) rows += '<tr><td style="padding-left:20px;">PF pesos — colocaciones cerradas</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intPFcerrado)+'</td><td style="font-size:10px;color:var(--muted);">F.12 Recursos Propios</td></tr>';
+      if (d.intPFcurso)   rows += '<tr><td style="padding-left:20px;">PF pesos — en curso</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intPFcurso)+'</td><td style="font-size:10px;color:var(--muted);">F.12 Recursos Propios</td></tr>';
+      if (d.intMEcerrado) rows += '<tr><td style="padding-left:20px;">PF moneda extranjera — cerradas</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intMEcerrado)+'</td><td style="font-size:10px;color:var(--muted);">Euros + USD</td></tr>';
+      if (d.intMEcurso)   rows += '<tr><td style="padding-left:20px;">PF moneda extranjera — en curso</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intMEcurso)+'</td><td style="font-size:10px;color:var(--muted);">Euros + USD</td></tr>';
+      if (d.intFima)       rows += '<tr><td style="padding-left:20px;">FCI — FIMA</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intFima)+'</td><td></td></tr>';
+      if (d.intPellegrini) rows += '<tr><td style="padding-left:20px;">FCI — Pellegrini</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intPellegrini)+'</td><td></td></tr>';
+      if (d.intTerceros>0) rows += '<tr><td style="padding-left:20px;">Recursos de Terceros (MAGYP + INIDEP)</td><td><span class="badge badge-info">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.intTerceros)+'</td><td></td></tr>';
+
+      // Total intereses
+      rows += '<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--surface-alt);"><td colspan="2">Total intereses</td><td class="mono" style="text-align:right;">'+fmt(int_)+'</td><td style="font-size:10px;color:var(--muted);"><span style="color:'+(pctPres>=1?'var(--success)':'var(--warn)')+';">'+(pctPres*100).toFixed(1)+'%</span> del presupuesto ('+fmt(d.presupuesto||FP_ING_PRESUPUESTO)+')</td></tr>';
+
+      // Sección colocaciones
+      rows += '<tr style="background:rgba(155,89,182,.05);"><td colspan="4" style="font-weight:600;font-size:11px;padding:8px 10px;color:#9b59b6;">COLOCACIONES EN CURSO — al '+( d.fecha ? new Date(d.fecha).toLocaleDateString('es-AR') : 'fecha del Excel')+'</td></tr>';
+      if (d.pfPropios)    rows += '<tr><td style="padding-left:20px;">Plazo Fijo — Recursos Propios</td><td><span class="badge badge-muted">Excel</span></td><td class="mono" style="text-align:right;">'+fmtM(d.pfPropios)+'</td><td style="font-size:10px;color:var(--muted);">PF $ + Euros + USD</td></tr>';
+      if (d.pfTerceros)   rows += '<tr><td style="padding-left:20px;">Plazo Fijo — Recursos Terceros</td><td><span class="badge badge-muted">Excel</span></td><td class="mono" style="text-align:right;">'+fmtM(d.pfTerceros)+'</td><td style="font-size:10px;color:var(--muted);">INIDEP + MAGYP</td></tr>';
+      if (d.fciFima)      rows += '<tr><td style="padding-left:20px;">FCI — FIMA</td><td><span class="badge badge-muted">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.fciFima)+'</td><td></td></tr>';
+      if (d.fciPellegrini)rows += '<tr><td style="padding-left:20px;">FCI — Pellegrini</td><td><span class="badge badge-muted">Excel</span></td><td class="mono" style="text-align:right;">'+fmt(d.fciPellegrini)+'</td><td></td></tr>';
+      if (d.varColo!==null) rows += '<tr style="font-weight:600;border-top:2px solid var(--border);background:var(--surface-alt);"><td colspan="2">Total colocado</td><td class="mono" style="text-align:right;">'+fmtM(d.totalColo)+'</td><td style="font-size:10px;color:'+(d.varColo<0?'var(--danger)':'var(--success)')+';">vs mes ant.: '+fmt(d.varColo)+'</td></tr>';
+    }
+
+    // Total general
+    rows += '<tr style="font-weight:700;font-size:12px;border-top:2px solid var(--border);background:var(--surface-alt);"><td colspan="2">TOTAL INGRESOS</td><td class="mono" style="text-align:right;">'+fmt(totalIng)+'</td><td></td></tr>';
+    tbody.innerHTML = rows;
+  }
+
+  if (!d.totalColo) return;
+
+  // Gráfico donut — composición colocaciones
+  var ctxD = document.getElementById('fp-ing-chart-donut');
+  var leyD  = document.getElementById('fp-ing-donut-legend');
+  if (ctxD && typeof Chart !== 'undefined') {
+    if (_fpIngChartDonut) _fpIngChartDonut.destroy();
+    var donutItems = [
+      {label:'PF pesos propios', val:d.pfPropios - (d.pfPropios - 14700000000) || 14700000000, color:'#2980b9'},
+      {label:'PF euros',         val:5490000000,  color:'#3498db'},
+      {label:'PF USD',           val:16373000000, color:'#85c1e9'},
+      {label:'PF terceros',      val:d.pfTerceros||0, color:'#7f8c8d'},
+      {label:'FCI FIMA',         val:d.fciFima||0,    color:'#9b59b6'},
+      {label:'FCI Pellegrini',   val:d.fciPellegrini||0, color:'#c39bd3'},
+    ].filter(function(it){ return it.val > 0; });
+    var dTotal = donutItems.reduce(function(s,it){return s+it.val;},0);
+
+    _fpIngChartDonut = new Chart(ctxD, {
+      type:'doughnut',
+      data:{ labels:donutItems.map(function(it){return it.label;}),
+             datasets:[{data:donutItems.map(function(it){return it.val;}),
+               backgroundColor:donutItems.map(function(it){return it.color;}),
+               borderWidth:2, hoverOffset:6}] },
+      options:{ responsive:false, cutout:'62%',
+        plugins:{ legend:{display:false},
+          tooltip:{callbacks:{label:function(ctx){return ctx.label+': '+fmtM(ctx.raw)+' ('+(ctx.raw/dTotal*100).toFixed(1)+'%)';}}}}
+      }
+    });
+    if (leyD) {
+      leyD.innerHTML = donutItems.map(function(it){
+        var pct=(it.val/dTotal*100).toFixed(0);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
+          '<div style="display:flex;align-items:center;gap:5px;">'+
+            '<span style="width:8px;height:8px;border-radius:50%;background:'+it.color+';display:inline-block;flex-shrink:0;"></span>'+
+            '<span style="font-size:10px;">'+it.label+'</span>'+
+          '</div><strong style="font-size:10px;margin-left:4px;">'+pct+'%</strong></div>';
+      }).join('');
+    }
+  }
+
+  // Gráfico evolución intereses acumulados — construir con datos disponibles
+  var ctxE = document.getElementById('fp-ing-chart-evol');
+  if (ctxE && typeof Chart !== 'undefined') {
+    if (_fpIngChartEvol) _fpIngChartEvol.destroy();
+    // Usar datos mensuales de Odoo si están disponibles
+    var mesesData = {};
+    (_fpData||[]).forEach(function(l){
+      if (!l.esIngreso) return;
+      if (!mesesData[l.mes]) mesesData[l.mes] = 0;
+      mesesData[l.mes] += l.montoReal;
+    });
+    var meses  = Object.keys(mesesData).sort();
+    // Construir acumulado
+    var acum = 0;
+    var acumData = meses.map(function(m){ acum+=mesesData[m]; return acum; });
+    // Línea presupuesto acumulado proporcional
+    var today    = new Date();
+    var mesActual= today.getMonth()+1;
+    var presAcum = meses.map(function(m,i){ return ((i+1)/12)*( d.presupuesto||FP_ING_PRESUPUESTO); });
+    var labels   = meses.map(function(m){ return new Date(m+'-15').toLocaleString('es-AR',{month:'short'}).toUpperCase(); });
+
+    _fpIngChartEvol = new Chart(ctxE, {
+      type:'bar',
+      data:{ labels:labels, datasets:[
+        {label:'COGAYT mensual', data:meses.map(function(m){return mesesData[m]||0;}),
+         backgroundColor:'rgba(46,204,113,.7)', borderRadius:3},
+        {label:'Int. acumulados', data:Array(meses.length).fill(null).map(function(_,i){
+           return i===meses.length-1 ? int_ : null; }),
+         type:'line', borderColor:'#2980b9', borderWidth:2, pointRadius:6,
+         pointBackgroundColor:'#2980b9', showLine:false},
+        {label:'Presup. intereses', data:presAcum,
+         type:'line', borderColor:'#e74c3c', borderDash:[5,3], borderWidth:1.5, pointRadius:0, fill:false}
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'bottom',labels:{font:{size:10}}},
+          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': $'+ctx.raw.toLocaleString('es-AR',{maximumFractionDigits:0});}}}},
+        scales:{
+          x:{grid:{display:false}},
+          y:{ticks:{callback:function(v){return '$'+(v/1000000).toFixed(0)+'M';}}}
+        }
+      }
+    });
+  }
 }
 </script>
 </body>
