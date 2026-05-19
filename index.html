@@ -5102,33 +5102,34 @@ var FP_CUENTA_BLOQUE = {
   '551000':'aportes',
 };
 
-// Ítems presupuestarios de Hoja1 con monto y bloque — para drilldown
+// Ítems presupuestarios — estructura confirmada
 var FP_ITEMS_PRESUPUESTO = [
-  {item:'En relación de Dependencia',       bloque:'personal',   monto:1927625457, cuentas:['511001','511002','511003','511004','512001','512002']},
-  {item:'Beneficio Guardería',              bloque:'personal',   monto:3262188,    cuentas:['511001']},
-  {item:'Asistencia Técnica',               bloque:'personal',   monto:64393397,   cuentas:['512003']},
-  {item:'Previsión Gastos Personal',        bloque:'personal',   monto:100000000,  cuentas:['511004']},
-  {item:'Librería y papelería',             bloque:'admin',      monto:5664000,    cuentas:['521000']},
-  {item:'Correo y franqueos',               bloque:'admin',      monto:3540000,    cuentas:['523000']},
-  {item:'Comisiones y Gastos Bancarios',    bloque:'admin',      monto:59000000,   cuentas:['522000']},
-  {item:'Seguros',                          bloque:'admin',      monto:8673000,    cuentas:['532001']},
-  {item:'Servicios Profesionales',          bloque:'admin',      monto:243015250,  cuentas:['534009']},
-  {item:'Otros Servicios - Dir. Ejecutiva', bloque:'admin',      monto:74686733,   cuentas:['534009']},
-  {item:'Consejo de Administración',        bloque:'admin',      monto:20000000,   cuentas:['561000']},
-  {item:'Ceremonial / Eventos',             bloque:'admin',      monto:100000000,  cuentas:['561000']},
-  {item:'Servicios Básicos',                bloque:'operativo',  monto:29240400,   cuentas:['531001']},
-  {item:'Artículos Limpieza / Cocina',      bloque:'operativo',  monto:7080000,    cuentas:['524000','531004']},
-  {item:'Servicio de limpieza edificios',   bloque:'operativo',  monto:25488000,   cuentas:['531004']},
-  {item:'Mantenimiento Rodados/Inmuebles',  bloque:'operativo',  monto:31152000,   cuentas:['533001','533002','533003']},
-  {item:'Viáticos y Movilidad',             bloque:'operativo',  monto:30000000,   cuentas:['534002','534003']},
-  {item:'Membresías y suscripciones',       bloque:'operativo',  monto:29207020,   cuentas:['534008']},
-  {item:'Alquileres equipos e inmuebles',   bloque:'operativo',  monto:44320800,   cuentas:['534005','534006']},
-  {item:'Gastos de refrigerio',             bloque:'operativo',  monto:82600000,   cuentas:['534004']},
-  {item:'Capacitación Delegaciones',        bloque:'operativo',  monto:42000000,   cuentas:['534001']},
-  {item:'Capacitación Sede Central',        bloque:'operativo',  monto:41422300,   cuentas:['534001']},
-  {item:'Previsión no contemplados',        bloque:'operativo',  monto:30000000,   cuentas:['524000']},
-  {item:'Aportes y Contribuciones INTA',    bloque:'aportes',    monto:800000000,  cuentas:['551000']},
-  {item:'Bienes de Uso',                    bloque:'activable',  monto:15000000,   cuentas:[]},
+  // PERSONAL
+  {item:'En relación de Dependencia (inc. Guardería)', bloque:'personal',  monto:1930887645, cuentas:['511001','511002','511003','511004','512001','512002']},
+  {item:'Asistencia Técnica',                          bloque:'personal',  monto:64393397,   cuentas:['512003']},
+  {item:'Capacitación Sede Central',                   bloque:'personal',  monto:41422300,   cuentas:['534001']},
+  {item:'Previsión Gastos Personal',                   bloque:'personal',  monto:100000000,  cuentas:['511004']},
+  // ADMINISTRATIVOS
+  {item:'Librería y papelería',                        bloque:'admin',     monto:5664000,    cuentas:['521000']},
+  {item:'Correo y franqueos',                          bloque:'admin',     monto:3540000,    cuentas:['523000']},
+  {item:'Comisiones y Gastos Bancarios',               bloque:'admin',     monto:59000000,   cuentas:['522000']},
+  {item:'Seguros',                                     bloque:'admin',     monto:8673000,    cuentas:['532001']},
+  {item:'Servicios Profesionales y Dirección Ejecutiva',bloque:'admin',    monto:317701983,  cuentas:['534009']},
+  {item:'Consejo de Administración y Ceremonial',      bloque:'admin',     monto:120000000,  cuentas:['561000']},
+  // OPERATIVOS
+  {item:'Servicios Básicos',                           bloque:'operativo', monto:29240400,   cuentas:['531001']},
+  {item:'Artículos Limpieza / Cocina',                 bloque:'operativo', monto:7080000,    cuentas:['524000','531004']},
+  {item:'Servicio de limpieza edificios',              bloque:'operativo', monto:25488000,   cuentas:['531004']},
+  {item:'Mantenimiento Rodados/Inmuebles',             bloque:'operativo', monto:31152000,   cuentas:['533001','533002','533003']},
+  {item:'Viáticos, Movilidad y Cap. Delegaciones',     bloque:'operativo', monto:72000000,   cuentas:['534002','534003']},
+  {item:'Membresías y suscripciones',                  bloque:'operativo', monto:29207020,   cuentas:['534008']},
+  {item:'Alquileres equipos e inmuebles',              bloque:'operativo', monto:44320800,   cuentas:['534005','534006']},
+  {item:'Gastos de refrigerio',                        bloque:'operativo', monto:82600000,   cuentas:['534004']},
+  {item:'Previsión no contemplados',                   bloque:'operativo', monto:30000000,   cuentas:['524000']},
+  // APORTES
+  {item:'Aportes y Contribuciones INTA',               bloque:'aportes',   monto:800000000,  cuentas:['551000']},
+  // ACTIVABLES
+  {item:'Bienes de Uso',                               bloque:'activable', monto:15000000,   cuentas:[]},
 ];
 // Cuentas de activos fijos (activables) — no tienen expense type pero las incluimos
 var FP_CUENTAS_ACTIVABLES = ['121101','121102','121103','121104','121105','121106','121201','121202','121203','121204'];
