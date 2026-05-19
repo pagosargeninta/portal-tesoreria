@@ -1752,11 +1752,11 @@ tbody tr:hover td { background: #f8faf9; }
               <table style="font-size:11px;">
                 <thead style="position:sticky;top:0;background:var(--surface);z-index:1;">
                   <tr>
-                    <th style="width:80px;">Código</th>
-                    <th>Ítem presupuestario</th>
+                    <th style="width:36px;"></th>
+                    <th>Bloque / Cuenta</th>
                     <th style="text-align:right;">Presupuesto</th>
                     <th style="text-align:right;">Ejecutado YTD</th>
-                    <th style="width:120px;">Ejecución</th>
+                    <th style="min-width:140px;">Ejecución</th>
                     <th style="text-align:center;width:60px;">%</th>
                     <th style="text-align:right;">Disponible</th>
                   </tr>
@@ -4350,7 +4350,6 @@ async function postBuscarRechazo() {
 let compSelectedFile = null;
 let compBanco = 'interbanking';
 let compZipBlob = null;
-let _compFolderId = null;
 
 function selectBancoPortal(b, el) {
   compBanco = b;
@@ -4373,39 +4372,24 @@ function compSetFile(f) {
 
 async function compGetFolderId() {
   if (_compFolderId) return _compFolderId;
-  // En Odoo 18 las carpetas son registros de documents.document con type='folder'
-  // (documents.folder no existe como modelo separado)
-  const folders = await odooCall('documents.document', 'search_read',
-    [[['name', 'ilike', 'comprobantes de pago'], ['type', '=', 'folder']]],
+  const folders = await odooCall('documents.folder', 'search_read',
+    [[['name', 'ilike', 'comprobantes de pago']]],
     { fields: ['id', 'name'], limit: 5 }
   );
-  if (!folders?.length) throw new Error('No se encontró carpeta "comprobantes de pago" en Odoo Documents');
+  if (!folders?.length) throw new Error('No se encontró carpeta "comprobantes de pago"');
   _compFolderId = folders[0].id;
   return _compFolderId;
 }
 
-// Encode base64 seguro para PDFs grandes (evita stack overflow con spread operator)
-function compSafeBase64(pdfBytes) {
-  const uint8 = new Uint8Array(pdfBytes);
-  let binary = '';
-  const chunk = 8192;
-  for (let i = 0; i < uint8.length; i += chunk) {
-    binary += String.fromCharCode(...uint8.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
 async function compSubirOdoo(filename, pdfBytes) {
   const folderId = await compGetFolderId();
-  const b64 = compSafeBase64(pdfBytes);
-  // Crear documento con contenido en un solo llamado (más confiable que create + write)
   const docId = await odooCall('documents.document', 'create', [{
     name: filename,
     folder_id: folderId,
     mimetype: 'application/pdf',
-    type: 'binary',
-    datas: b64,
   }]);
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
+  await odooCall('documents.document', 'write', [[docId], { datas: b64 }]);
   return docId;
 }
 
@@ -4482,7 +4466,7 @@ async function procesarComprobantes() {
       const pb = await sd.save();
       zip.file(fn, pb);
       let odooStatus = 'pendiente', odooId = null;
-      try { odooId=await compSubirOdoo(fn,pb); odooStatus='ok'; } catch(e) { odooStatus='error'; console.error('compSubirOdoo error:', e.message, e); }
+      try { odooId=await compSubirOdoo(fn,pb); odooStatus='ok'; } catch(e) { odooStatus='error'; }
       results.push({page:i+1, filename:fn, hasError, odooStatus, odooId});
       await new Promise(r=>setTimeout(r,0));
     }
@@ -5087,10 +5071,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 <script>
 // ═══════════════════════════════════════════════════════════════
 // FONDOS PROPIOS FA — Ejecución Presupuestaria 2026
-// Devengado: income + expense — excluye diario Saldos Iniciales (ID 184)
+// 5 bloques: Activables / Personal / Administrativos / Operativos / Aportes INTA
+// Excluye diario Saldos Iniciales (ID 184)
 // ═══════════════════════════════════════════════════════════════
-var _fpData       = null;
-var _fpEjecucion  = null;
+var _fpData      = null;
+var _fpEjecucion = null;
 var _fpChartEvol  = null;
 var _fpChartDonut = null;
 var _fpChartSaldo = null;
@@ -5099,42 +5084,55 @@ var FP_CUENTA_ID    = 116;
 var FP_COMPANY_ID   = 1;
 var FP_JOURNAL_SINIC= 184;
 
-// Presupuesto 2026 — mapeo ítem → código(s) Odoo → monto presupuestado
-// Agrupado por sección para el reporte
-var FP_PRESUPUESTO = [
-  { seccion: 'PERSONAL',                   item: 'En relación de Dependencia',        codigos: ['511001','511002','511003','511004','512002'], monto: 2030887645 },
-  { seccion: 'PERSONAL',                   item: 'Beneficio Guardería',               codigos: ['511001'],                                    monto: 3262188 },
-  { seccion: 'LOCACIÓN DE SERVICIOS',      item: 'Asistencia Técnica',                codigos: ['512003','534009'],                           monto: 64393397 },
-  { seccion: 'GASTOS ADMINISTRATIVOS',     item: 'Librería y papelería',              codigos: ['521000'],                                    monto: 5664000 },
-  { seccion: 'GASTOS ADMINISTRATIVOS',     item: 'Correo y franqueos',                codigos: ['531001'],                                    monto: 3540000 },
-  { seccion: 'GASTOS ADMINISTRATIVOS',     item: 'Comisiones y Gastos Bancarios',     codigos: ['522000','523000'],                           monto: 59000000 },
-  { seccion: 'GASTOS FUNCIONAMIENTO',      item: 'Servicios Básicos',                 codigos: ['531001'],                                    monto: 29240400 },
-  { seccion: 'GASTOS FUNCIONAMIENTO',      item: 'Artículos Limpieza / Cocina',       codigos: ['524000'],                                    monto: 7080000 },
-  { seccion: 'GASTOS FUNCIONAMIENTO',      item: 'Servicio de limpieza edificios',    codigos: ['531004'],                                    monto: 25488000 },
-  { seccion: 'GASTOS FUNCIONAMIENTO',      item: 'Seguros',                           codigos: ['532001'],                                    monto: 8673000 },
-  { seccion: 'GASTOS MANTENIMIENTO',       item: 'Mantenimiento Rodados/Inmuebles',   codigos: ['533001','533002','533003'],                  monto: 31152000 },
-  { seccion: 'OTROS GASTOS OPERATIVOS',    item: 'Viáticos y Movilidad',              codigos: ['534002','534003'],                           monto: 30000000 },
-  { seccion: 'OTROS GASTOS OPERATIVOS',    item: 'Servicios Profesionales',           codigos: ['534009'],                                    monto: 317701983 },
-  { seccion: 'OTROS GASTOS OPERATIVOS',    item: 'Membresías y suscripciones',        codigos: ['534008'],                                    monto: 29207020 },
-  { seccion: 'OTROS GASTOS OPERATIVOS',    item: 'Alquileres equipos e inmuebles',    codigos: ['534005','534006'],                           monto: 44320800 },
-  { seccion: 'OTROS GASTOS OPERATIVOS',    item: 'Gastos de refrigerio',              codigos: ['534004'],                                    monto: 82600000 },
-  { seccion: 'OTROS GASTOS OPERATIVOS',    item: 'Capacitación',                      codigos: ['534001'],                                    monto: 83422300 },
-  { seccion: 'GASTOS CEREMONIAL',          item: 'Ceremonial y Protocolo',            codigos: ['561000'],                                    monto: 120000000 },
-  { seccion: 'GASTOS EXTRAORDINARIOS',     item: 'Previsión no contemplados',         codigos: ['524000'],                                    monto: 30000000 },
-  { seccion: 'APORTES Y CONTRIBUCIONES',   item: 'Aportes a INTA (todos)',            codigos: ['551000'],                                    monto: 800000000 },
+// Mapeo código de cuenta → bloque (extraído de Hoja1 del presupuesto)
+var FP_CUENTA_BLOQUE = {
+  '511001':'personal',  '511002':'personal',  '511003':'personal',
+  '511004':'personal',  '512001':'personal',  '512002':'personal',
+  '512003':'personal',  '534001':'personal',
+  '521000':'admin',     '522000':'admin',     '523000':'admin',
+  '525000':'admin',     '532001':'admin',     '532002':'admin',
+  '534009':'admin',     '534010':'admin',     '534011':'admin',
+  '561000':'admin',
+  '524000':'operativo', '531001':'operativo', '531002':'operativo',
+  '531003':'operativo', '531004':'operativo', '533001':'operativo',
+  '533002':'operativo', '533003':'operativo', '534002':'operativo',
+  '534003':'operativo', '534004':'operativo', '534005':'operativo',
+  '534006':'operativo', '534007':'operativo', '534008':'operativo',
+  '551000':'aportes',
+};
+// Cuentas de activos fijos (activables) — no tienen expense type pero las incluimos
+var FP_CUENTAS_ACTIVABLES = ['121101','121102','121103','121104','121105','121106','121201','121202','121203','121204'];
+
+var FP_BLOQUES = [
+  { key:'personal',   label:'Personal',               color:'#2980b9', icon:'ti-users' },
+  { key:'admin',      label:'Gastos Administrativos',  color:'#e67e22', icon:'ti-building' },
+  { key:'operativo',  label:'Gastos Operativos',       color:'#9b59b6', icon:'ti-settings' },
+  { key:'aportes',    label:'Aportes al INTA',         color:'#27ae60', icon:'ti-leaf' },
+  { key:'activable',  label:'Gastos Activables',       color:'#7f8c8d', icon:'ti-package' },
 ];
 
-// Colores por sección para gráficos
-var FP_SECCION_COLOR = {
-  'PERSONAL':               '#2980b9',
-  'LOCACIÓN DE SERVICIOS':  '#1abc9c',
-  'GASTOS ADMINISTRATIVOS': '#f39c12',
-  'GASTOS FUNCIONAMIENTO':  '#e67e22',
-  'GASTOS MANTENIMIENTO':   '#e74c3c',
-  'OTROS GASTOS OPERATIVOS':'#9b59b6',
-  'GASTOS CEREMONIAL':      '#7f8c8d',
-  'GASTOS EXTRAORDINARIOS': '#bdc3c7',
-  'APORTES Y CONTRIBUCIONES':'#2ecc71',
+// Presupuesto 2026 por bloque (escenario base 18%)
+var FP_PRESUPUESTO_BLOQUE = {
+  personal:   2095281042,  // sueldos + contrib + asist tecnica + capacitacion
+  admin:       818885503,  // admin + serv prof + ceremonial + extraordinarios + bienes de uso
+  operativo:   719633503,  // operativos
+  aportes:     800000000,  // aportes INTA
+  activable:    15000000,  // bienes de uso
+};
+
+// Presupuesto detallado por cuenta para el drilldown
+var FP_PRESUPUESTO_CUENTA = {
+  '511001': 1930887645, '511002': 0, '511003': 0, '511004': 100000000,
+  '512001': 0, '512002': 77226235, '512003': 64393397, '534001': 83422300,
+  '521000': 5664000, '522000': 59000000, '523000': 0, '525000': 0,
+  '532001': 8673000, '532002': 0, '534009': 317701983, '534010': 0,
+  '534011': 0, '561000': 120000000,
+  '524000': 37080000, '531001': 58420400, '531004': 25488000,
+  '531002': 0, '531003': 0,
+  '533001': 31152000, '533002': 0, '533003': 0,
+  '534002': 30000000, '534003': 0, '534004': 82600000,
+  '534005': 44320800, '534006': 0, '534007': 0, '534008': 29207020,
+  '551000': 800000000,
 };
 
 async function fpCargar() {
@@ -5144,22 +5142,23 @@ async function fpCargar() {
 
   var loading = document.getElementById('fp-loading');
   var charts  = document.getElementById('fp-charts');
-  if (loading) { loading.style.display='block'; loading.querySelector('#fp-loading-msg').textContent='Cargando movimientos...'; }
+  if (loading) { loading.style.display='block'; loading.querySelector('#fp-loading-msg').textContent='Cargando...'; }
   if (charts)  charts.style.display='none';
-  ['fp-k-saldo','fp-k-ing','fp-k-egr','fp-k-ret','fp-k-mov'].forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent='—'; });
+  ['fp-k-saldo','fp-k-ing','fp-k-egr','fp-k-ret','fp-k-mov'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.textContent='—';
+  });
 
   try {
-    // Contar
     var total = await odooCall('account.analytic.line','search_count',
       [[['account_id','=',FP_CUENTA_ID],['company_id','=',FP_COMPANY_ID],
         ['date','>=',desde],['date','<=',hasta],
         ['move_line_id.move_id.journal_id','!=',FP_JOURNAL_SINIC]]]);
 
-    // Paginar
     var lineas = [];
-    var PAGE = 8000, off = 0;
+    var PAGE=8000, off=0;
     while (off < total) {
-      if (loading) loading.querySelector('#fp-loading-msg').textContent = 'Cargando... '+Math.min(off+PAGE,total)+' / '+total;
+      if (loading) loading.querySelector('#fp-loading-msg').textContent =
+        'Cargando... '+Math.min(off+PAGE,total)+' / '+total;
       var pg = await odooCall('account.analytic.line','search_read',
         [[['account_id','=',FP_CUENTA_ID],['company_id','=',FP_COMPANY_ID],
           ['date','>=',desde],['date','<=',hasta],
@@ -5169,70 +5168,66 @@ async function fpCargar() {
       off += PAGE;
     }
 
-    // Traer account_type
+    // Traer account_type y código
     var cuentaIds = [];
-    lineas.forEach(function(l){ var cid=l.general_account_id&&l.general_account_id[0]; if(cid&&cuentaIds.indexOf(cid)<0) cuentaIds.push(cid); });
+    lineas.forEach(function(l){
+      var cid=l.general_account_id&&l.general_account_id[0];
+      if(cid&&cuentaIds.indexOf(cid)<0) cuentaIds.push(cid);
+    });
     var cuentaInfo = {};
-    if (cuentaIds.length > 0) {
+    if (cuentaIds.length>0) {
       var cList = await odooCall('account.account','search_read',
         [[['id','in',cuentaIds]]],{fields:['id','name','code','account_type'],limit:500});
       cList.forEach(function(c){
         var nom = typeof c.name==='object'?(c.name.es_AR||c.name.en_US||''):c.name;
-        // Extraer código del nombre (ej: "511001 Sueldos - ##" → "511001")
-        var code = (c.code||nom.split(' ')[0]||'').toString().trim();
+        var code = String(c.code||nom.split(' ')[0]||'').trim();
         cuentaInfo[c.id] = {nombre:nom, tipo:c.account_type, code:code};
       });
     }
 
-    // Procesar — solo income y expense, excluir SINIC ya filtrado en query
-    _fpData = lineas.map(function(l) {
-      var cid  = l.general_account_id&&l.general_account_id[0];
-      var ci   = cuentaInfo[cid]||{};
+    // Procesar — income y expense únicamente
+    _fpData = lineas.map(function(l){
+      var cid = l.general_account_id&&l.general_account_id[0];
+      var ci  = cuentaInfo[cid]||{};
       if (ci.tipo !== 'income' && ci.tipo !== 'expense') return null;
+      var code   = ci.code||'';
+      var bloque = FP_CUENTA_BLOQUE[code] || (ci.tipo==='income'?'ingreso':'otro');
       return {
-        id:       l.id,
-        fecha:    l.date,
-        mes:      l.date.substring(0,7),
-        nombre:   l.name||'',
-        cuenta:   ci.nombre||'',
-        code:     ci.code||'',
-        tipo:     ci.tipo,
-        esIngreso:ci.tipo==='income',
-        amount:   l.amount,
-        // expense: amount positivo en Odoo = gasto real
-        // income:  amount negativo en Odoo = ingreso real (×-1)
-        montoReal:ci.tipo==='income' ? (l.amount*-1) : Math.abs(l.amount),
+        id: l.id, fecha: l.date, mes: l.date.substring(0,7),
+        nombre: l.name||'', cuenta: ci.nombre||'', code: code,
+        tipo: ci.tipo, bloque: bloque,
+        esIngreso: ci.tipo==='income',
+        montoReal: ci.tipo==='income' ? (l.amount*-1) : Math.abs(l.amount),
       };
     }).filter(Boolean);
 
-    // Calcular ejecutado por código de cuenta
-    var ejecutadoPorCodigo = {};  // code → monto
+    // Ejecutado por bloque y por código
+    var ejBloque = {personal:0,admin:0,operativo:0,aportes:0,activable:0};
+    var ejCodigo = {};
+    var ejMesBloque = {}; // 'YYYY-MM' → {personal,admin,...}
+
     _fpData.forEach(function(l){
-      if (!ejecutadoPorCodigo[l.code]) ejecutadoPorCodigo[l.code] = 0;
-      // gastos suman, ingresos no van al presupuesto de gastos
-      if (!l.esIngreso) ejecutadoPorCodigo[l.code] += l.montoReal;
+      if (l.esIngreso) return;
+      if (ejBloque[l.bloque]!==undefined) ejBloque[l.bloque] += l.montoReal;
+      if (!ejCodigo[l.code]) ejCodigo[l.code]=0;
+      ejCodigo[l.code] += l.montoReal;
+      if (!ejMesBloque[l.mes]) ejMesBloque[l.mes]={personal:0,admin:0,operativo:0,aportes:0,activable:0,total:0};
+      if (ejMesBloque[l.mes][l.bloque]!==undefined) ejMesBloque[l.mes][l.bloque] += l.montoReal;
+      ejMesBloque[l.mes].total += l.montoReal;
     });
 
-    // Cruzar con presupuesto
-    _fpEjecucion = FP_PRESUPUESTO.map(function(p) {
-      var ejecutado = p.codigos.reduce(function(s, cod) {
-        return s + (ejecutadoPorCodigo[cod]||0);
-      }, 0);
-      var pct   = p.monto > 0 ? ejecutado / p.monto : 0;
-      var diff  = p.monto - ejecutado;
-      return {
-        seccion:   p.seccion,
-        item:      p.item,
-        codigos:   p.codigos,
-        monto:     p.monto,
-        ejecutado: ejecutado,
-        pct:       pct,
-        diff:      diff,
-        alerta:    pct > 1 ? 'over' : pct > 0.85 ? 'warn' : 'ok'
-      };
+    // Calcular ejecución por bloque
+    _fpEjecucion = FP_BLOQUES.map(function(b){
+      var pres = FP_PRESUPUESTO_BLOQUE[b.key]||0;
+      var ejec = ejBloque[b.key]||0;
+      var pct  = pres>0 ? ejec/pres : 0;
+      return { key:b.key, label:b.label, color:b.color, icon:b.icon,
+               pres:pres, ejec:ejec, pct:pct, diff:pres-ejec,
+               alerta: pct>1?'over':pct>0.85?'warn':'ok' };
     });
 
-    _fpData._ejecutadoPorCodigo = ejecutadoPorCodigo;
+    _fpData._ejMesBloque = ejMesBloque;
+    _fpData._ejCodigo    = ejCodigo;
 
     if (loading) loading.style.display='none';
     if (charts)  charts.style.display='block';
@@ -5244,225 +5239,206 @@ async function fpCargar() {
   }
 }
 
-function fpFiltrar() {
-  fpRender();
-}
+function fpFiltrar(){ fpRender(); }
 
 function fpRender() {
   if (!_fpEjecucion) return;
   var fmt  = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
   var fmtM = function(n){ return '$'+(parseFloat(n||0)/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'M'; };
 
-  var ejec = _fpEjecucion;
-  var all  = _fpData||[];
-
-  // KPIs
-  var totPres   = ejec.reduce(function(s,e){return s+e.monto;},0);
-  var totEjec   = ejec.reduce(function(s,e){return s+e.ejecutado;},0);
+  var ej        = _fpEjecucion;
+  var totPres   = ej.reduce(function(s,e){return s+e.pres;},0);
+  var totEjec   = ej.reduce(function(s,e){return s+e.ejec;},0);
   var totDiff   = totPres - totEjec;
   var pctGlobal = totPres>0 ? totEjec/totPres : 0;
-  var overBudget= ejec.filter(function(e){return e.alerta==='over';}).length;
+  var ingresos  = (_fpData||[]).filter(function(l){return l.esIngreso;}).reduce(function(s,l){return s+l.montoReal;},0);
 
-  var kSaldo = document.getElementById('fp-k-saldo');
-  var kIng   = document.getElementById('fp-k-ing');
-  var kEgr   = document.getElementById('fp-k-egr');
-  var kRet   = document.getElementById('fp-k-ret');
-  var kMov   = document.getElementById('fp-k-mov');
-  if (kSaldo) { kSaldo.textContent=fmtM(totEjec); kSaldo.style.color='var(--text)'; }
-  if (kIng)   kIng.textContent=fmtM(totPres);
-  if (kEgr)   kEgr.textContent=(pctGlobal*100).toFixed(1)+'%';
-  if (kRet)   kRet.textContent=fmtM(totDiff);
-  if (kMov)   kMov.textContent=overBudget+' ítems';
-
-  // Actualizar labels KPI
+  // KPIs
   var lbls = document.querySelectorAll('#fp-kpis .c29-kpi-lbl');
   if (lbls[0]) lbls[0].textContent='Ejecutado YTD';
   if (lbls[1]) lbls[1].textContent='Presupuesto total';
-  if (lbls[2]) lbls[2].textContent='% Ejecución global';
+  if (lbls[2]) lbls[2].textContent='% Ejecución';
   if (lbls[3]) lbls[3].textContent='Disponible';
-  if (lbls[4]) lbls[4].textContent='Sobre presupuesto';
+  if (lbls[4]) lbls[4].textContent='Ingresos YTD';
 
-  // ── TABLA EJECUCIÓN ────────────────────────────────────────────────────────
-  var tbody = document.getElementById('fp-tbody');
-  var count = document.getElementById('fp-tabla-count');
-  var q = ((document.getElementById('fp-buscar')||{}).value||'').toLowerCase();
-
-  var seccionActual = '';
-  var rows = '';
-  var filtrados = q ? ejec.filter(function(e){ return e.item.toLowerCase().indexOf(q)>=0||e.seccion.toLowerCase().indexOf(q)>=0; }) : ejec;
-
-  if (count) count.textContent = filtrados.length+' ítems';
-
-  filtrados.forEach(function(e) {
-    // Header de sección
-    if (e.seccion !== seccionActual) {
-      seccionActual = e.seccion;
-      var sc = FP_SECCION_COLOR[e.seccion]||'#555';
-      // Subtotales de sección
-      var secItems  = ejec.filter(function(x){return x.seccion===e.seccion;});
-      var secPres   = secItems.reduce(function(s,x){return s+x.monto;},0);
-      var secEjec   = secItems.reduce(function(s,x){return s+x.ejecutado;},0);
-      var secPct    = secPres>0?secEjec/secPres:0;
-      rows += '<tr style="background:'+sc+'18;border-top:2px solid '+sc+';">'+
-        '<td colspan="2" style="font-weight:700;font-size:11px;color:'+sc+';padding:8px 10px;">'+e.seccion+'</td>'+
-        '<td class="mono" style="text-align:right;font-weight:600;font-size:11px;">'+fmt(secPres)+'</td>'+
-        '<td class="mono" style="text-align:right;font-weight:600;font-size:11px;">'+fmt(secEjec)+'</td>'+
-        '<td colspan="2" style="padding:8px;">'+fpBarraHTML(secPct, sc)+'</td>'+
-        '<td class="mono" style="text-align:right;font-weight:600;font-size:11px;color:'+(secPres-secEjec>=0?'var(--success)':'var(--danger)')+';">'+fmt(secPres-secEjec)+'</td>'+
-      '</tr>';
-    }
-
-    // Ítem
-    var pctColor = e.alerta==='over'?'var(--danger)':e.alerta==='warn'?'var(--warn)':'var(--text)';
-    var rowBg = e.alerta==='over'?'rgba(231,76,60,.04)':e.alerta==='warn'?'rgba(243,156,18,.04)':'';
-    rows += '<tr style="'+rowBg+'">' +
-      '<td style="padding-left:20px;font-size:11px;color:var(--muted);width:70px;">'+e.codigos.join(', ')+'</td>'+
-      '<td style="font-size:11px;">'+e.item+'</td>'+
-      '<td class="mono" style="text-align:right;font-size:11px;">'+fmt(e.monto)+'</td>'+
-      '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;color:'+pctColor+';">'+fmt(e.ejecutado)+'</td>'+
-      '<td style="padding:4px 8px;width:120px;">'+fpBarraHTML(e.pct,'#2980b9')+'</td>'+
-      '<td class="mono" style="text-align:center;font-size:11px;font-weight:600;color:'+pctColor+';">'+(e.pct*100).toFixed(1)+'%</td>'+
-      '<td class="mono" style="text-align:right;font-size:11px;color:'+(e.diff>=0?'var(--success)':'var(--danger)')+';">'+fmt(e.diff)+'</td>'+
-    '</tr>';
+  var kpis = ['fp-k-saldo','fp-k-ing','fp-k-egr','fp-k-ret','fp-k-mov'];
+  var vals = [fmtM(totEjec), fmtM(totPres), (pctGlobal*100).toFixed(1)+'%', fmtM(totDiff), fmtM(ingresos)];
+  var colors = ['var(--text)','var(--text)',
+    pctGlobal>1?'var(--danger)':pctGlobal>0.85?'var(--warn)':'var(--success)',
+    totDiff>=0?'var(--success)':'var(--danger)', 'var(--success)'];
+  kpis.forEach(function(id,i){
+    var el=document.getElementById(id);
+    if(el){ el.textContent=vals[i]; el.style.color=colors[i]; }
   });
 
-  // Fila totales
-  rows += '<tr style="background:var(--surface-alt);border-top:2px solid var(--border);font-weight:700;">'+
-    '<td colspan="2" style="font-size:12px;padding:8px 10px;">TOTAL PRESUPUESTO</td>'+
-    '<td class="mono" style="text-align:right;">'+fmt(totPres)+'</td>'+
-    '<td class="mono" style="text-align:right;color:'+(pctGlobal>1?'var(--danger)':'var(--text)')+';">'+fmt(totEjec)+'</td>'+
-    '<td style="padding:4px 8px;">'+fpBarraHTML(pctGlobal,'#27ae60')+'</td>'+
-    '<td class="mono" style="text-align:center;font-weight:700;color:'+(pctGlobal>1?'var(--danger)':pctGlobal>0.85?'var(--warn)':'var(--success)')+';">'+(pctGlobal*100).toFixed(1)+'%</td>'+
-    '<td class="mono" style="text-align:right;color:'+(totDiff>=0?'var(--success)':'var(--danger)')+';">'+fmt(totDiff)+'</td>'+
+  // ── TABLA: cards por bloque ────────────────────────────────────────────────
+  var tbody = document.getElementById('fp-tbody');
+  var q = ((document.getElementById('fp-buscar')||{}).value||'').toLowerCase();
+  var rows = '';
+
+  // Total row primero
+  rows += '<tr style="background:var(--surface-alt);font-weight:700;border-bottom:2px solid var(--border);">'+
+    '<td colspan="2" style="padding:10px;font-size:12px;">TOTAL PRESUPUESTO</td>'+
+    '<td class="mono" style="text-align:right;font-size:12px;">'+fmt(totPres)+'</td>'+
+    '<td class="mono" style="text-align:right;font-size:12px;color:'+(totEjec>totPres?'var(--danger)':'var(--text)')+';">'+fmt(totEjec)+'</td>'+
+    '<td colspan="1" style="padding:6px 10px;">'+fpBarraHTML(pctGlobal,'#27ae60',true)+'</td>'+
+    '<td class="mono" style="text-align:center;font-weight:700;font-size:12px;color:'+(pctGlobal>1?'var(--danger)':pctGlobal>0.85?'var(--warn)':'var(--success)')+';">'+(pctGlobal*100).toFixed(1)+'%</td>'+
+    '<td class="mono" style="text-align:right;font-size:12px;color:'+(totDiff>=0?'var(--success)':'var(--danger)')+';">'+fmt(totDiff)+'</td>'+
   '</tr>';
 
-  if (tbody) tbody.innerHTML = rows;
+  ej.forEach(function(e){
+    if (q && e.label.toLowerCase().indexOf(q)<0) return;
+    var ac = e.alerta==='over'?'var(--danger)':e.alerta==='warn'?'var(--warn)':'var(--success)';
 
-  // ── GRÁFICO BARRAS HORIZONTALES — Ejecución por sección ──────────────────
+    // Bloque header row
+    rows += '<tr style="background:'+e.color+'14;border-top:2px solid '+e.color+'22;cursor:pointer;" onclick="fpToggleBloque(\''+e.key+'\')">'+
+      '<td style="padding:10px 8px;width:32px;"><i class="ti '+e.icon+'" style="color:'+e.color+';font-size:16px;"></i></td>'+
+      '<td style="font-weight:600;font-size:12px;color:'+e.color+';">'+e.label+'</td>'+
+      '<td class="mono" style="text-align:right;font-size:12px;">'+fmt(e.pres)+'</td>'+
+      '<td class="mono" style="text-align:right;font-size:12px;font-weight:600;color:'+ac+';">'+fmt(e.ejec)+'</td>'+
+      '<td style="padding:4px 10px;min-width:120px;">'+fpBarraHTML(e.pct,e.color,false)+'</td>'+
+      '<td class="mono" style="text-align:center;font-weight:700;font-size:12px;color:'+ac+';">'+(e.pct*100).toFixed(1)+'%</td>'+
+      '<td class="mono" style="text-align:right;font-size:12px;color:'+(e.diff>=0?'var(--success)':'var(--danger)')+';">'+fmt(e.diff)+'</td>'+
+    '</tr>';
+
+    // Drilldown: cuentas del bloque (ocultas por defecto)
+    var cuentasBloque = Object.keys(FP_CUENTA_BLOQUE).filter(function(c){return FP_CUENTA_BLOQUE[c]===e.key;});
+    var ejCodigo = (_fpData&&_fpData._ejCodigo)||{};
+    cuentasBloque.forEach(function(cod){
+      var ejCod  = ejCodigo[cod]||0;
+      var presCod= FP_PRESUPUESTO_CUENTA[cod]||0;
+      if (ejCod===0 && presCod===0) return;
+      var pctCod = presCod>0 ? ejCod/presCod : (ejCod>0?1:0);
+      var ac2 = pctCod>1?'var(--danger)':pctCod>0.85?'var(--warn)':'var(--muted)';
+      // Find account name from _fpData
+      var cuentaNom = cod;
+      (_fpData||[]).forEach(function(l){ if(l.code===cod && l.cuenta) cuentaNom=l.cuenta; });
+      rows += '<tr class="fp-detail-'+e.key+'" style="display:none;background:'+e.color+'07;">'+
+        '<td></td>'+
+        '<td style="padding:6px 8px 6px 28px;font-size:10px;color:var(--muted);">'+cod+' — '+cuentaNom.replace(' - ##','')+'</td>'+
+        '<td class="mono" style="text-align:right;font-size:10px;color:var(--muted);">'+(presCod>0?fmt(presCod):'—')+'</td>'+
+        '<td class="mono" style="text-align:right;font-size:10px;color:'+(ejCod>0?ac2:'var(--muted)')+';">'+(ejCod>0?fmt(ejCod):'—')+'</td>'+
+        '<td style="padding:3px 10px;">'+(presCod>0?fpBarraHTML(pctCod,e.color,false):'')+'</td>'+
+        '<td class="mono" style="text-align:center;font-size:10px;color:'+ac2+';">'+(presCod>0?(pctCod*100).toFixed(0)+'%':'')+'</td>'+
+        '<td class="mono" style="text-align:right;font-size:10px;color:var(--muted);">'+(presCod>0?fmt(presCod-ejCod):'')+'</td>'+
+      '</tr>';
+    });
+  });
+
+  if (tbody) tbody.innerHTML = rows || '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--muted);">Sin datos</td></tr>';
+
+  // ── GRÁFICO BARRAS HORIZONTALES ───────────────────────────────────────────
   var ctxEvol = document.getElementById('fp-chart-evol');
-  if (ctxEvol && typeof Chart !== 'undefined') {
+  if (ctxEvol && typeof Chart!=='undefined') {
     if (_fpChartEvol) _fpChartEvol.destroy();
-
-    // Agrupar por sección
-    var secciones = {};
-    ejec.forEach(function(e){
-      if (!secciones[e.seccion]) secciones[e.seccion]={pres:0,ejec:0};
-      secciones[e.seccion].pres += e.monto;
-      secciones[e.seccion].ejec += e.ejecutado;
-    });
-    var secLabels = Object.keys(secciones);
-    var secPres   = secLabels.map(function(s){return secciones[s].pres;});
-    var secEjec   = secLabels.map(function(s){return secciones[s].ejec;});
-    var secColors = secLabels.map(function(s){return FP_SECCION_COLOR[s]||'#999';});
-    // Abreviar labels
-    var shortLabels = secLabels.map(function(s){
-      var map={'PERSONAL':'Personal','LOCACIÓN DE SERVICIOS':'Loc. Servicios',
-               'GASTOS ADMINISTRATIVOS':'Administrativos','GASTOS FUNCIONAMIENTO':'Funcionamiento',
-               'GASTOS MANTENIMIENTO':'Mantenimiento','OTROS GASTOS OPERATIVOS':'Otros Operativos',
-               'GASTOS CEREMONIAL':'Ceremonial','GASTOS EXTRAORDINARIOS':'Extraordinarios',
-               'APORTES Y CONTRIBUCIONES':'Aportes INTA'};
-      return map[s]||s;
-    });
-
+    var labels  = ej.map(function(e){return e.label.replace('Gastos ','').replace(' al INTA','');});
+    var colors  = ej.map(function(e){return e.color;});
     _fpChartEvol = new Chart(ctxEvol, {
       type:'bar',
-      data:{ labels:shortLabels, datasets:[
-        {label:'Presupuesto', data:secPres, backgroundColor:secColors.map(function(c){return c+'44';}), borderColor:secColors, borderWidth:1.5, borderRadius:3},
-        {label:'Ejecutado',   data:secEjec, backgroundColor:secColors, borderRadius:3}
+      data:{ labels:labels, datasets:[
+        {label:'Presupuesto', data:ej.map(function(e){return e.pres;}),
+         backgroundColor:colors.map(function(c){return c+'33';}), borderColor:colors, borderWidth:1.5, borderRadius:4},
+        {label:'Ejecutado',   data:ej.map(function(e){return e.ejec;}),
+         backgroundColor:colors, borderRadius:4}
       ]},
       options:{
         indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        plugins:{
-          legend:{position:'bottom',labels:{font:{size:10}}},
-          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': $'+ctx.raw.toLocaleString('es-AR',{maximumFractionDigits:0});}}}
-        },
+        plugins:{ legend:{position:'bottom',labels:{font:{size:10}}},
+          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtM(ctx.raw);}}}},
         scales:{
-          x:{ticks:{callback:function(v){return '$'+v.toLocaleString('es-AR',{notation:'compact',maximumFractionDigits:1});}},grid:{display:false}},
+          x:{ticks:{callback:function(v){return '$'+(v/1000000).toFixed(0)+'M';}},grid:{display:false}},
           y:{grid:{display:false}}
         }
       }
     });
   }
 
-  // ── GRÁFICO DONUT — % ejecución por sección ──────────────────────────────
+  // ── DONUT: distribución del ejecutado ─────────────────────────────────────
   var ctxDonut = document.getElementById('fp-chart-donut');
   var leyenda  = document.getElementById('fp-donut-legend');
-  if (ctxDonut && typeof Chart !== 'undefined') {
+  if (ctxDonut && typeof Chart!=='undefined') {
     if (_fpChartDonut) _fpChartDonut.destroy();
-
-    var secciones2 = {};
-    ejec.forEach(function(e){
-      if (!secciones2[e.seccion]) secciones2[e.seccion]=0;
-      secciones2[e.seccion] += e.ejecutado;
-    });
-    var dKeys   = Object.keys(secciones2).filter(function(k){return secciones2[k]>0;});
-    var dColors = dKeys.map(function(k){return FP_SECCION_COLOR[k]||'#ccc';});
-    var dData   = dKeys.map(function(k){return secciones2[k];});
-    var dTotal  = dData.reduce(function(s,v){return s+v;},0);
-
+    var dData   = ej.filter(function(e){return e.ejec>0;});
+    var dTotal  = dData.reduce(function(s,e){return s+e.ejec;},0);
     _fpChartDonut = new Chart(ctxDonut, {
       type:'doughnut',
-      data:{ labels:dKeys, datasets:[{data:dData, backgroundColor:dColors, borderWidth:2, hoverOffset:6}] },
-      options:{responsive:false, cutout:'60%',
-        plugins:{legend:{display:false},
-          tooltip:{callbacks:{label:function(ctx){return ctx.label+': $'+ctx.raw.toLocaleString('es-AR',{maximumFractionDigits:0})+' ('+(ctx.raw/dTotal*100).toFixed(1)+'%)';}}}}
+      data:{ labels:dData.map(function(e){return e.label;}),
+             datasets:[{data:dData.map(function(e){return e.ejec;}),
+               backgroundColor:dData.map(function(e){return e.color;}), borderWidth:2, hoverOffset:8}] },
+      options:{ responsive:false, cutout:'65%',
+        plugins:{ legend:{display:false},
+          tooltip:{callbacks:{label:function(ctx){return ctx.label+': '+fmtM(ctx.raw)+' ('+(ctx.raw/dTotal*100).toFixed(1)+'%)';}}}}
       }
     });
-
     if (leyenda) {
-      var shortMap={'PERSONAL':'Personal','LOCACIÓN DE SERVICIOS':'Loc.Serv.','GASTOS ADMINISTRATIVOS':'Adm.','GASTOS FUNCIONAMIENTO':'Func.','GASTOS MANTENIMIENTO':'Mant.','OTROS GASTOS OPERATIVOS':'Operativos','GASTOS CEREMONIAL':'Ceremonial','GASTOS EXTRAORDINARIOS':'Extraord.','APORTES Y CONTRIBUCIONES':'Aportes'};
-      leyenda.innerHTML = dKeys.map(function(k){
-        var pct=(secciones2[k]/dTotal*100).toFixed(0);
-        return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
+      leyenda.innerHTML = dData.map(function(e){
+        var pct=(e.ejec/dTotal*100).toFixed(0);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">'+
           '<div style="display:flex;align-items:center;gap:5px;min-width:0;">'+
-            '<span style="flex-shrink:0;width:8px;height:8px;border-radius:50%;background:'+(FP_SECCION_COLOR[k]||'#ccc')+';display:inline-block;"></span>'+
-            '<span style="font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(shortMap[k]||k)+'</span>'+
-          '</div><strong style="font-size:10px;margin-left:4px;flex-shrink:0;">'+pct+'%</strong></div>';
+            '<span style="flex-shrink:0;width:8px;height:8px;border-radius:50%;background:'+e.color+';display:inline-block;"></span>'+
+            '<span style="font-size:10px;">'+e.label.replace('Gastos ','')+'</span>'+
+          '</div><strong style="font-size:11px;margin-left:4px;">'+pct+'%</strong></div>';
       }).join('');
     }
   }
 
-  // ── GRÁFICO EVOLUCIÓN MENSUAL DEL GASTO ──────────────────────────────────
+  // ── GRÁFICO EVOLUCIÓN MENSUAL ──────────────────────────────────────────────
   var ctxSaldo = document.getElementById('fp-chart-saldo');
-  if (ctxSaldo && typeof Chart !== 'undefined') {
+  if (ctxSaldo && typeof Chart!=='undefined') {
     if (_fpChartSaldo) _fpChartSaldo.destroy();
-    var meses = {};
-    (_fpData||[]).forEach(function(l){
-      if (l.esIngreso) return;
-      if (!meses[l.mes]) meses[l.mes]=0;
-      meses[l.mes] += l.montoReal;
-    });
-    var mesesOrden = Object.keys(meses).sort();
-    var labels = mesesOrden.map(function(m){
+    var ejMes   = (_fpData&&_fpData._ejMesBloque)||{};
+    var meses   = Object.keys(ejMes).sort();
+    var labels2 = meses.map(function(m){
       return new Date(m+'-15').toLocaleString('es-AR',{month:'short'}).toUpperCase();
     });
-    // Presupuesto mensual (anual / 12)
-    var presMensual = Array(mesesOrden.length).fill(totPres/12);
+    var datasets = FP_BLOQUES.filter(function(b){return b.key!=='activable';}).map(function(b){
+      return {
+        label: b.label.replace('Gastos ',''),
+        data:  meses.map(function(m){ return (ejMes[m]&&ejMes[m][b.key])||0; }),
+        backgroundColor: b.color+'bb',
+        borderRadius: 3,
+        stack: 'gasto'
+      };
+    });
+    // Línea presupuesto mensual
+    var presMensual = totPres/12;
+    datasets.push({
+      label:'Presup. ref.', type:'line',
+      data: Array(meses.length).fill(presMensual),
+      borderColor:'#e74c3c', borderDash:[6,3], borderWidth:2,
+      pointRadius:0, fill:false, stack:undefined
+    });
     _fpChartSaldo = new Chart(ctxSaldo, {
       type:'bar',
-      data:{ labels:labels, datasets:[
-        {label:'Gasto real',       data:mesesOrden.map(function(m){return meses[m];}), backgroundColor:'rgba(41,128,185,.7)',  borderRadius:3},
-        {label:'Presup. mensual',  data:presMensual, type:'line', borderColor:'#e74c3c', borderDash:[5,3], borderWidth:2, pointRadius:0, fill:false}
-      ]},
+      data:{ labels:labels2, datasets:datasets },
       options:{
         responsive:true, maintainAspectRatio:false,
-        plugins:{legend:{position:'bottom',labels:{font:{size:10}}},
-          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': $'+ctx.raw.toLocaleString('es-AR',{maximumFractionDigits:0});}}}},
+        plugins:{ legend:{position:'bottom',labels:{font:{size:10}}},
+          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtM(ctx.raw);}}}},
         scales:{
-          x:{grid:{display:false}},
-          y:{ticks:{callback:function(v){return '$'+v.toLocaleString('es-AR',{notation:'compact',maximumFractionDigits:1});}}}
+          x:{stacked:true, grid:{display:false}},
+          y:{stacked:true, ticks:{callback:function(v){return '$'+(v/1000000).toFixed(0)+'M';}}}
         }
       }
     });
   }
 }
 
-function fpBarraHTML(pct, color) {
-  var w   = Math.min(pct*100, 100).toFixed(0);
-  var over= pct > 1;
-  var bg  = over ? '#e74c3c' : color;
-  return '<div style="background:#f0f0f0;border-radius:3px;height:8px;width:100%;overflow:hidden;">'+
-    '<div style="height:8px;width:'+w+'%;background:'+bg+';border-radius:3px;transition:width .3s;"></div>'+
+function fpToggleBloque(key) {
+  var rows = document.querySelectorAll('.fp-detail-'+key);
+  rows.forEach(function(r){
+    r.style.display = r.style.display==='none' ? 'table-row' : 'none';
+  });
+}
+
+function fpBarraHTML(pct, color, showPct) {
+  var w   = Math.min(pct*100,100).toFixed(0);
+  var bg  = pct>1 ? '#e74c3c' : color;
+  return '<div style="display:flex;align-items:center;gap:6px;">'+
+    '<div style="flex:1;background:#f0f0f0;border-radius:3px;height:8px;overflow:hidden;">'+
+      '<div style="height:8px;width:'+w+'%;background:'+bg+';border-radius:3px;transition:width .3s;"></div>'+
+    '</div>'+
+    (showPct?'<span style="font-size:10px;color:var(--muted);white-space:nowrap;width:36px;">'+(pct*100).toFixed(0)+'%</span>':'')+
   '</div>';
 }
 
