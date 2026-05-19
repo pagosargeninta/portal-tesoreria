@@ -1692,6 +1692,16 @@ tbody tr:hover td { background: #f8faf9; }
         </div>
       </div>
 
+      <!-- PAGE TABS -->
+      <div class="tab-row" id="fp-page-tabs" style="margin-bottom:14px;">
+        <button class="tab-btn active" onclick="fpPageTab(this,'gastos')"><i class="ti ti-chart-bar"></i> Gastos</button>
+        <button class="tab-btn" onclick="fpPageTab(this,'ingresos')"><i class="ti ti-arrow-down-circle"></i> Ingresos</button>
+        <button class="tab-btn" onclick="fpPageTab(this,'indicadores')"><i class="ti ti-gauge"></i> Indicadores</button>
+      </div>
+
+      <!-- TAB GASTOS -->
+      <div id="fp-tab-gastos">
+
       <!-- KPI STRIP -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;" id="fp-kpis">
         <div class="c29-kpi"><div class="c29-kpi-val" id="fp-k-saldo">—</div><div class="c29-kpi-lbl">Saldo financiero</div></div>
