@@ -5819,68 +5819,96 @@ function fpIngRender() {
   setK('fp-col-k-terc',     fmtM(d.intTerceros));
   setK('fp-col-k-total2',   fmtB(d.totalGeneral));
 
-  // ── TABLA DETALLE ────────────────────────────────────────────────
+  // ── TABLA DETALLE ── estructura: Colocaciones (capital) → Intereses ──────
   var tbody = document.getElementById('fp-col-tbody');
   if (tbody) {
     var rows = '';
-
-    // Sección PF Recursos Propios
-    var varPF = d.pfTotalPropios - d.pfPropiosMesAnt;
-    rows += '<tr style="background:rgba(41,128,185,.06);">' +
-      '<td colspan="6" style="font-weight:600;font-size:11px;padding:8px 10px;color:#2980b9;">' +
-        '<i class="ti ti-building-bank" style="margin-right:5px;"></i>Plazo Fijo — Recursos Propios FA' +
-      '</td></tr>';
-    rows += fpColRow('PF en pesos', 'Banco Nación (ARS)', d.pfPesosPropios, d.intPFcerrado+d.intPFcurso, '— / En curso', null, '#2980b9');
-    rows += fpColRow('PF en euros', 'Banco Nación (EUR 3.600.000)', d.pfEuros, d.intMEcerrado, 'Cerrado', null, '#2980b9');
-    rows += fpColRow('PF en USD', 'Banco Nación (U$D 12.300.000)', d.pfUSD, d.intMEcurso, 'En curso', null, '#2980b9');
-    rows += '<tr style="font-weight:600;background:rgba(41,128,185,.04);">' +
-      '<td colspan="2" style="padding:6px 10px;font-size:11px;">Subtotal PF Propios</td>' +
-      '<td class="mono" style="text-align:right;color:#2980b9;">' + fmtB(d.pfTotalPropios) + '</td>' +
-      '<td class="mono" style="text-align:right;color:var(--success);">' + fmtM(d.intPFcerrado+d.intPFcurso+d.intMEcerrado+d.intMEcurso) + '</td>' +
-      '<td></td>' +
-      '<td class="mono" style="text-align:right;color:' + (varPF>=0?'var(--success)':'var(--danger)') + ';">' + (varPF>=0?'+':'') + fmtB(varPF) + '</td>' +
-    '</tr>';
-
-    // Sección FCI
+    var varPF  = d.pfTotalPropios - d.pfPropiosMesAnt;
     var varFCI = d.fciTotal - d.fciMesAnt;
-    rows += '<tr style="background:rgba(155,89,182,.06);">' +
-      '<td colspan="6" style="font-weight:600;font-size:11px;padding:8px 10px;color:#9b59b6;">' +
-        '<i class="ti ti-currency-dollar" style="margin-right:5px;"></i>Fondos Comunes de Inversión — Recursos Propios FA' +
-      '</td></tr>';
-    rows += fpColRow('FCI FIMA', 'Banco Nación', d.fciFima, d.intFima, 'En curso', null, '#9b59b6');
-    rows += fpColRow('FCI Pellegrini', 'Banco Nación', d.fciPellegrini, d.intPellegrini, 'En curso', null, '#9b59b6');
-    rows += '<tr style="font-weight:600;background:rgba(155,89,182,.04);">' +
-      '<td colspan="2" style="padding:6px 10px;font-size:11px;">Subtotal FCI Propios</td>' +
-      '<td class="mono" style="text-align:right;color:#9b59b6;">' + fmtM(d.fciTotal) + '</td>' +
-      '<td class="mono" style="text-align:right;color:var(--success);">' + fmtM(d.intFima+d.intPellegrini) + '</td>' +
-      '<td></td>' +
-      '<td class="mono" style="text-align:right;color:' + (varFCI>=0?'var(--success)':'var(--danger)') + ';">' + (varFCI>=0?'+':'') + fmtM(varFCI) + '</td>' +
-    '</tr>';
 
-    // TOTAL FA
+    // ── BLOQUE 1: COLOCACIONES (capital) ────────────────────────────────────
+    rows += fpColSeccion('COLOCACIONES — Composición de la masa invertida', 'ti-coins', '#1a5276');
+
+    // PF Recursos Propios
+    rows += fpColSubSeccion('Plazo Fijo — Recursos Propios FA', '#2980b9');
+    // PF pesos: cerrado + en curso sumados, estado mixto
+    var pfPesosCap = d.pfPesosPropios || 14700000000;
+    rows += fpColRow('PF en pesos (ARS)', 'Banco Nación — cerrado + en curso', pfPesosCap, null, 'Cerrado + En curso', null, '#2980b9');
+    rows += fpColRow('PF en euros', 'Banco Nación — EUR 3.600.000', d.pfEuros, null, 'Cerrado', null, '#2980b9');
+    rows += fpColRow('PF en USD', 'Banco Nación — U$D 12.300.000', d.pfUSD, null, 'En curso', null, '#2980b9');
+    rows += fpColSubtotal('Subtotal PF Propios', d.pfTotalPropios, null, varPF, '#2980b9', fmtB, fmtB);
+
+    // FCI Recursos Propios
+    rows += fpColSubSeccion('Fondo Común de Inversión — Recursos Propios FA', '#9b59b6');
+    rows += fpColRow('FCI FIMA', 'Banco Nación', d.fciFima, null, 'En curso', null, '#9b59b6');
+    rows += fpColRow('FCI Pellegrini', 'Banco Nación', d.fciPellegrini, null, 'En curso', null, '#9b59b6');
+    rows += fpColSubtotal('Subtotal FCI Propios', d.fciTotal, null, varFCI, '#9b59b6', fmtM, fmtM);
+
+    // TOTAL FA colocado
     rows += '<tr style="font-weight:700;font-size:12px;border-top:2px solid var(--border);background:rgba(39,174,96,.06);">' +
-      '<td colspan="2" style="padding:10px;color:var(--success);">TOTAL RECURSOS PROPIOS FA</td>' +
+      '<td colspan="2" style="padding:10px;color:var(--success);"><i class="ti ti-check" style="margin-right:4px;"></i>TOTAL COLOCADO — RECURSOS PROPIOS FA</td>' +
       '<td class="mono" style="text-align:right;color:var(--success);">' + fmtB(d.totalFA) + '</td>' +
-      '<td class="mono" style="text-align:right;color:var(--success);">' + fmtM(d.intFA) + '</td>' +
-      '<td></td>' +
-      '<td class="mono" style="text-align:right;color:' + (d.varTotalFA>=0?'var(--success)':'var(--danger)') + ';">' + fmtV(d.varTotalFA) + '</td>' +
+      '<td></td><td></td>' +
+      '<td class="mono" style="text-align:right;color:'+(d.varTotalFA>=0?'var(--success)':'var(--danger)')+';">' + fmtV(d.varTotalFA) + '</td>' +
     '</tr>';
 
-    // SEPARADOR — Fondos de Terceros (informativo, no suma)
+    // Fondos de Terceros — capital (informativo)
     rows += '<tr><td colspan="6" style="padding:4px 10px;background:var(--surface-alt);font-size:10px;color:var(--muted);font-style:italic;">' +
-      '<i class="ti ti-info-circle" style="margin-right:4px;"></i>Los fondos de terceros son administrados por Fundación pero NO pertenecen a sus recursos propios — se muestran como referencia.' +
+      '<i class="ti ti-info-circle" style="margin-right:4px;"></i>Administrados por Fundación pero NO son recursos propios — se muestran como referencia.' +
     '</td></tr>';
-    rows += '<tr style="background:rgba(127,140,141,.05);opacity:.8;">' +
-      '<td colspan="6" style="font-weight:600;font-size:11px;padding:8px 10px;color:#7f8c8d;">' +
-        '<i class="ti ti-users" style="margin-right:5px;"></i>Fondos de Terceros (informativo — no suma)' +
-      '</td></tr>';
-    if (d.pfINIDEP) rows += fpColRow('INIDEP', 'Plazo Fijo', d.pfINIDEP, d.intINIDEP, '—', null, '#7f8c8d');
-    if (d.pfMAGYP)  rows += fpColRow('MAGYP',  'Plazo Fijo', d.pfMAGYP,  d.intMAGYP,  '—', null, '#7f8c8d');
-    rows += '<tr style="font-weight:600;opacity:.8;">' +
-      '<td colspan="2" style="padding:6px 10px;font-size:11px;color:#7f8c8d;">Subtotal Terceros (ref.)</td>' +
-      '<td class="mono" style="text-align:right;color:#7f8c8d;">' + fmtM(d.pfTotalTerceros) + '</td>' +
-      '<td class="mono" style="text-align:right;color:#7f8c8d;">' + fmtM(d.intTerceros) + '</td>' +
-      '<td></td><td></td></tr>';
+    rows += fpColSubSeccion('Fondos de Terceros (ref. — no suma al total FA)', '#7f8c8d');
+    if (d.pfINIDEP) rows += fpColRow('INIDEP', 'Plazo Fijo', d.pfINIDEP, null, '—', null, '#7f8c8d');
+    if (d.pfMAGYP)  rows += fpColRow('MAGYP',  'Plazo Fijo', d.pfMAGYP,  null, '—', null, '#7f8c8d');
+    rows += fpColSubtotal('Subtotal Terceros (ref.)', d.pfTotalTerceros, null, null, '#7f8c8d', fmtM, fmtM);
+
+    // Total general (capital)
+    rows += '<tr style="font-weight:600;border-top:1px solid var(--border);background:var(--surface-alt);">' +
+      '<td colspan="2" style="padding:8px 10px;font-size:11px;color:var(--muted);">Total general administrado (FA + Terceros)</td>' +
+      '<td class="mono" style="text-align:right;font-size:11px;color:var(--muted);">' + fmtB(d.totalGeneral) + '</td>' +
+      '<td colspan="3"></td>' +
+    '</tr>';
+
+    // ── BLOQUE 2: INTERESES (rendimiento) ───────────────────────────────────
+    rows += fpColSeccion('INTERESES — Rendimiento de las colocaciones', 'ti-percentage', '#1e8449');
+
+    // Intereses PF Propios
+    rows += fpColSubSeccion('Plazo Fijo — Recursos Propios FA', '#27ae60');
+    rows += fpColRow('PF pesos — colocaciones cerradas', '', null, d.intPFcerrado, 'Liquidado', null, '#27ae60');
+    rows += fpColRow('PF pesos — colocaciones en curso', '', null, d.intPFcurso, 'Devengado', null, '#27ae60');
+    rows += fpColRow('PF moneda extranjera — cerradas', 'Euros + USD', null, d.intMEcerrado, 'Liquidado', null, '#27ae60');
+    rows += fpColRow('PF moneda extranjera — en curso', 'Euros + USD', null, d.intMEcurso, 'Devengado', null, '#27ae60');
+    var intPFtot = d.intPFcerrado+d.intPFcurso+d.intMEcerrado+d.intMEcurso;
+    rows += fpColSubtotal('Subtotal int. PF Propios', null, intPFtot, null, '#27ae60', fmtM, fmtM);
+
+    // Intereses FCI
+    rows += fpColSubSeccion('FCI — Recursos Propios FA', '#2ecc71');
+    rows += fpColRow('FCI FIMA', '', null, d.intFima, 'Devengado', null, '#2ecc71');
+    rows += fpColRow('FCI Pellegrini', '', null, d.intPellegrini, 'Devengado', null, '#2ecc71');
+    rows += fpColSubtotal('Subtotal int. FCI Propios', null, d.intFima+d.intPellegrini, null, '#2ecc71', fmtM, fmtM);
+
+    // Total intereses FA
+    rows += '<tr style="font-weight:700;font-size:12px;border-top:2px solid var(--border);background:rgba(39,174,96,.06);">' +
+      '<td colspan="2" style="padding:10px;color:var(--success);"><i class="ti ti-check" style="margin-right:4px;"></i>TOTAL INTERESES — RECURSOS PROPIOS FA</td>' +
+      '<td></td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">' + fmtM(d.intFA) + '</td>' +
+      '<td colspan="2" style="padding:10px;font-size:11px;color:'+(d.pctVsPres>=1?'var(--success)':'var(--warn)')+';">' +
+        (d.pctVsPres*100).toFixed(1)+'% del presupuesto (' + fmtM(d.presupuesto) + ')' +
+      '</td>' +
+    '</tr>';
+
+    // Intereses terceros (informativo)
+    rows += fpColSubSeccion('Fondos de Terceros — intereses (ref.)', '#7f8c8d');
+    if (d.intMAGYP)  rows += fpColRow('MAGYP',  '', null, d.intMAGYP,  '—', null, '#7f8c8d');
+    if (d.intINIDEP) rows += fpColRow('INIDEP', '', null, d.intINIDEP, '—', null, '#7f8c8d');
+    rows += fpColSubtotal('Subtotal int. Terceros (ref.)', null, d.intTerceros, null, '#7f8c8d', fmtM, fmtM);
+
+    // Total intereses global
+    rows += '<tr style="font-weight:600;border-top:1px solid var(--border);background:var(--surface-alt);">' +
+      '<td colspan="2" style="padding:8px 10px;font-size:11px;color:var(--muted);">Total intereses global (FA + Terceros)</td>' +
+      '<td></td>' +
+      '<td class="mono" style="text-align:right;font-size:11px;color:var(--muted);">' + fmtM(d.intTotal) + '</td>' +
+      '<td colspan="2"></td>' +
+    '</tr>';
 
     tbody.innerHTML = rows;
   }
@@ -5953,6 +5981,29 @@ function fpIngRender() {
   }
 }
 
+function fpColSeccion(titulo, icon, color) {
+  return '<tr style="background:'+color+'18;border-top:2px solid '+color+'33;">' +
+    '<td colspan="6" style="font-weight:700;font-size:12px;padding:10px;color:'+color+';letter-spacing:.02em;">' +
+      '<i class="ti '+icon+'" style="margin-right:6px;"></i>'+titulo+
+    '</td></tr>';
+}
+function fpColSubSeccion(titulo, color) {
+  return '<tr style="background:'+color+'0d;">' +
+    '<td colspan="6" style="font-weight:600;font-size:11px;padding:7px 10px 7px 16px;color:'+color+';">'+titulo+'</td>' +
+  '</tr>';
+}
+function fpColSubtotal(label, capital, intereses, varMes, color, fmtCap, fmtInt) {
+  var fmt = function(n){ if(!n) return ''; return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+  return '<tr style="font-weight:600;background:'+color+'0a;">' +
+    '<td colspan="2" style="padding:6px 10px;font-size:11px;color:'+color+';">'+label+'</td>' +
+    '<td class="mono" style="text-align:right;color:'+color+';">'+(capital?fmtCap(capital):'')+'</td>' +
+    '<td class="mono" style="text-align:right;color:var(--success);">'+(intereses?fmtInt(intereses):'')+'</td>' +
+    '<td></td>' +
+    '<td class="mono" style="text-align:right;font-size:11px;color:'+(varMes!=null?(varMes>=0?'var(--success)':'var(--danger)'):'var(--muted)')+';font-size:10px;">' +
+      (varMes!=null?((varMes>=0?'+':'')+fmt(varMes)):'') +
+    '</td>' +
+  '</tr>';
+}
 function fpColRow(nombre, detalle, capital, intereses, estado, varMes, color) {
   var fmt  = function(n){ if(!n||n===0) return '—'; return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
   var fmtB = function(n){ if(!n||n===0) return '—'; return '$'+(parseFloat(n||0)/1000000000).toLocaleString('es-AR',{maximumFractionDigits:2})+'B'; };
