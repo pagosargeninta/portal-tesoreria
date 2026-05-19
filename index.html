@@ -5084,20 +5084,20 @@ var FP_CUENTA_ID    = 116;
 var FP_COMPANY_ID   = 1;
 var FP_JOURNAL_SINIC= 184;
 
-// Mapeo código de cuenta → bloque (extraído de Hoja1 del presupuesto)
+// Mapeo código de cuenta → bloque — Hoja1 actualizada
 var FP_CUENTA_BLOQUE = {
   '511001':'personal',  '511002':'personal',  '511003':'personal',
   '511004':'personal',  '512001':'personal',  '512002':'personal',
   '512003':'personal',  '534001':'personal',
   '521000':'admin',     '522000':'admin',     '523000':'admin',
   '525000':'admin',     '532001':'admin',     '532002':'admin',
-  '534009':'admin',     '534010':'admin',     '534011':'admin',
-  '561000':'admin',
+  '534008':'admin',     '534009':'admin',     '534010':'admin',
+  '534011':'admin',     '561000':'admin',
   '524000':'operativo', '531001':'operativo', '531002':'operativo',
   '531003':'operativo', '531004':'operativo', '533001':'operativo',
   '533002':'operativo', '533003':'operativo', '534002':'operativo',
   '534003':'operativo', '534004':'operativo', '534005':'operativo',
-  '534006':'operativo', '534007':'operativo', '534008':'operativo',
+  '534006':'operativo', '534007':'operativo',
   '551000':'aportes',
 };
 // Cuentas de activos fijos (activables) — no tienen expense type pero las incluimos
@@ -5111,29 +5111,17 @@ var FP_BLOQUES = [
   { key:'activable',  label:'Gastos Activables',       color:'#7f8c8d', icon:'ti-package' },
 ];
 
-// Presupuesto 2026 por bloque (escenario base 18%)
+// Presupuesto 2026 por bloque — tomado exactamente de Hoja1 fila 29
 var FP_PRESUPUESTO_BLOQUE = {
-  personal:   2095281042,  // sueldos + contrib + asist tecnica + capacitacion
-  admin:       818885503,  // admin + serv prof + ceremonial + extraordinarios + bienes de uso
-  operativo:   719633503,  // operativos
-  aportes:     800000000,  // aportes INTA
-  activable:    15000000,  // bienes de uso
+  activable:    15000000,       // Bienes de Uso
+  personal:   2095281042,       // Personal (total Hoja1)
+  admin:        88204000,       // Gastos Administrativos (total Hoja1)
+  operativo:   818885503,       // Gastos Operativos (total Hoja1)
+  aportes:     800000000,       // Aportes al INTA (total Hoja1)
 };
 
-// Presupuesto detallado por cuenta para el drilldown
-var FP_PRESUPUESTO_CUENTA = {
-  '511001': 1930887645, '511002': 0, '511003': 0, '511004': 100000000,
-  '512001': 0, '512002': 77226235, '512003': 64393397, '534001': 83422300,
-  '521000': 5664000, '522000': 59000000, '523000': 0, '525000': 0,
-  '532001': 8673000, '532002': 0, '534009': 317701983, '534010': 0,
-  '534011': 0, '561000': 120000000,
-  '524000': 37080000, '531001': 58420400, '531004': 25488000,
-  '531002': 0, '531003': 0,
-  '533001': 31152000, '533002': 0, '533003': 0,
-  '534002': 30000000, '534003': 0, '534004': 82600000,
-  '534005': 44320800, '534006': 0, '534007': 0, '534008': 29207020,
-  '551000': 800000000,
-};
+// Sin presupuesto por cuenta individual — la Hoja1 solo define totales por bloque
+var FP_PRESUPUESTO_CUENTA = {};
 
 async function fpCargar() {
   var anioSel = (document.getElementById('fp-anio')||{value:'2026'}).value||'2026';
