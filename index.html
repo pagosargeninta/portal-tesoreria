@@ -4543,8 +4543,24 @@ function compParseInterbanking(text) {
 
 function compParseNacion(text) {
   let cuit = null;
-  const cm = text.match(/C\.?U\.?I\.?T\.?:?\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})/i);
-  if (cm) cuit=cm[1].replace(/[-\s]/g,''); else { const all=[...text.matchAll(/\b(\d{11})\b/g)]; if(all.length) cuit=all[0][1]; }
+
+  // Estructura BNA exacta:
+  // "Cuit de origen\n30676303657"       ← FUNDACION (ignorar)
+  // "CUIT/CUIL destinatario\n30716348365" ← este es el correcto
+  const destMatch = text.match(/CUIT\/CUIL\s+destinatario[^\d]{0,20}(\d{11})/i);
+  if (destMatch) {
+    cuit = destMatch[1];
+  } else {
+    // Fallback: buscar después de "destinatario" con cualquier formato
+    const fallback = text.match(/destinatario[^\d]{0,30}(\d{8,11})/i);
+    if (fallback) {
+      cuit = fallback[1].replace(/[-\s]/g, '');
+    } else {
+      // Último recurso: todos los números de 11 dígitos, excluir el de Fundación (30676303657)
+      const all = [...text.matchAll(/\b(\d{11})\b/g)].map(m => m[1]).filter(n => n !== '30676303657');
+      if (all.length) cuit = all[0];
+    }
+  }
   const dm = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
   let fecha = dm ? `${dm[3].slice(2)}-${dm[2]}-${dm[1]}` : null;
   let monto = null;
