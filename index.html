@@ -4129,8 +4129,8 @@ document.querySelector('.nav-item[onclick*="honorarios"]')?.addEventListener('cl
 // ═══════════════════════════════════════════════════════
 
 const HON_CARTAS_FILTRO = [
-  '10.SENASA.23.1', '10.SENASA.27.1', '10.SENASA.28.1', '10.SENASA.29',
-  '10.INTA.CTRL.C93.CA13.1', '10.INTA.CTRL.C93.CA36.1', '10.MAABA.613.1'
+  '10.SENASA.CA23.1', '10.SENASA.CA27.1', '10.SENASA.28.1', '10.SENASA.29',
+  '10.INTA.CTRAL.C93.CA13.1', '10.INTA.CTRAL.C93.CA36.1', '10.MAABA.613.1'
 ];
 const CICLO_ANT_DESDE = '2026-04-20';
 const CICLO_ANT_HASTA = '2026-05-15';
@@ -4143,19 +4143,17 @@ function esCarta(nombre) {
 let _honControlData = null; // cache
 
 async function honControlCargar() {
-  // Load data for all 3 panels
   _honControlData = null;
 
   try {
-    // 1. Get all analytic accounts
+    // 1. Cartas de honorarios
     const todasCartas = await odooCall('account.analytic.account', 'search_read',
       [[['active','=',true]]], {fields:['id','name'], order:'name asc'});
-    const cartasHon = todasCartas.filter(c => esCarta(c.name));
-    const cartaIds = cartasHon.map(c => c.id);
-
+    const cartasHon = todasCartas.filter(function(ca){ return esCarta(ca.name); });
+    const cartaIds = cartasHon.map(function(ca){ return ca.id; });
     if (!cartaIds.length) { _honControlData = {error: 'No se encontraron cartas'}; honRenderControl(); return; }
 
-    // 2. Move lines ciclo anterior (expected)
+    // 2. Líneas ciclo anterior — para calcular ESPERADOS con nombre/CUIT
     const antLineas = await odooCall('account.move.line', 'search_read', [[
       ['move_id.move_type','=','in_invoice'],
       ['move_id.date','>=',CICLO_ANT_DESDE],
@@ -4164,7 +4162,7 @@ async function honControlCargar() {
       ['analytic_distribution','!=',false]
     ]], {fields:['move_id','analytic_distribution','price_subtotal','partner_id'], limit:5000});
 
-    // 3. Move lines ciclo actual
+    // 3. Líneas ciclo actual
     const actLineas = await odooCall('account.move.line', 'search_read', [[
       ['move_id.move_type','=','in_invoice'],
       ['move_id.date','>=',CICLO_ACT_DESDE],
@@ -4172,119 +4170,170 @@ async function honControlCargar() {
       ['analytic_distribution','!=',false]
     ]], {fields:['move_id','analytic_distribution','price_subtotal','partner_id'], limit:5000});
 
-    // 4. Get invoices with CBU info for current cycle
-    const actMoveIds = [...new Set(actLineas.map(l => l.move_id[0]))];
-    let facturasCBU = [];
+    // 4. Facturas actuales con CBU y estado de pago
+    const actMoveIds = Array.from(new Set(actLineas.map(function(l){ return l.move_id[0]; })));
+    var facturasCBU = [];
     if (actMoveIds.length > 0) {
-      // Get in batches of 100
-      for (let i = 0; i < actMoveIds.length; i += 100) {
-        const batch = actMoveIds.slice(i, i + 100);
-        const r = await odooCall('account.move', 'search_read',
-          [[['id','in',batch]]],
-          {fields:['id','partner_id','partner_bank_id','amount_total','payment_state'], limit:200});
+      for (var bi = 0; bi < actMoveIds.length; bi += 200) {
+        var batch = actMoveIds.slice(bi, bi + 200);
+        var r = await odooCall('account.move', 'search_read', [[['id','in',batch]]],
+          {fields:['id','partner_id','partner_bank_id','amount_total','payment_state','state'], limit:300});
         facturasCBU = facturasCBU.concat(r);
       }
     }
 
-    // 5. Saldos financieros — via account.analytic.line with x_plan2_id
-    const saldosData = {};
-    for (const carta of cartasHon) {
-      try {
-        const lineas = await odooCall('account.analytic.line', 'search_read',
-          [[['x_plan2_id','=',carta.id]]],
-          {fields:['amount','general_account_id'], limit:10000});
-        
-        // Filter by asset_cash and asset_current account types
-        // We need account types - get them
-        const accountIds = [...new Set(lineas.map(l => l.general_account_id?.[0]).filter(Boolean))];
-        let accountTypes = {};
-        if (accountIds.length > 0) {
-          const accounts = await odooCall('account.account', 'search_read',
-            [[['id','in',accountIds]]],
-            {fields:['id','account_type','name'], limit:500});
-          accounts.forEach(a => {
-            accountTypes[a.id] = {type: a.account_type, name: typeof a.name === 'object' ? (a.name.es_AR || a.name.en_US || '') : a.name};
-          });
-        }
-        
-        let saldo = 0;
-        lineas.forEach(l => {
-          const accId = l.general_account_id?.[0];
-          if (!accId) return;
-          const acc = accountTypes[accId];
-          if (!acc) return;
-          if (!['asset_cash','asset_current'].includes(acc.type)) return;
-          const nombre = acc.name.toLowerCase();
-          if (nombre.includes('anticipo') || nombre.includes('fondos de terceros')) return;
-          saldo += l.amount;
-        });
-        
-        saldosData[carta.id] = saldo * -1; // invertir signo
-      } catch(e) {
-        saldosData[carta.id] = null;
+    // 5. Historial de CBUs confiables — pagados desde abril
+    const histLineas = await odooCall('account.move.line', 'search_read', [[
+      ['move_id.move_type','=','in_invoice'],
+      ['move_id.date','>=','2026-04-01'],
+      ['move_id.payment_state','=','paid'],
+      ['analytic_distribution','!=',false]
+    ]], {fields:['move_id','partner_id'], limit:5000});
+
+    const histMoveIds = Array.from(new Set(histLineas.map(function(l){ return l.move_id[0]; })));
+    var histFacturas = [];
+    if (histMoveIds.length > 0) {
+      for (var bi2 = 0; bi2 < histMoveIds.length; bi2 += 200) {
+        var batch2 = histMoveIds.slice(bi2, bi2 + 200);
+        var r2 = await odooCall('account.move', 'search_read', [[['id','in',batch2]]],
+          {fields:['id','partner_id','partner_bank_id','payment_state'], limit:300});
+        histFacturas = histFacturas.concat(r2);
       }
     }
 
-    // Group lines by carta
-    function agruparPorCarta(lineas, cartaIds) {
-      const resultado = {};
-      const movesVistas = {};
-      cartaIds.forEach(id => resultado[id] = { moves: new Set(), monto: 0, partners: [] });
-      lineas.forEach(l => {
+    // CBUs confiables: partner_id → {cbu, confiable: true}
+    var cbuConfiableMap = {};
+    histFacturas.forEach(function(f) {
+      var pid = f.partner_id && f.partner_id[0];
+      if (pid && f.partner_bank_id) {
+        cbuConfiableMap[pid] = { cbu: f.partner_bank_id[1], confiable: true };
+      }
+    });
+
+    // 6. Partners — traer CUIT de todos
+    var allPartnerIds = Array.from(new Set(
+      antLineas.concat(actLineas).map(function(l){ return l.partner_id && l.partner_id[0]; }).filter(Boolean)
+    ));
+    var partnerCuits = {};
+    var partnerNames = {};
+    if (allPartnerIds.length > 0) {
+      for (var pi = 0; pi < allPartnerIds.length; pi += 200) {
+        var pbatch = allPartnerIds.slice(pi, pi + 200);
+        var pres = await odooCall('res.partner', 'search_read', [[['id','in',pbatch]]],
+          {fields:['id','name','vat'], limit:300});
+        pres.forEach(function(p) {
+          partnerCuits[p.id] = (p.vat || '').replace(/\D/g,'');
+          partnerNames[p.id] = p.name || '';
+        });
+      }
+    }
+
+    // Agrupar por carta
+    function agruparPorCarta(lineas, cIds) {
+      var res = {};
+      cIds.forEach(function(id){ res[id] = { moves: {}, monto: 0 }; });
+      lineas.forEach(function(l) {
         if (!l.analytic_distribution) return;
-        Object.keys(l.analytic_distribution).forEach(cidStr => {
-          const cid = parseInt(cidStr);
-          if (!resultado[cid]) return;
-          const moveId = l.move_id[0];
-          const key = `${cid}-${moveId}`;
-          if (!movesVistas[key]) {
-            resultado[cid].moves.add(moveId);
-            resultado[cid].monto += l.price_subtotal || 0;
-            if (l.partner_id) resultado[cid].partners.push({id: l.partner_id[0], name: l.partner_id[1], moveId});
-            movesVistas[key] = true;
+        Object.keys(l.analytic_distribution).forEach(function(cidStr) {
+          var cid = parseInt(cidStr);
+          if (!res[cid]) return;
+          var mid = l.move_id[0];
+          if (!res[cid].moves[mid]) {
+            var pid = l.partner_id && l.partner_id[0];
+            res[cid].moves[mid] = {
+              moveId: mid, pid: pid,
+              nombre: pid ? partnerNames[pid] : '—',
+              cuit: pid ? partnerCuits[pid] : '',
+              monto: l.price_subtotal || 0
+            };
+            res[cid].monto += l.price_subtotal || 0;
           }
         });
       });
-      return resultado;
+      return res;
     }
 
-    const antAgr = agruparPorCarta(antLineas, cartaIds);
-    const actAgr = agruparPorCarta(actLineas, cartaIds);
+    var antAgr = agruparPorCarta(antLineas, cartaIds);
+    var actAgr = agruparPorCarta(actLineas, cartaIds);
 
-    // Build CBU map from facturas
-    const cbuMap = {};
-    facturasCBU.forEach(f => {
+    // CBU map desde facturas actuales
+    var cbuMap = {};
+    facturasCBU.forEach(function(f) {
       cbuMap[f.id] = {
         hasCBU: !!f.partner_bank_id,
         cbu: f.partner_bank_id ? f.partner_bank_id[1] : null,
-        partner: f.partner_id,
+        partner: f.partner_id && f.partner_id[0],
         monto: f.amount_total,
         paymentState: f.payment_state
       };
     });
 
-    // Build resumen per carta
-    const resumen = {};
-    cartasHon.forEach(c => {
-      const actMoves = [...actAgr[c.id].moves];
-      const sinCBU = actMoves.filter(mid => cbuMap[mid] && !cbuMap[mid].hasCBU);
-      const saldo = saldosData[c.id];
-      const montoAct = actAgr[c.id].monto;
-      
-      resumen[c.id] = {
-        id: c.id, name: c.name,
-        esperado: antAgr[c.id].moves.size,
-        montoAnt: antAgr[c.id].monto,
-        actual: actAgr[c.id].moves.size,
-        montoAct,
-        sinCBU: sinCBU.map(mid => cbuMap[mid]),
-        saldoFinanciero: saldo,
-        saldoOK: saldo === null ? true : saldo >= montoAct,
-        paymentStates: actMoves.map(mid => cbuMap[mid]?.paymentState).filter(Boolean)
+    // Resumen por carta
+    var resumen = {};
+    cartasHon.forEach(function(ca) {
+      var antMovs = Object.values(antAgr[ca.id].moves);
+      var actMovs = Object.values(actAgr[ca.id].moves);
+
+      // CUITs del ciclo anterior
+      var antCuits = {};
+      antMovs.forEach(function(m){ if(m.cuit) antCuits[m.cuit] = m; });
+
+      // CUITs del ciclo actual
+      var actCuits = {};
+      actMovs.forEach(function(m){ if(m.cuit) actCuits[m.cuit] = m; });
+
+      // Faltantes: estaban en anterior y no en actual
+      var faltantes = Object.keys(antCuits).filter(function(cuit){ return !actCuits[cuit]; })
+        .map(function(cuit) {
+          var m = antCuits[cuit];
+          var pid = m.pid;
+          var cbuInfo = pid ? cbuConfiableMap[pid] : null;
+          return {
+            nombre: m.nombre, cuit: cuit,
+            montoAnt: m.monto,
+            cbu: cbuInfo ? cbuInfo.cbu : null,
+            cbuConfiable: !!(cbuInfo && cbuInfo.confiable)
+          };
+        });
+
+      // Sin CBU en ciclo actual
+      var sinCBU = actMovs.filter(function(m){
+        var f = cbuMap[m.moveId];
+        return f && !f.hasCBU;
+      }).map(function(m){
+        var f = cbuMap[m.moveId];
+        return { nombre: m.nombre, cuit: m.cuit, monto: m.monto, pid: m.pid };
+      });
+
+      // CBU nuevo (no confiable) en ciclo actual
+      var cbuNuevo = actMovs.filter(function(m){
+        var f = cbuMap[m.moveId];
+        return f && f.hasCBU && !cbuConfiableMap[m.pid];
+      }).map(function(m){
+        var f = cbuMap[m.moveId];
+        return { nombre: m.nombre, cuit: m.cuit, monto: m.monto, cbu: f ? f.cbu : null };
+      });
+
+      // Saldo financiero
+      var montoActTotal = actMovs.reduce(function(s,m){ return s + m.monto; }, 0);
+
+      // Estados de pago
+      var pagadas = actMovs.filter(function(m){ var f=cbuMap[m.moveId]; return f && f.paymentState==='paid'; }).length;
+      var enProceso = actMovs.filter(function(m){ var f=cbuMap[m.moveId]; return f && f.paymentState==='in_payment'; }).length;
+
+      resumen[ca.id] = {
+        id: ca.id, name: ca.name,
+        esperado: antMovs.length, montoAnt: antAgr[ca.id].monto,
+        actual: actMovs.length, montoAct: montoActTotal,
+        faltantes: faltantes,
+        sinCBU: sinCBU,
+        cbuNuevo: cbuNuevo,
+        pagadas: pagadas, enProceso: enProceso,
+        actMovs: actMovs, antMovs: antMovs
       };
     });
 
-    _honControlData = { resumen, cartasHon, cartaIds, cbuMap, actLineas, antLineas };
+    _honControlData = { resumen: resumen, cartasHon: cartasHon, cbuConfiableMap: cbuConfiableMap };
     honRenderControl();
 
   } catch(e) {
@@ -4296,156 +4345,195 @@ async function honControlCargar() {
 function honRenderControl() {
   if (!_honControlData) return;
   if (_honControlData.error) {
-    ['rec-cartas-body','pre-sin-cbu-body','pre-saldos-body','post-pendientes-body'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.innerHTML = `<div class="alert danger"><i class="ti ti-x"></i><div>${_honControlData.error}</div></div>`;
+    ['rec-cartas-body','pre-sin-cbu-body','pre-saldos-body','post-pendientes-body'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = '<div class="alert danger"><i class="ti ti-x"></i><div>' + _honControlData.error + '</div></div>';
     });
     return;
   }
 
-  const { resumen } = _honControlData;
-  const vals = Object.values(resumen);
-  const fmt = n => '$' + (n/1000000).toFixed(2) + 'M';
-  const fmtN = n => n ? '$' + n.toLocaleString('es-AR') : '—';
+  var res = _honControlData.resumen;
+  var vals = Object.values(res);
+  var fmt = function(n){ return '$' + (n/1000000).toFixed(2) + 'M'; };
+  var fmtN = function(n){ return n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—'; };
 
   // ── RECEPCIÓN ──
-  const totalEsp = vals.reduce((s,c) => s+c.esperado, 0);
-  const totalAct = vals.reduce((s,c) => s+c.actual, 0);
-  const totalMonto = vals.reduce((s,c) => s+c.montoAct, 0);
-  const faltantes = Math.max(0, totalEsp - totalAct);
-  const cartasOK = vals.filter(c => c.esperado > 0 && c.actual >= c.esperado).length;
-  const cartasConDatos = vals.filter(c => c.esperado > 0).length;
+  var totalEsp = vals.reduce(function(s,c){ return s+c.esperado; }, 0);
+  var totalAct = vals.reduce(function(s,c){ return s+c.actual; }, 0);
+  var totalMonto = vals.reduce(function(s,c){ return s+c.montoAct; }, 0);
+  var totalFaltantes = vals.reduce(function(s,c){ return s+c.faltantes.length; }, 0);
+  var cartasOK = vals.filter(function(c){ return c.esperado>0 && c.actual>=c.esperado; }).length;
+  var cartasConDatos = vals.filter(function(c){ return c.esperado>0; }).length;
 
-  document.getElementById('rec-total-recibidas').textContent = totalAct;
-  document.getElementById('rec-sub-recibidas').textContent = `de ${totalEsp} esperadas`;
-  document.getElementById('rec-total-faltantes').textContent = faltantes;
-  document.getElementById('rec-total-monto').textContent = fmt(totalMonto);
-  document.getElementById('rec-cartas-ok').textContent = `${cartasOK}/${cartasConDatos}`;
-  document.getElementById('rec-cartas-sub').textContent = 'cartas completas';
+  var el = function(id){ return document.getElementById(id); };
+  if(el('rec-total-recibidas')) el('rec-total-recibidas').textContent = totalAct;
+  if(el('rec-sub-recibidas')) el('rec-sub-recibidas').textContent = 'de ' + totalEsp + ' esperadas';
+  if(el('rec-total-faltantes')) el('rec-total-faltantes').textContent = totalFaltantes;
+  if(el('rec-total-monto')) el('rec-total-monto').textContent = fmt(totalMonto);
+  if(el('rec-cartas-ok')) el('rec-cartas-ok').textContent = cartasOK + '/' + cartasConDatos;
 
-  const recAlerta = document.getElementById('rec-alertas');
-  recAlerta.innerHTML = faltantes > 0
-    ? `<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-alert-circle"></i><div><strong>${faltantes} facturas faltantes</strong> vs ciclo anterior.</div></div>`
-    : totalAct > 0 ? `<div class="alert success" style="margin-bottom:8px;"><i class="ti ti-circle-check"></i><div>Todo completo para este ciclo.</div></div>`
-    : `<div class="alert info" style="margin-bottom:8px;"><i class="ti ti-info-circle"></i><div>Ciclo actual sin facturas aún. Esperado: ${totalEsp}.</div></div>`;
+  var recAlerta = el('rec-alertas');
+  if (recAlerta) {
+    recAlerta.innerHTML = totalFaltantes > 0
+      ? '<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-alert-circle"></i><div><strong>' + totalFaltantes + ' facturas faltantes</strong> vs ciclo anterior.</div></div>'
+      : totalAct > 0
+      ? '<div class="alert success" style="margin-bottom:8px;"><i class="ti ti-circle-check"></i><div>Todo completo para este ciclo.</div></div>'
+      : '<div class="alert info" style="margin-bottom:8px;"><i class="ti ti-info-circle"></i><div>Ciclo actual sin facturas. Esperado: ' + totalEsp + '.</div></div>';
+  }
 
-  const cartasOrdenadas = vals.sort((a,b) => b.esperado - a.esperado).filter(c => c.esperado > 0 || c.actual > 0);
-  document.getElementById('rec-cartas-body').innerHTML = cartasOrdenadas.map(c => {
-    const pct = c.esperado > 0 ? Math.min(100, Math.round(c.actual/c.esperado*100)) : (c.actual > 0 ? 100 : 0);
-    const estado = c.actual >= c.esperado && c.esperado > 0 ? 'lista' : c.actual > 0 ? 'parcial' : 'inicio';
-    const borde = estado === 'lista' ? 'var(--verde)' : estado === 'parcial' ? '#e0820a' : '#ccc';
-    const badge = estado === 'lista' ? '<span class="badge badge-ok">✓ Completa</span>'
-      : `<span class="badge badge-warn">⚠ ${c.esperado - c.actual} faltantes</span>`;
-    const fill = pct >= 100 ? 'var(--verde)' : pct > 50 ? '#e0820a' : 'var(--danger)';
-    return `<div style="border:1px solid var(--border);border-left:4px solid ${borde};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;background:${estado==='parcial'?'#fffdf8':'var(--surface)'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-        <div style="font-size:13px;font-weight:600;">${c.name}</div>
-        <div style="display:flex;gap:6px;">${badge}<span class="badge badge-muted">${c.actual}/${c.esperado}</span></div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:8px;">
-        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">RECIBIDAS</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${c.actual>=c.esperado?'var(--success)':'var(--warn)'};">${c.actual}</div></div>
-        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">ESPERADAS</div><div style="font-size:15px;font-weight:600;font-family:'JetBrains Mono',monospace;">${c.esperado}</div></div>
-        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">MONTO ACT.</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;">${fmt(c.montoAct)}</div></div>
-        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">MONTO ANT.</div><div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--muted);">${fmt(c.montoAnt)}</div></div>
-      </div>
-      <div style="background:#e8f0ea;border-radius:99px;height:6px;overflow:hidden;">
-        <div style="height:100%;width:${pct}%;background:${fill};border-radius:99px;"></div>
-      </div>
-    </div>`;
-  }).join('');
+  // Cards por carta — recepción
+  var cartasOrdenadas = vals.slice().sort(function(a,b){ return b.esperado-a.esperado; }).filter(function(c){ return c.esperado>0||c.actual>0; });
+  var recBody = el('rec-cartas-body');
+  if (recBody) {
+    recBody.innerHTML = cartasOrdenadas.map(function(c) {
+      var pct = c.esperado>0 ? Math.min(100,Math.round(c.actual/c.esperado*100)) : (c.actual>0?100:0);
+      var estado = c.actual>=c.esperado&&c.esperado>0 ? 'lista' : c.actual>0 ? 'parcial' : 'inicio';
+      var borde = estado==='lista'?'var(--verde)':estado==='parcial'?'#e0820a':'#ccc';
+      var badge = estado==='lista'
+        ? '<span class="badge badge-ok">✓ Completa</span>'
+        : '<span class="badge badge-warn">⚠ ' + c.faltantes.length + ' faltantes</span>';
+      var fill = pct>=100?'var(--verde)':pct>50?'#e0820a':'var(--danger)';
+
+      // Tabla de faltantes
+      var faltHTML = '';
+      if (c.faltantes.length > 0) {
+        faltHTML = '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">' +
+          '<div style="font-size:11px;font-weight:600;color:var(--warn);margin-bottom:6px;">Faltantes vs ciclo anterior:</div>' +
+          '<table style="width:100%;font-size:11px;border-collapse:collapse;">' +
+          '<thead><tr style="background:#f8faf9;"><th style="padding:5px 8px;text-align:left;color:var(--muted);">Nombre</th><th style="padding:5px 8px;text-align:left;color:var(--muted);">CUIT</th><th style="padding:5px 8px;text-align:right;color:var(--muted);">Monto ant.</th><th style="padding:5px 8px;text-align:center;color:var(--muted);">CBU</th></tr></thead><tbody>' +
+          c.faltantes.map(function(f){
+            var cbuStr = f.cbu
+              ? '<span class="badge ' + (f.cbuConfiable?'badge-ok':'badge-warn') + '">' + (f.cbuConfiable?'✓ Confiable':'Nuevo') + '</span>'
+              : '<span class="badge badge-danger">Sin CBU</span>';
+            return '<tr style="border-bottom:1px solid #f0f4f1;">' +
+              '<td style="padding:5px 8px;font-weight:500;">' + f.nombre + '</td>' +
+              '<td style="padding:5px 8px;font-family:\'JetBrains Mono\',monospace;">' + f.cuit + '</td>' +
+              '<td style="padding:5px 8px;text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmtN(f.montoAnt) + '</td>' +
+              '<td style="padding:5px 8px;text-align:center;">' + cbuStr + '</td>' +
+              '</tr>';
+          }).join('') + '</tbody></table></div>';
+      }
+
+      return '<div style="border:1px solid var(--border);border-left:4px solid ' + borde + ';border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;background:' + (estado==='parcial'?'#fffdf8':'var(--surface)') + '">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">' +
+        '<div style="font-size:13px;font-weight:600;">' + c.name + '</div>' +
+        '<div style="display:flex;gap:6px;">' + badge + '<span class="badge badge-muted">' + c.actual + '/' + c.esperado + '</span></div></div>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:8px;">' +
+        '<div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">RECIBIDAS</div><div style="font-size:15px;font-weight:600;font-family:\'JetBrains Mono\',monospace;color:' + (c.actual>=c.esperado?'var(--success)':'var(--warn)') + ';">' + c.actual + '</div></div>' +
+        '<div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">ESPERADAS</div><div style="font-size:15px;font-weight:600;font-family:\'JetBrains Mono\',monospace;">' + c.esperado + '</div></div>' +
+        '<div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">MONTO ACT.</div><div style="font-size:13px;font-weight:600;font-family:\'JetBrains Mono\',monospace;">' + fmt(c.montoAct) + '</div></div>' +
+        '<div><div style="font-size:10px;color:var(--muted);margin-bottom:2px;">MONTO ANT.</div><div style="font-size:13px;font-weight:600;font-family:\'JetBrains Mono\',monospace;color:var(--muted);">' + fmt(c.montoAnt) + '</div></div>' +
+        '</div>' +
+        '<div style="background:#e8f0ea;border-radius:99px;height:6px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + fill + ';border-radius:99px;"></div></div>' +
+        faltHTML + '</div>';
+    }).join('') || '<div style="text-align:center;padding:32px;color:var(--muted);">Sin datos.</div>';
+  }
 
   // ── PRE-PAGO ──
-  const totalSinCBU = vals.reduce((s,c) => s + c.sinCBU.length, 0);
-  const totalConCBU = totalAct - totalSinCBU;
-  const montoLote = vals.reduce((s,c) => s + (c.montoAct - c.sinCBU.reduce((ss,f) => ss+(f.monto||0), 0)), 0);
-  const cartasSinSaldo = vals.filter(c => c.saldoFinanciero !== null && !c.saldoOK);
+  var totalSinCBU = vals.reduce(function(s,c){ return s+c.sinCBU.length; }, 0);
+  var totalCBUNuevo = vals.reduce(function(s,c){ return s+c.cbuNuevo.length; }, 0);
+  var montoLote = vals.reduce(function(s,c){
+    return s + c.sinCBU.reduce(function(ss,f){ return ss - (f.monto||0); }, c.montoAct);
+  }, 0);
 
-  document.getElementById('pre-listas').textContent = totalConCBU;
-  document.getElementById('pre-sin-cbu').textContent = totalSinCBU;
-  document.getElementById('pre-sin-saldo').textContent = cartasSinSaldo.length;
-  document.getElementById('pre-monto-lote').textContent = fmt(montoLote);
-  document.getElementById('pre-badge-cbu').textContent = totalSinCBU;
+  if(el('pre-listas')) el('pre-listas').textContent = totalAct - totalSinCBU;
+  if(el('pre-sin-cbu')) el('pre-sin-cbu').textContent = totalSinCBU;
+  if(el('pre-sin-saldo')) el('pre-sin-saldo').textContent = totalCBUNuevo;
+  if(el('pre-monto-lote')) el('pre-monto-lote').textContent = fmt(montoLote);
+  if(el('pre-badge-cbu')) el('pre-badge-cbu').textContent = totalSinCBU;
 
-  const preAlertas = document.getElementById('pre-alertas');
-  preAlertas.innerHTML = '';
-  if (cartasSinSaldo.length > 0) {
-    preAlertas.innerHTML += `<div class="alert danger" style="margin-bottom:8px;"><i class="ti ti-alert-triangle"></i><div><strong>${cartasSinSaldo.length} carta(s) con saldo insuficiente:</strong> ${cartasSinSaldo.map(c => c.name.split(' ')[0]).join(', ')}. Las facturas no se podrán confirmar.</div></div>`;
-  }
-  if (totalSinCBU > 0) {
-    preAlertas.innerHTML += `<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-credit-card-off"></i><div><strong>${totalSinCBU} proveedor(es) sin CBU</strong> — no entran al lote de Interbanking.</div></div>`;
-  }
-  if (cartasSinSaldo.length === 0 && totalSinCBU === 0 && totalAct > 0) {
-    preAlertas.innerHTML += `<div class="alert success" style="margin-bottom:8px;"><i class="ti ti-circle-check"></i><div><strong>Todo OK para el lote.</strong> ${totalAct} facturas listas, saldos suficientes, todas con CBU.</div></div>`;
+  var preAlertas = el('pre-alertas');
+  if (preAlertas) {
+    preAlertas.innerHTML = '';
+    if (totalSinCBU > 0)
+      preAlertas.innerHTML += '<div class="alert danger" style="margin-bottom:8px;"><i class="ti ti-credit-card-off"></i><div><strong>' + totalSinCBU + ' proveedor(es) sin CBU</strong> — no entran al lote de Interbanking.</div></div>';
+    if (totalCBUNuevo > 0)
+      preAlertas.innerHTML += '<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-alert-triangle"></i><div><strong>' + totalCBUNuevo + ' CBU(s) sin historial de pago exitoso</strong> — verificar antes de incluir en el lote.</div></div>';
+    if (totalSinCBU===0 && totalCBUNuevo===0 && totalAct>0)
+      preAlertas.innerHTML += '<div class="alert success" style="margin-bottom:8px;"><i class="ti ti-circle-check"></i><div><strong>Todo OK para el lote.</strong> Todos con CBU confiable.</div></div>';
   }
 
   // Sin CBU list
-  const sinCBUList = vals.flatMap(c => c.sinCBU.map(f => ({...f, carta: c.name})));
-  document.getElementById('pre-sin-cbu-body').innerHTML = sinCBUList.length === 0
-    ? '<div style="text-align:center;padding:20px;color:var(--muted);">✓ Todos tienen CBU registrado</div>'
-    : sinCBUList.map(f => `
-      <div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;gap:10px;">
-        <div style="width:32px;height:32px;border-radius:50%;background:var(--danger-bg);color:var(--danger);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">?</div>
-        <div style="flex:1;">
-          <div style="font-weight:500;">${f.partner?.[1] || '—'}</div>
-          <div style="font-size:11px;color:var(--muted);">${f.carta}</div>
-        </div>
-        <span class="badge badge-danger">Sin CBU</span>
-      </div>`).join('');
+  var sinCBUAll = vals.flatMap(function(c){ return c.sinCBU.map(function(f){ return Object.assign({},f,{carta:c.name}); }); });
+  var preSinCBUBody = el('pre-sin-cbu-body');
+  if (preSinCBUBody) {
+    preSinCBUBody.innerHTML = sinCBUAll.length===0
+      ? '<div style="text-align:center;padding:20px;color:var(--muted);">✓ Todos tienen CBU registrado</div>'
+      : sinCBUAll.map(function(f){
+          var ini = (f.nombre||'?').split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();
+          return '<div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;gap:10px;">' +
+            '<div style="width:32px;height:32px;border-radius:50%;background:var(--danger-bg);color:var(--danger);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;">' + ini + '</div>' +
+            '<div style="flex:1;"><div style="font-weight:500;">' + f.nombre + '</div><div style="font-size:11px;color:var(--muted);">' + f.cuit + ' · ' + f.carta + '</div></div>' +
+            '<span class="badge badge-danger">Sin CBU</span></div>';
+        }).join('');
+  }
 
-  // Saldos financieros
-  document.getElementById('pre-saldos-body').innerHTML = cartasOrdenadas.map(c => {
-    const saldo = c.saldoFinanciero;
-    const monto = c.montoAct;
-    const ok = saldo === null ? true : saldo >= monto;
-    const saldoStr = saldo === null ? '—' : fmtN(saldo);
-    const color = saldo === null ? 'var(--muted)' : ok ? 'var(--success)' : 'var(--danger)';
-    return `<div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <div style="font-size:12px;font-weight:500;">${c.name.split(' ')[0]}</div>
-      <div style="text-align:right;">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:${color};">${saldoStr}</div>
-        <div style="font-size:10px;color:var(--muted);">Monto lote: ${fmt(monto)}</div>
-      </div>
-      <span class="badge ${ok ? 'badge-ok' : 'badge-danger'}">${ok ? '✓ OK' : '✗ Insuf.'}</span>
-    </div>`;
-  }).join('');
+  // CBU nuevos / saldos
+  var preSaldosBody = el('pre-saldos-body');
+  if (preSaldosBody) {
+    var rows = cartasOrdenadas.map(function(c) {
+      var cbuNuevoStr = c.cbuNuevo.length > 0
+        ? '<span class="badge badge-warn">' + c.cbuNuevo.length + ' CBU nuevo</span>'
+        : '<span class="badge badge-ok">CBUs OK</span>';
+      return '<div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;justify-content:space-between;gap:10px;">' +
+        '<div style="font-size:12px;font-weight:500;">' + c.name.split(' ')[0] + '</div>' +
+        '<div style="text-align:right;">' +
+        '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:600;">' + fmt(c.montoAct) + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);">' + c.actual + ' facturas</div></div>' +
+        cbuNuevoStr + '</div>';
+    }).join('');
+    preSaldosBody.innerHTML = rows || '<div style="padding:16px;color:var(--muted);">Sin datos</div>';
+  }
 
   // ── POST-PAGO ──
-  const pagadas = vals.reduce((s,c) => s + c.paymentStates.filter(p => p === 'paid' || p === 'in_payment').length, 0);
-  const enProceso = vals.reduce((s,c) => s + c.paymentStates.filter(p => p === 'not_paid' || p === 'partial').length, 0);
-  document.getElementById('post-pagadas').textContent = pagadas;
-  document.getElementById('post-rechazados').textContent = '?';
-  document.getElementById('post-pendientes').textContent = totalSinCBU + enProceso;
-  document.getElementById('post-monto').textContent = fmt(montoLote);
+  var totalPagadas = vals.reduce(function(s,c){ return s+c.pagadas; }, 0);
+  var totalEnProceso = vals.reduce(function(s,c){ return s+c.enProceso; }, 0);
+  var totalPendientes = totalSinCBU + (totalAct - totalPagadas - totalEnProceso);
 
-  document.getElementById('post-pendientes-body').innerHTML = sinCBUList.length === 0
-    ? '<div style="text-align:center;padding:20px;color:var(--muted);">Sin pendientes históricos</div>'
-    : sinCBUList.map(f => `
-      <div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;gap:10px;">
-        <div style="flex:1;"><div style="font-weight:500;">${f.partner?.[1] || '—'}</div><div style="font-size:11px;color:var(--muted);">${f.carta} · Sin CBU</div></div>
-        <span class="badge badge-danger">Sin CBU</span>
-      </div>`).join('');
+  if(el('post-pagadas')) el('post-pagadas').textContent = totalPagadas;
+  if(el('post-rechazados')) el('post-rechazados').textContent = '?';
+  if(el('post-pendientes')) el('post-pendientes').textContent = totalPendientes;
+  if(el('post-monto')) el('post-monto').textContent = fmt(montoLote);
 
-  document.getElementById('post-historial-body').innerHTML = `
-    <table>
-      <thead><tr><th>Evento</th><th>Facturas</th><th>Monto</th><th>Estado</th></tr></thead>
-      <tbody>
-        <tr><td>Recibidas este ciclo</td><td class="mono">${totalAct}</td><td class="mono">${fmt(totalMonto)}</td><td><span class="badge badge-ok">OK</span></td></tr>
-        <tr><td>Lote Interbanking (con CBU)</td><td class="mono">${totalConCBU}</td><td class="mono">${fmt(montoLote)}</td><td><span class="badge ${totalConCBU > 0 ? 'badge-ok' : 'badge-muted'}">${totalConCBU > 0 ? 'Listo' : 'Pendiente'}</span></td></tr>
-        <tr><td>Sin CBU (excluidas)</td><td class="mono">${totalSinCBU}</td><td class="mono">—</td><td><span class="badge badge-danger">Sin resolver</span></td></tr>
-        <tr><td>Pagadas</td><td class="mono">${pagadas}</td><td class="mono">—</td><td><span class="badge ${pagadas > 0 ? 'badge-ok' : 'badge-muted'}">${pagadas > 0 ? 'Pagado' : 'Pendiente'}</span></td></tr>
-      </tbody>
-    </table>`;
+  // Pendientes históricos = sin CBU
+  var postPendBody = el('post-pendientes-body');
+  if (postPendBody) {
+    postPendBody.innerHTML = sinCBUAll.length===0
+      ? '<div style="text-align:center;padding:20px;color:var(--muted);">Sin pendientes</div>'
+      : sinCBUAll.map(function(f){
+          return '<div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;gap:10px;">' +
+            '<div style="flex:1;"><div style="font-weight:500;">' + f.nombre + '</div><div style="font-size:11px;color:var(--muted);">' + f.carta + ' · Sin CBU</div></div>' +
+            '<span class="badge badge-danger">Sin CBU</span></div>';
+        }).join('');
+  }
+
+  // Historial del ciclo
+  var postHistBody = el('post-historial-body');
+  if (postHistBody) {
+    postHistBody.innerHTML = '<table>' +
+      '<thead><tr><th>Carta</th><th>Recibidas</th><th>Monto</th><th>Pagadas</th><th>En proceso</th><th>Sin CBU</th><th>Faltantes</th></tr></thead>' +
+      '<tbody>' + cartasOrdenadas.map(function(c){
+        return '<tr>' +
+          '<td style="font-weight:500;">' + c.name.split(' ')[0] + '</td>' +
+          '<td class="mono">' + c.actual + '/' + c.esperado + '</td>' +
+          '<td class="mono">' + fmt(c.montoAct) + '</td>' +
+          '<td><span class="badge ' + (c.pagadas===c.actual&&c.actual>0?'badge-ok':'badge-muted') + '">' + c.pagadas + '</span></td>' +
+          '<td><span class="badge badge-info">' + c.enProceso + '</span></td>' +
+          '<td><span class="badge ' + (c.sinCBU.length>0?'badge-danger':'badge-ok') + '">' + c.sinCBU.length + '</span></td>' +
+          '<td><span class="badge ' + (c.faltantes.length>0?'badge-warn':'badge-ok') + '">' + c.faltantes.length + '</span></td>' +
+          '</tr>';
+      }).join('') + '</tbody></table>';
+  }
 }
 
 async function postBuscarRechazo() {
-  const monto = parseFloat(document.getElementById('post-monto-buscar').value);
+  var monto = parseFloat(document.getElementById('post-monto-buscar') ? document.getElementById('post-monto-buscar').value : 0);
   if (!monto) return;
-  
-  const div = document.getElementById('post-candidatos');
+  var div = document.getElementById('post-candidatos');
+  if (!div) return;
   div.innerHTML = '<div style="color:var(--muted);font-size:12px;">Buscando...</div>';
-
   try {
-    const lineas = await odooCall('account.move.line', 'search_read', [[
+    var lineas = await odooCall('account.move.line', 'search_read', [[
       ['move_id.move_type','=','in_invoice'],
       ['move_id.date','>=',CICLO_ACT_DESDE],
       ['move_id.state','=','posted'],
@@ -4453,20 +4541,40 @@ async function postBuscarRechazo() {
     ]], {fields:['move_id','partner_id','analytic_distribution'], limit:50});
 
     if (!lineas.length) {
-      div.innerHTML = '<div class="alert info"><i class="ti ti-info-circle"></i><div>No se encontraron facturas con ese monto en el ciclo actual.</div></div>';
+      div.innerHTML = '<div class="alert info"><i class="ti ti-info-circle"></i><div>No se encontraron facturas con ese monto.</div></div>';
       return;
     }
 
-    div.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;">${lineas.length} candidato(s) con monto $${monto.toLocaleString('es-AR')}:</div>` +
-      lineas.map(l => `
-        <div style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--warn-bg);">
-          <div style="font-weight:500;">${l.partner_id?.[1] || '—'}</div>
-          <div style="font-size:11px;color:var(--muted);">Factura #${l.move_id?.[0]} · Monto: $${monto.toLocaleString('es-AR')}</div>
-        </div>`).join('');
+    // Traer CBU de cada partner
+    var pids = Array.from(new Set(lineas.map(function(l){ return l.partner_id&&l.partner_id[0]; }).filter(Boolean)));
+    var cbuInfo = {};
+    if (pids.length > 0) {
+      var moves = await odooCall('account.move', 'search_read', [[['partner_id','in',pids],['move_type','=','in_invoice'],['date','>=',CICLO_ACT_DESDE]]],
+        {fields:['partner_id','partner_bank_id','payment_state'], limit:100});
+      moves.forEach(function(m){ if(m.partner_id) cbuInfo[m.partner_id[0]] = { cbu: m.partner_bank_id ? m.partner_bank_id[1] : null, paid: m.payment_state==='paid' }; });
+    }
+
+    var cbuConf = _honControlData ? _honControlData.cbuConfiableMap : {};
+    div.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;">' + lineas.length + ' candidato(s) con monto $' + monto.toLocaleString('es-AR') + ':</div>' +
+      lineas.map(function(l) {
+        var pid = l.partner_id && l.partner_id[0];
+        var info = pid ? cbuInfo[pid] : null;
+        var confiable = pid && cbuConf[pid];
+        var cbuBadge = !info || !info.cbu
+          ? '<span class="badge badge-danger">Sin CBU</span>'
+          : confiable
+          ? '<span class="badge badge-ok">✓ CBU confiable</span>'
+          : '<span class="badge badge-warn">CBU sin historial</span>';
+        return '<div style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--warn-bg);">' +
+          '<div style="font-weight:500;">' + (l.partner_id ? l.partner_id[1] : '—') + '</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-top:2px;">Factura #' + l.move_id[0] + ' · $' + monto.toLocaleString('es-AR') + ' ' + cbuBadge + '</div>' +
+          '</div>';
+      }).join('');
   } catch(e) {
-    div.innerHTML = `<div class="alert danger"><i class="ti ti-x"></i><div>${e.message}</div></div>`;
+    div.innerHTML = '<div class="alert danger"><i class="ti ti-x"></i><div>' + e.message + '</div></div>';
   }
 }
+
 
 let compSelectedFile = null;
 let compBanco = 'interbanking';
@@ -5138,7 +5246,7 @@ function planExcel() {
   showToast(data.length + ' filas exportadas', 'ok');
 }
 
-const HON_CARTAS_FILTRO_DET = ['10.SENASA.23.1','10.SENASA.27.1','10.SENASA.28.1','10.SENASA.29','10.INTA.CTRL.C93.CA13.1','10.INTA.CTRL.C93.CA36.1','10.MAABA.613.1'];
+const HON_CARTAS_FILTRO_DET = ['10.SENASA.CA23.1','10.SENASA.CA27.1','10.SENASA.28.1','10.SENASA.29','10.INTA.CTRAL.C93.CA13.1','10.INTA.CTRAL.C93.CA36.1','10.MAABA.613.1'];
 var _honDetalleData = [];
 
 async function honDetalleCargar() {
