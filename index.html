@@ -6233,7 +6233,7 @@ var FP_DESM_ORGS = {
   'INNOVA': {label:'INNOVA', color:'#3498db'},
   'INAFCI': {label:'INAFCI', color:'#9b59b6'},
   'IMPULS': {label:'Impulsa',color:'#e74c3c'},
-  'DEC':    {label:'Delegaciones INTA', color:'#795548'},
+  'DEC':    {label:'INTA DEC', color:'#795548'},
   'INT':    {label:'INTA Internacional', color:'#607d8b'},
   'OTRO':   {label:'Otros', color:'#95a5a6'},
 };
@@ -6303,6 +6303,7 @@ async function fpDesmCargar() {
     var totalMov = await odooCall('account.move.line','search_count',
       [[['account_id','=',2379],['move_id.move_type','=','out_invoice'],
         ['move_id.company_id','=',1],['move_id.state','=','posted'],
+        ['move_id.payment_state','in',['paid','in_payment']],
         ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
         ['analytic_distribution','!=',false]]]);
 
@@ -6314,6 +6315,7 @@ async function fpDesmCargar() {
       var pg2 = await odooCall('account.move.line','search_read',
         [[['account_id','=',2379],['move_id.move_type','=','out_invoice'],
           ['move_id.company_id','=',1],['move_id.state','=','posted'],
+          ['move_id.payment_state','in',['paid','in_payment']],
           ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
           ['analytic_distribution','!=',false]]],
         {fields:['analytic_distribution','price_total','move_id'],limit:500,offset:off});
@@ -6321,12 +6323,33 @@ async function fpDesmCargar() {
       off += 500;
     }
 
-    // 3. COGAYT: account.analytic.line, cuenta 411000 (id=2395), company=1, amount<0
+    // 3. COGAYT en dos partes:
+    //    A) Liquidaciones: out_invoice a Fundación (partner=1), account.analytic.line cuenta 2395
+    //       → total global sin discriminar por carta
+    //    B) Cobros: in_invoice con producto G3-Gastos Administrativos, analítica de convenios
     if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando COGAYT...';
-    var cogaytLineas = await odooCall('account.analytic.line','search_read',
+
+    // A) Liquidaciones COGAYT — account.analytic.line cuenta 411000 (2395), company=1
+    var cogaytLiqLineas = await odooCall('account.analytic.line','search_read',
       [[['general_account_id','=',2395],['company_id','=',1],
         ['date','>=',desde],['date','<=',hasta]]],
-      {fields:['x_plan2_id','amount','date','name'],limit:20000});
+      {fields:['amount','date','name'],limit:20000});
+    var totalCogaytLiq = cogaytLiqLineas.reduce(function(s,l){ return s+Math.abs(l.amount); }, 0);
+
+    // B) Cobros COGAYT — in_invoice con producto G3-Gastos Administrativos, analítica convenios
+    //    Buscar en account.move.line: move_type=in_invoice, account=2379, analytic_distribution
+    //    El producto G3-Gastos Administrativos está en el nombre de la línea
+    var cogaytCobroLines = await odooCall('account.move.line','search_read',
+      [[['move_id.move_type','=','in_invoice'],
+        ['move_id.company_id','=',1],['move_id.state','=','posted'],
+        ['move_id.payment_state','in',['paid','in_payment']],
+        ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
+        ['analytic_distribution','!=',false],
+        ['name','ilike','G3']]],
+      {fields:['analytic_distribution','price_total','move_id','name'],limit:5000});
+
+    // Agregar cobros COGAYT por carta
+    var cogaytLineas = [];  // compatibilidad con código siguiente
 
     // 4. Agregar desembolsos por organismo y carta
     var porOrg   = {};
@@ -6353,27 +6376,29 @@ async function fpDesmCargar() {
       });
     });
 
-    // 5. Agregar COGAYT por carta (x_plan2_id puede ser false — igual sumamos al total)
-    var cogaytPorCarta = {};
-    var totalCogayt    = 0;
-    cogaytLineas.forEach(function(l){
-      var monto = Math.abs(l.amount);
-      totalCogayt += monto;
-      var cid = l.x_plan2_id && l.x_plan2_id[0];
-      if (cid) {
-        if (!cogaytPorCarta[cid]) cogaytPorCarta[cid] = {nombre:l.x_plan2_id[1]||String(cid), total:0};
+    // 5. Agregar cobros COGAYT por carta (in_invoice G3, analytic_distribution)
+    var cogaytPorCarta    = {};
+    var totalCogaytCobros = 0;
+    cogaytCobroLines.forEach(function(l){
+      if (!l.analytic_distribution) return;
+      Object.keys(l.analytic_distribution).forEach(function(cidStr){
+        var cid   = parseInt(cidStr);
+        var nom   = cartaById[cid] || String(cid);
+        var pct   = parseFloat(l.analytic_distribution[cidStr]||100)/100;
+        var monto = (l.price_total||0) * pct;
+        if (monto <= 0) return;
+        if (!cogaytPorCarta[cid]) cogaytPorCarta[cid] = {nombre:nom, total:0};
         cogaytPorCarta[cid].total += monto;
-      } else {
-        // Sin carta — agrupar por descripción del movimiento para identificar convenio
-        var key = 'sin_carta';
-        if (!cogaytPorCarta[key]) cogaytPorCarta[key] = {nombre:'Sin carta asignada', total:0, detalle:[]};
-        cogaytPorCarta[key].total += monto;
-        if (l.name) cogaytPorCarta[key].detalle = (cogaytPorCarta[key].detalle||[]).concat([{nombre:l.name.split('\n')[0], monto:monto, fecha:l.date}]);
-      }
+        totalCogaytCobros += monto;
+      });
     });
+    var totalCogayt = totalCogaytLiq;  // KPI principal = liquidaciones
 
     _fpDesmData = {porOrg:porOrg, porCarta:porCarta,
-                  cogaytPorCarta:cogaytPorCarta, totalCogayt:totalCogayt,
+                  cogaytPorCarta:cogaytPorCarta,
+                  totalCogayt:totalCogayt,
+                  totalCogaytLiq:totalCogaytLiq,
+                  totalCogaytCobros:totalCogaytCobros,
                   cartaById:cartaById};
 
     if (loading) loading.style.display='none';
@@ -6490,11 +6515,20 @@ function fpDesmRender(anioSel) {
 
     var html2 = '';
 
-    // KPI cogayt
-    html2 += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">' +
-      '<div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val">'+fmtM(d.totalCogayt)+'</div><div class="c29-kpi-lbl">Total COGAYT cobrado</div></div>' +
-      '<div class="c29-kpi"><div class="c29-kpi-val">'+cEntries.length+'</div><div class="c29-kpi-lbl">Convenios con COGAYT</div></div>' +
-      '<div class="c29-kpi"><div class="c29-kpi-val">'+(cEntries.length>0?fmtM(d.totalCogayt/cEntries.length):'—')+'</div><div class="c29-kpi-lbl">Promedio por convenio</div></div>' +
+    // KPI cogayt — separado en liquidaciones y cobros
+    var cobrosTotal = cEntries.reduce(function(s,e){return s+e.monto;},0);
+    html2 += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">' +
+      '<div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val">'+fmtM(d.totalCogaytLiq||d.totalCogayt)+'</div><div class="c29-kpi-lbl">Liquidaciones cobradas</div></div>' +
+      '<div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val">'+fmtM(d.totalCogaytCobros||cobrosTotal)+'</div><div class="c29-kpi-lbl">Cobros a convenios</div></div>' +
+      '<div class="c29-kpi"><div class="c29-kpi-val">'+cEntries.filter(function(e){return e.cid!=='sin_carta';}).length+'</div><div class="c29-kpi-lbl">Convenios con cobro</div></div>' +
+      '<div class="c29-kpi"><div class="c29-kpi-val">'+(cEntries.length>0?fmtM((d.totalCogaytCobros||cobrosTotal)/Math.max(cEntries.length,1)):'—')+'</div><div class="c29-kpi-lbl">Promedio por convenio</div></div>' +
+    '</div>';
+
+    // Nota explicativa
+    html2 += '<div class="alert info" style="margin-bottom:12px;padding:8px 14px;font-size:11px;">' +
+      '<i class="ti ti-info-circle"></i>' +
+      '<div><strong>Liquidaciones:</strong> total cobrado por Fundación (sin discriminar por convenio) · ' +
+      '<strong>Cobros a convenios:</strong> monto descontado a cada convenio vía factura de proveedor G3</div>' +
     '</div>';
 
     // Tabla COGAYT por convenio
