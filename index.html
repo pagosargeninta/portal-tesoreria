@@ -6304,7 +6304,7 @@ async function fpDesmCargar() {
     var lineas = [];
     var total  = await odooCall('account.analytic.line','search_count',
       [[['x_plan2_id','in',cartaIds],['general_account_id','=',2379],
-        ['amount','<',0],['date','>=',desde],['date','<=',hasta]]]);
+        ['company_id','=',1],['amount','<',0],['date','>=',desde],['date','<=',hasta]]]);
 
     off = 0;
     while (off < total) {
@@ -6312,7 +6312,7 @@ async function fpDesmCargar() {
         'Desembolsos: '+Math.min(off+500,total)+' / '+total;
       var pg2 = await odooCall('account.analytic.line','search_read',
         [[['x_plan2_id','in',cartaIds],['general_account_id','=',2379],
-          ['amount','<',0],['date','>=',desde],['date','<=',hasta]]],
+          ['company_id','=',1],['amount','<',0],['date','>=',desde],['date','<=',hasta]]],
         {fields:['x_plan2_id','amount','date'],limit:500,offset:off,order:'date desc'});
       pg2.forEach(function(l){ lineas.push(l); });
       off += 500;
@@ -6320,10 +6320,11 @@ async function fpDesmCargar() {
 
     // 3. COGAYT: out_invoice a Fundación con analítica en cartas de convenios
     if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando COGAYT...';
+    // COGAYT: cuenta 411000 (id=2395), company Fundación ArgenINTA, amount < 0 = ingreso real
     var cogaytLineas = await odooCall('account.analytic.line','search_read',
       [[['x_plan2_id','in',cartaIds],['general_account_id','=',2395],
-        ['date','>=',desde],['date','<=',hasta]]],
-      {fields:['x_plan2_id','amount','date'],limit:5000});
+        ['company_id','=',1],['amount','<',0],['date','>=',desde],['date','<=',hasta]]],
+      {fields:['x_plan2_id','amount','date'],limit:10000});
 
     // 4. Agregar por organismo y por carta
     var porOrg   = {};  // orgKey → {total, convenios:{cartaId→total}}
@@ -6349,10 +6350,10 @@ async function fpDesmCargar() {
     var cogaytPorCarta = {};
     var totalCogayt = 0;
     cogaytLineas.forEach(function(l){
-      var cid  = l.x_plan2_id && l.x_plan2_id[0];
+      var cid   = l.x_plan2_id && l.x_plan2_id[0];
       if (!cid) return;
-      var monto = Math.abs(l.amount);
-      if (!cogaytPorCarta[cid]) cogaytPorCarta[cid]=0;
+      var monto = Math.abs(l.amount);  // amount negativo = ingreso real
+      if (!cogaytPorCarta[cid]) cogaytPorCarta[cid] = 0;
       cogaytPorCarta[cid] += monto;
       totalCogayt += monto;
     });
