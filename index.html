@@ -6289,8 +6289,10 @@ async function fpDesmCargar() {
       if (pg.length < PAGE) break;
       off += PAGE;
     }
+    var EXCLUIR_CARTAS = ['10.INTA.CTRAL.C93.CA36.1'];
     var cartas = todasCartas.filter(function(c){
       if (!c.name) return false;
+      if (EXCLUIR_CARTAS.indexOf(c.name) >= 0) return false;
       return c.name.match(/^10\./) || c.name.match(/^14\.INTA\.DEC/) || c.name.match(/^5\.2\./);
     });
     var cartaIds  = cartas.map(function(c){ return c.id; });
@@ -6303,7 +6305,7 @@ async function fpDesmCargar() {
     var totalMov = await odooCall('account.move.line','search_count',
       [[['account_id','=',2379],['move_id.move_type','=','out_invoice'],
         ['move_id.company_id','=',1],['move_id.state','=','posted'],
-        ['move_id.payment_state','in',['paid','in_payment']],
+        ['move_id.payment_state','in',['paid','in_payment','partial']],
         ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
         ['analytic_distribution','!=',false]]]);
 
@@ -6315,7 +6317,7 @@ async function fpDesmCargar() {
       var pg2 = await odooCall('account.move.line','search_read',
         [[['account_id','=',2379],['move_id.move_type','=','out_invoice'],
           ['move_id.company_id','=',1],['move_id.state','=','posted'],
-          ['move_id.payment_state','in',['paid','in_payment']],
+          ['move_id.payment_state','in',['paid','in_payment','partial']],
           ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
           ['analytic_distribution','!=',false]]],
         {fields:['analytic_distribution','price_total','move_id'],limit:500,offset:off});
@@ -6342,7 +6344,7 @@ async function fpDesmCargar() {
     var cogaytCobroLines = await odooCall('account.move.line','search_read',
       [[['move_id.move_type','=','in_invoice'],
         ['move_id.company_id','=',1],['move_id.state','=','posted'],
-        ['move_id.payment_state','in',['paid','in_payment']],
+        ['move_id.payment_state','in',['paid','in_payment','partial']],
         ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
         ['analytic_distribution','!=',false],
         ['name','ilike','G3']]],
@@ -6433,7 +6435,7 @@ function fpDesmRender(anioSel) {
       return d.porOrg[b].total - d.porOrg[a].total;
     });
 
-    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;">';
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:12px;">';
 
     orgsOrden.forEach(function(orgKey) {
       var org   = d.porOrg[orgKey];
@@ -6502,89 +6504,105 @@ function fpDesmRender(anioSel) {
     orgContent.innerHTML = html;
   }
 
-  // ── VISTA COGAYT ─────────────────────────────────────────────
+  // ── VISTA COGAYT ─────────────────────────────────────────
   var cogaytContent = document.getElementById('fp-desm-cogayt-content');
   if (cogaytContent) {
-    var cEntries = Object.keys(d.cogaytPorCarta)
-      .map(function(cid){
-        var obj = d.cogaytPorCarta[cid];
-        return {cid:cid, nombre:obj.nombre||cid, monto:obj.total||0, detalle:obj.detalle||null};
-      })
-      .filter(function(e){ return e.monto > 0; })
-      .sort(function(a,b){ return b.monto-a.monto; });
+    var fmt  = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+    var fmtM = function(n){ return '$'+(parseFloat(n||0)/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'M'; };
+    var cobrosTotal = Object.values(d.cogaytPorCarta).reduce(function(s,v){return s+v.total;},0);
 
     var html2 = '';
 
-    // KPI cogayt — separado en liquidaciones y cobros
-    var cobrosTotal = cEntries.reduce(function(s,e){return s+e.monto;},0);
-    html2 += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">' +
+    // KPIs
+    var nConv = Object.keys(d.cogaytPorCarta).length;
+    html2 += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">' +
       '<div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val">'+fmtM(d.totalCogaytLiq||d.totalCogayt)+'</div><div class="c29-kpi-lbl">Liquidaciones cobradas</div></div>' +
-      '<div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val">'+fmtM(d.totalCogaytCobros||cobrosTotal)+'</div><div class="c29-kpi-lbl">Cobros a convenios</div></div>' +
-      '<div class="c29-kpi"><div class="c29-kpi-val">'+cEntries.filter(function(e){return e.cid!=='sin_carta';}).length+'</div><div class="c29-kpi-lbl">Convenios con cobro</div></div>' +
-      '<div class="c29-kpi"><div class="c29-kpi-val">'+(cEntries.length>0?fmtM((d.totalCogaytCobros||cobrosTotal)/Math.max(cEntries.length,1)):'—')+'</div><div class="c29-kpi-lbl">Promedio por convenio</div></div>' +
+      '<div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val">'+fmtM(cobrosTotal)+'</div><div class="c29-kpi-lbl">Cobros a convenios</div></div>' +
+      '<div class="c29-kpi"><div class="c29-kpi-val">'+nConv+'</div><div class="c29-kpi-lbl">Convenios con cobro</div></div>' +
+      '<div class="c29-kpi"><div class="c29-kpi-val">'+(nConv>0?fmtM(cobrosTotal/nConv):'—')+'</div><div class="c29-kpi-lbl">Promedio por convenio</div></div>' +
     '</div>';
 
-    // Nota explicativa
-    html2 += '<div class="alert info" style="margin-bottom:12px;padding:8px 14px;font-size:11px;">' +
+    html2 += '<div class="alert info" style="margin-bottom:14px;padding:8px 14px;font-size:11px;">' +
       '<i class="ti ti-info-circle"></i>' +
-      '<div><strong>Liquidaciones:</strong> total cobrado por Fundación (sin discriminar por convenio) · ' +
-      '<strong>Cobros a convenios:</strong> monto descontado a cada convenio vía factura de proveedor G3</div>' +
+      '<div><strong>Liquidaciones:</strong> total cobrado por Fundación (account 411000, sin discriminar por convenio) · ' +
+      '<strong>Cobros a convenios:</strong> descontado a cada convenio vía in_invoice G3</div>' +
     '</div>';
 
-    // Tabla COGAYT por convenio
-    html2 += '<div class="card"><div class="card-header"><div class="card-title"><i class="ti ti-percentage"></i> COGAYT cobrado por convenio — '+anioSel+'</div></div>' +
-    '<div class="card-body" style="padding:0;">' +
-    '<div class="table-wrap" style="border:none;border-radius:0;"><table style="font-size:11px;">' +
-    '<thead><tr><th>Código</th><th>Convenio</th><th style="text-align:right;">COGAYT cobrado</th><th style="text-align:right;">% del total</th></tr></thead>' +
-    '<tbody>';
-
-    cEntries.forEach(function(e){
-      var pct   = d.totalCogayt > 0 ? e.monto/d.totalCogayt : 0;
-      var orgK  = fpDesmOrgKey(e.nombre);
-      var color = (FP_DESM_ORGS[orgK]||{color:'#95a5a6'}).color;
-      var short = e.nombre;
-      var m3    = short.match(/^(?:10|14|5)\.[A-Z0-9.]+\s*-\s*(.+)$/);
-      if (m3) short = m3[1];
-      var codigo = e.nombre.split(' - ')[0];
-      html2 += '<tr>' +
-        '<td class="mono" style="font-size:10px;color:var(--muted);">'+codigo+'</td>' +
-        '<td>'+short+'</td>' +
-        '<td class="mono" style="text-align:right;font-weight:500;color:var(--success);">'+fmt(e.monto)+'</td>' +
-        '<td style="padding:4px 10px;">' +
-          '<div style="display:flex;align-items:center;gap:6px;">' +
-            '<div style="flex:1;background:var(--surface-alt);border-radius:2px;height:6px;overflow:hidden;">' +
-              '<div style="height:6px;background:'+color+';width:'+(pct*100).toFixed(1)+'%;"></div>' +
-            '</div>' +
-            '<span style="font-size:10px;width:36px;text-align:right;">'+(pct*100).toFixed(1)+'%</span>' +
-          '</div>' +
-        '</td>' +
-      '</tr>';
-      // Si tiene detalle (sin carta asignada), expandir
-      if (e.detalle && e.detalle.length > 0) {
-        e.detalle.slice(0,10).forEach(function(det){
-          html2 += '<tr style="background:var(--surface-alt);opacity:.8;">' +
-            '<td></td>' +
-            '<td style="padding:3px 8px 3px 24px;font-size:10px;color:var(--muted);" colspan="1">'+det.nombre.substring(0,60)+'</td>' +
-            '<td class="mono" style="text-align:right;font-size:10px;color:var(--success);">'+fmt(det.monto)+'</td>' +
-            '<td style="font-size:10px;color:var(--muted);">'+det.fecha+'</td>' +
-          '</tr>';
-        });
-        if (e.detalle.length > 10) {
-          html2 += '<tr><td colspan="4" style="text-align:center;font-size:10px;color:var(--muted);padding:4px;">... y '+(e.detalle.length-10)+' más</td></tr>';
-        }
-      }
+    // Agrupar cobros por organismo
+    var cogOrg = {};
+    Object.keys(d.cogaytPorCarta).forEach(function(cidStr){
+      var cid  = parseInt(cidStr)||cidStr;
+      var obj  = d.cogaytPorCarta[cidStr];
+      var nom  = obj.nombre||String(cid);
+      var org  = fpDesmOrgKey(nom);
+      if (!cogOrg[org]) cogOrg[org] = {total:0, convenios:{}};
+      cogOrg[org].total += obj.total;
+      cogOrg[org].convenios[cid] = {nombre:nom, total:obj.total};
     });
 
-    html2 += '<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--surface-alt);">' +
-      '<td colspan="2" style="padding:8px 10px;">Total COGAYT</td>' +
-      '<td class="mono" style="text-align:right;color:var(--success);">'+fmt(d.totalCogayt)+'</td>' +
-      '<td></td></tr>';
+    var orgsOrden = Object.keys(cogOrg).sort(function(a,b){return cogOrg[b].total-cogOrg[a].total;});
 
-    html2 += '</tbody></table></div></div></div>';
+    html2 += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:12px;">';
+
+    orgsOrden.forEach(function(orgKey){
+      var org  = cogOrg[orgKey];
+      var meta = FP_DESM_ORGS[orgKey]||{label:orgKey,color:'#95a5a6'};
+      var pct  = cobrosTotal > 0 ? org.total/cobrosTotal : 0;
+
+      var convOrden = Object.keys(org.convenios).sort(function(a,b){
+        return org.convenios[b].total - org.convenios[a].total;
+      });
+
+      var convRows = convOrden.map(function(cid){
+        var conv     = org.convenios[cid];
+        var shortName= conv.nombre;
+        var m2       = shortName.match(/^(?:10|14|5)\.[A-Z0-9.]+\s*[-–]\s*(.+)$/);
+        if (m2) shortName = m2[1];
+        var codigo   = conv.nombre.split(/\s*[-–]\s*/)[0];
+        return '<tr>' +
+          '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);white-space:nowrap;">'+codigo+'</td>' +
+          '<td style="font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+conv.nombre+'">'+shortName+'</td>' +
+          '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;color:var(--success);">'+fmt(conv.total)+'</td>' +
+        '</tr>';
+      }).join('');
+
+      html2 +=
+        '<div class="card" style="margin:0;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--border);" onclick="fpDesmToggle('cog-org-'+orgKey+'')">' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<span style="width:10px;height:10px;border-radius:50%;background:'+meta.color+';display:inline-block;flex-shrink:0;"></span>' +
+              '<strong style="font-size:12px;">'+meta.label+'</strong>' +
+              '<span style="font-size:10px;color:var(--muted);">('+convOrden.length+' convenios)</span>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:10px;">' +
+              '<span class="mono" style="font-size:13px;font-weight:600;color:'+meta.color+';">'+fmtM(org.total)+'</span>' +
+              '<span style="font-size:10px;color:var(--muted);">'+(pct*100).toFixed(1)+'%</span>' +
+              '<i class="ti ti-chevron-down" style="font-size:12px;color:var(--muted);"></i>' +
+            '</div>' +
+          '</div>' +
+          '<div style="height:3px;background:var(--surface-alt);">' +
+            '<div style="height:3px;background:'+meta.color+';width:'+(pct*100).toFixed(1)+'%;"></div>' +
+          '</div>' +
+          '<div id="cog-org-'+orgKey+'" style="display:none;">' +
+            '<table style="width:100%;font-size:11px;border-collapse:collapse;">' +
+              '<thead><tr style="background:var(--surface-alt);">' +
+                '<th style="padding:5px 8px 5px 20px;font-size:10px;text-align:left;">Código</th>' +
+                '<th style="font-size:10px;text-align:left;">Convenio</th>' +
+                '<th style="font-size:10px;text-align:right;">COGAYT cobrado</th>' +
+              '</tr></thead>' +
+              '<tbody>'+convRows+'</tbody>' +
+              '<tfoot><tr style="background:'+meta.color+'11;font-weight:700;border-top:1px solid var(--border);">' +
+                '<td colspan="2" style="padding:6px 8px 6px 20px;font-size:11px;">Total '+meta.label+'</td>' +
+                '<td class="mono" style="text-align:right;color:'+meta.color+';">'+fmt(org.total)+'</td>' +
+              '</tr></tfoot>' +
+            '</table>' +
+          '</div>' +
+        '</div>';
+    });
+
+    html2 += '</div>';
     cogaytContent.innerHTML = html2;
   }
-}
-
 function fpDesmToggle(id) {
   var el = document.getElementById(id);
   if (el) el.style.display = el.style.display==='none' ? 'block' : 'none';
