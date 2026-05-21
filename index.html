@@ -3297,12 +3297,10 @@ function c29AbrirDetalle(idx) {
   };
   var fRow = function(f){
     return '<tr>' +
-      '<td style="font-size:10px;color:var(--muted);white-space:nowrap;">'+(f.invoice_date||f.date||'—')+'</td>' +
-      '<td class="mono" style="font-size:10px;">'+(f.name||'—')+'</td>' +
-      '<td class="mono" style="text-align:right;">'+fmt(f.amount_total)+'</td>' +
-      '<td>'+fmtF(f)+'</td>' +
-      '<td style="font-size:10px;color:var(--muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;">'+(f.partner_id&&f.partner_id[1]||'—')+'</td>' +
-    '</tr>';
+          '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);white-space:nowrap;">'+codigo+'</td>' +
+          '<td style="font-size:11px;" title="'+conv.nombre+'">'+shortName+'</td>' +
+          '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;color:var(--success);white-space:nowrap;padding-right:10px;">'+fmt(conv.total)+'</td>' +
+        '</tr>';
   };
   var tbl = function(rows, empty){
     return '<div class="table-wrap" style="margin-top:8px;margin-bottom:0;">' +
@@ -6457,11 +6455,13 @@ function fpDesmRender(anioSel) {
         if (m2) shortName = m2[1];
         return '<tr onclick="fpDesmToggleConv(\'desm-det-'+cid+'\')" style="cursor:pointer;">' +
           '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);white-space:nowrap;">'+conv.nombre.split(' - ')[0]+'</td>' +
-          '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);">'+conv.nombre.split(' - ')[0]+'</td>' +
-          '<td style="font-size:10px;" title="'+conv.nombre+'">'+shortName+'</td>' +
-          '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;white-space:nowrap;">'+fmt(conv.total)+'</td>' +
+          '<td style="font-size:11px;" title="'+conv.nombre+'">'+shortName+'</td>' +
+          '<td class="mono" style="text-align:right;font-size:11px;font-weight:600;white-space:nowrap;padding-right:10px;">'+fmt(conv.total)+'</td>' +
+          '<td class="mono" style="text-align:right;font-size:11px;color:var(--success);white-space:nowrap;padding-right:10px;">'+(cogayt>0?fmt(cogayt):'—')+'</td>' +
         '</tr>';
       }).join('');
+
+
 
       html +=
         '<div class="card" style="margin:0;">' +
@@ -6562,8 +6562,8 @@ function fpDesmRender(anioSel) {
         var codigo   = conv.nombre.split(/\s*[-–]\s*/)[0];
         return '<tr>' +
           '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);white-space:nowrap;">'+codigo+'</td>' +
-          '<td style="font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+conv.nombre+'">'+shortName+'</td>' +
-          '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;color:var(--success);">'+fmt(conv.total)+'</td>' +
+          '<td style="font-size:11px;" title="'+conv.nombre+'">'+shortName+'</td>' +
+          '<td class="mono" style="text-align:right;font-size:11px;font-weight:600;white-space:nowrap;padding-right:10px;">'+fmt(conv.total)+'</td>' +
         '</tr>';
       }).join('');
 
