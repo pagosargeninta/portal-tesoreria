@@ -1697,6 +1697,7 @@ tbody tr:hover td { background: #f8faf9; }
         <button class="tab-btn active" onclick="fpPageTab(this,'gastos')"><i class="ti ti-chart-bar"></i> Gastos</button>
         <button class="tab-btn" onclick="fpPageTab(this,'ingresos')"><i class="ti ti-building-bank"></i> Colocaciones</button>
         <button class="tab-btn" onclick="fpPageTab(this,'indicadores')"><i class="ti ti-gauge"></i> Indicadores</button>
+        <button class="tab-btn" onclick="fpPageTab(this,'desembolsos');fpDesmCargar()"><i class="ti ti-send"></i> Desembolsos a Convenios</button>
       </div>
 
       <!-- TAB GASTOS -->
@@ -1888,6 +1889,50 @@ tbody tr:hover td { background: #f8faf9; }
           <div>Pestaña en construcción — disponible próximamente.</div>
         </div>
       </div><!-- end fp-tab-indicadores -->
+
+      <!-- ══ TAB DESEMBOLSOS ══ -->
+      <div id="fp-tab-desembolsos" style="display:none;">
+
+        <!-- Sub-tabs -->
+        <div class="tab-row" id="fp-desm-subtabs" style="margin-bottom:14px;">
+          <button class="tab-btn active" onclick="fpDesmSubTab(this,'organismos')"><i class="ti ti-building"></i> Por organismo</button>
+          <button class="tab-btn" onclick="fpDesmSubTab(this,'cogayt')"><i class="ti ti-percentage"></i> COGAYT</button>
+        </div>
+
+        <!-- KPIs desembolsos -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">
+          <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="fp-desm-k-total">—</div><div class="c29-kpi-lbl">Total desembolsado</div></div>
+          <div class="c29-kpi"><div class="c29-kpi-val" id="fp-desm-k-org">—</div><div class="c29-kpi-lbl">Organismos activos</div></div>
+          <div class="c29-kpi"><div class="c29-kpi-val" id="fp-desm-k-conv">—</div><div class="c29-kpi-lbl">Convenios activos</div></div>
+          <div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val" id="fp-desm-k-cogayt">—</div><div class="c29-kpi-lbl">COGAYT cobrado</div></div>
+        </div>
+
+        <!-- Loading -->
+        <div id="fp-desm-loading" style="display:none;text-align:center;padding:50px;color:var(--muted);">
+          <i class="ti ti-loader" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+          <div id="fp-desm-loading-msg" style="font-size:12px;">Consultando Odoo...</div>
+        </div>
+
+        <!-- Tab: Organismos -->
+        <div id="fp-desm-tab-organismos">
+          <!-- Filtro año -->
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+            <select id="fp-desm-anio" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;color:var(--text);background:var(--surface);">
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="todos">Todos los períodos</option>
+            </select>
+            <button class="btn btn-primary" onclick="fpDesmCargar()" style="padding:5px 12px;font-size:12px;"><i class="ti ti-refresh"></i> Actualizar</button>
+          </div>
+          <div id="fp-desm-org-content"></div>
+        </div>
+
+        <!-- Tab: COGAYT -->
+        <div id="fp-desm-tab-cogayt" style="display:none;">
+          <div id="fp-desm-cogayt-content"></div>
+        </div>
+
+      </div><!-- end fp-tab-desembolsos -->
 
     </div>
 
@@ -5805,7 +5850,7 @@ var FP_ING_PRESUPUESTO = 2043863014;
 function fpPageTab(btn, tab) {
   document.querySelectorAll('#fp-page-tabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
   btn.classList.add('active');
-  ['gastos','ingresos','indicadores'].forEach(function(t){
+  ['gastos','ingresos','indicadores','desembolsos'].forEach(function(t){
     var el = document.getElementById('fp-tab-'+t);
     if (el) el.style.display = t===tab ? 'block' : 'none';
   });
@@ -6163,6 +6208,322 @@ function fpColRow(nombre, detalle, capital, intereses, estado, varMes, color) {
     '<td><span style="font-size:9px;padding:2px 6px;border-radius:10px;background:'+(estado==='Cerrado'?'rgba(39,174,96,.15)':'rgba(52,152,219,.15)')+';color:'+(estado==='Cerrado'?'var(--success)':'#2980b9')+';">'+estado+'</span></td>' +
     '<td class="mono" style="text-align:right;font-size:10px;color:var(--muted);">'+(varMes!==null&&varMes!==undefined?fmt(varMes):'')+'</td>' +
   '</tr>';
+}
+// ═══════════════════════════════════════════════════════════════
+// DESEMBOLSOS A CONVENIOS — Fondos Propios FA
+// Fuente: account.analytic.line, general_account_id=2379 (FdT)
+// amount < 0 = desembolso real
+// ═══════════════════════════════════════════════════════════════
+var _fpDesmData     = null;
+var _fpDesmCargado  = false;
+
+// Organismos conocidos y su label para display
+var FP_DESM_ORGS = {
+  'SENASA': {label:'SENASA', color:'#2980b9'},
+  'INA':    {label:'INA',    color:'#27ae60'},
+  'INIDEP': {label:'INIDEP', color:'#8e44ad'},
+  'INASE':  {label:'INASE',  color:'#e67e22'},
+  'CFP':    {label:'CFP',    color:'#16a085'},
+  'GMZA':   {label:'GMZA',   color:'#2c3e50'},
+  'INTA':   {label:'INTA',   color:'#c0392b'},
+  'GNA':    {label:'GNA',    color:'#d35400'},
+  'BID':    {label:'BID',    color:'#1abc9c'},
+  'CCT':    {label:'CCT',    color:'#7f8c8d'},
+  'GIRSAR': {label:'GIRSAR', color:'#f39c12'},
+  'INNOVA': {label:'INNOVA', color:'#3498db'},
+  'INAFCI': {label:'INAFCI', color:'#9b59b6'},
+  'IMPULS': {label:'Impulsa',color:'#e74c3c'},
+  'DEC':    {label:'Delegaciones INTA', color:'#795548'},
+  'INT':    {label:'INTA Internacional', color:'#607d8b'},
+  'OTRO':   {label:'Otros', color:'#95a5a6'},
+};
+
+function fpDesmSubTab(btn, sub) {
+  document.querySelectorAll('#fp-desm-subtabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  ['organismos','cogayt'].forEach(function(t){
+    var el = document.getElementById('fp-desm-tab-'+t);
+    if (el) el.style.display = t===sub ? 'block' : 'none';
+  });
+}
+
+function fpDesmOrgKey(nombre) {
+  // Extraer organismo del nombre de la carta
+  // 10.SENASA.28.1 → SENASA
+  // 10.INA.SC.LH → INA
+  // 14.INTA.DEC.31 → DEC
+  // 5.2.122 → INT (internacional)
+  if (!nombre) return 'OTRO';
+  var m = nombre.match(/^10\.([A-Z]+)\./);
+  if (m) return m[1];
+  if (nombre.indexOf('14.INTA.DEC') >= 0) return 'DEC';
+  if (nombre.indexOf('5.2.') >= 0) return 'INT';
+  return 'OTRO';
+}
+
+async function fpDesmCargar() {
+  var loading = document.getElementById('fp-desm-loading');
+  var anioSel = (document.getElementById('fp-desm-anio')||{value:'2026'}).value||'2026';
+  var desde   = anioSel === 'todos' ? '2020-01-01' : anioSel+'-01-01';
+  var hasta   = anioSel === 'todos' ? '2030-12-31' : anioSel+'-12-31';
+
+  if (loading) { loading.style.display='block'; loading.querySelector('#fp-desm-loading-msg').textContent='Cargando cartas analíticas...'; }
+  var orgContent   = document.getElementById('fp-desm-org-content');
+  var cogaytContent= document.getElementById('fp-desm-cogayt-content');
+  if (orgContent)    orgContent.innerHTML='';
+  if (cogaytContent) cogaytContent.innerHTML='';
+
+  ['fp-desm-k-total','fp-desm-k-org','fp-desm-k-conv','fp-desm-k-cogayt'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.textContent='—';
+  });
+
+  try {
+    // 1. Todas las cartas analíticas activas (10.*, 5.2.*, 14.DEC.*)
+    if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando cartas analíticas...';
+    var todasCartas = [];
+    var PAGE=500, off=0;
+    while (true) {
+      var pg = await odooCall('account.analytic.account','search_read',
+        [[['active','=',true]]],
+        {fields:['id','name'],limit:PAGE,offset:off,order:'name asc'});
+      pg.forEach(function(c){ todasCartas.push(c); });
+      if (pg.length < PAGE) break;
+      off += PAGE;
+    }
+    // Filtrar relevantes
+    var cartas = todasCartas.filter(function(c){
+      if (!c.name) return false;
+      return c.name.match(/^10\./) || c.name.match(/^14\.INTA\.DEC/) || c.name.match(/^5\.2\./);
+    });
+    var cartaIds  = cartas.map(function(c){ return c.id; });
+    var cartaById = {};
+    cartas.forEach(function(c){ cartaById[c.id]=c.name; });
+
+    // 2. Líneas analíticas de desembolsos (FdT account_id=2379, amount<0) en el período
+    if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando desembolsos...';
+    var lineas = [];
+    var total  = await odooCall('account.analytic.line','search_count',
+      [[['x_plan2_id','in',cartaIds],['general_account_id','=',2379],
+        ['amount','<',0],['date','>=',desde],['date','<=',hasta]]]);
+
+    off = 0;
+    while (off < total) {
+      if (loading) loading.querySelector('#fp-desm-loading-msg').textContent =
+        'Desembolsos: '+Math.min(off+500,total)+' / '+total;
+      var pg2 = await odooCall('account.analytic.line','search_read',
+        [[['x_plan2_id','in',cartaIds],['general_account_id','=',2379],
+          ['amount','<',0],['date','>=',desde],['date','<=',hasta]]],
+        {fields:['x_plan2_id','amount','date'],limit:500,offset:off,order:'date desc'});
+      pg2.forEach(function(l){ lineas.push(l); });
+      off += 500;
+    }
+
+    // 3. COGAYT: out_invoice a Fundación con analítica en cartas de convenios
+    if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando COGAYT...';
+    var cogaytLineas = await odooCall('account.analytic.line','search_read',
+      [[['x_plan2_id','in',cartaIds],['general_account_id','=',2395],
+        ['date','>=',desde],['date','<=',hasta]]],
+      {fields:['x_plan2_id','amount','date'],limit:5000});
+
+    // 4. Agregar por organismo y por carta
+    var porOrg   = {};  // orgKey → {total, convenios:{cartaId→total}}
+    var porCarta = {};  // cartaId → total
+
+    lineas.forEach(function(l){
+      var cid  = l.x_plan2_id && l.x_plan2_id[0];
+      if (!cid) return;
+      var nom  = cartaById[cid] || '';
+      var org  = fpDesmOrgKey(nom);
+      var monto= Math.abs(l.amount);
+
+      if (!porOrg[org]) porOrg[org] = {total:0, convenios:{}};
+      porOrg[org].total += monto;
+      if (!porOrg[org].convenios[cid]) porOrg[org].convenios[cid] = {nombre:nom, total:0};
+      porOrg[org].convenios[cid].total += monto;
+
+      if (!porCarta[cid]) porCarta[cid] = 0;
+      porCarta[cid] += monto;
+    });
+
+    // COGAYT por carta
+    var cogaytPorCarta = {};
+    var totalCogayt = 0;
+    cogaytLineas.forEach(function(l){
+      var cid  = l.x_plan2_id && l.x_plan2_id[0];
+      if (!cid) return;
+      var monto = Math.abs(l.amount);
+      if (!cogaytPorCarta[cid]) cogaytPorCarta[cid]=0;
+      cogaytPorCarta[cid] += monto;
+      totalCogayt += monto;
+    });
+
+    _fpDesmData = {porOrg:porOrg, porCarta:porCarta, cogaytPorCarta:cogaytPorCarta,
+                  totalCogayt:totalCogayt, cartaById:cartaById};
+
+    if (loading) loading.style.display='none';
+    fpDesmRender(anioSel);
+
+  } catch(e) {
+    if (loading) loading.innerHTML='<div class="alert danger" style="margin:16px;"><i class="ti ti-x"></i><div>Error: '+e.message+'</div></div>';
+    console.error(e);
+  }
+}
+
+function fpDesmRender(anioSel) {
+  var d = _fpDesmData;
+  if (!d) return;
+  var fmt  = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+  var fmtM = function(n){ return '$'+(parseFloat(n||0)/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'M'; };
+
+  // KPIs
+  var totalDesm = Object.values(d.porOrg).reduce(function(s,o){return s+o.total;},0);
+  var totalOrgs = Object.keys(d.porOrg).filter(function(k){return d.porOrg[k].total>0;}).length;
+  var totalConv = Object.keys(d.porCarta).length;
+  var setK = function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
+  setK('fp-desm-k-total',  fmtM(totalDesm));
+  setK('fp-desm-k-org',    totalOrgs);
+  setK('fp-desm-k-conv',   totalConv);
+  setK('fp-desm-k-cogayt', fmtM(d.totalCogayt));
+
+  // ── VISTA ORGANISMOS ──────────────────────────────────────────
+  var orgContent = document.getElementById('fp-desm-org-content');
+  if (orgContent) {
+    // Ordenar organismos por monto descendente
+    var orgsOrden = Object.keys(d.porOrg).sort(function(a,b){
+      return d.porOrg[b].total - d.porOrg[a].total;
+    });
+
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;">';
+
+    orgsOrden.forEach(function(orgKey) {
+      var org   = d.porOrg[orgKey];
+      var meta  = FP_DESM_ORGS[orgKey] || {label:orgKey, color:'#95a5a6'};
+      var pct   = totalDesm > 0 ? org.total/totalDesm : 0;
+
+      // Convenios ordenados por monto
+      var convOrden = Object.keys(org.convenios).sort(function(a,b){
+        return org.convenios[b].total - org.convenios[a].total;
+      });
+
+      var convRows = convOrden.map(function(cid) {
+        var conv    = org.convenios[cid];
+        var cogayt  = d.cogaytPorCarta[cid]||0;
+        // Nombre corto: quitar prefijo "10.XXX." y sufijo " - "
+        var shortName = conv.nombre;
+        var m2 = shortName.match(/^(?:10|14|5)\.[A-Z0-9.]+\s*-\s*(.+)$/);
+        if (m2) shortName = m2[1];
+        return '<tr onclick="fpDesmToggleConv(\'desm-det-'+cid+'\')" style="cursor:pointer;">' +
+          '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);white-space:nowrap;">'+conv.nombre.split(' - ')[0]+'</td>' +
+          '<td style="font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+conv.nombre+'">'+shortName+'</td>' +
+          '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;">'+fmt(conv.total)+'</td>' +
+          '<td class="mono" style="text-align:right;font-size:10px;color:var(--success);">'+(cogayt>0?fmt(cogayt):'—')+'</td>' +
+        '</tr>';
+      }).join('');
+
+      html +=
+        '<div class="card" style="margin:0;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--border);" onclick="fpDesmToggle(\'desm-org-'+orgKey+'\')">' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<span style="width:10px;height:10px;border-radius:50%;background:'+meta.color+';display:inline-block;flex-shrink:0;"></span>' +
+              '<strong style="font-size:12px;color:var(--text);">'+meta.label+'</strong>' +
+              '<span style="font-size:10px;color:var(--muted);">('+convOrden.length+' convenios)</span>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:10px;">' +
+              '<span class="mono" style="font-size:13px;font-weight:600;color:'+meta.color+';">'+fmtM(org.total)+'</span>' +
+              '<span style="font-size:10px;color:var(--muted);">'+(pct*100).toFixed(1)+'%</span>' +
+              '<i class="ti ti-chevron-down" style="font-size:12px;color:var(--muted);"></i>' +
+            '</div>' +
+          '</div>' +
+          // Barra progreso
+          '<div style="height:3px;background:var(--surface-alt);">' +
+            '<div style="height:3px;background:'+meta.color+';width:'+(pct*100).toFixed(1)+'%;"></div>' +
+          '</div>' +
+          // Tabla convenios (colapsada por defecto)
+          '<div id="desm-org-'+orgKey+'" style="display:none;">' +
+            '<table style="width:100%;font-size:11px;border-collapse:collapse;">' +
+              '<thead><tr style="background:var(--surface-alt);">' +
+                '<th style="padding:5px 8px 5px 20px;font-size:10px;text-align:left;">Código</th>' +
+                '<th style="font-size:10px;text-align:left;">Convenio</th>' +
+                '<th style="font-size:10px;text-align:right;">Desembolsado</th>' +
+                '<th style="font-size:10px;text-align:right;color:var(--success);">COGAYT</th>' +
+              '</tr></thead>' +
+              '<tbody>'+convRows+'</tbody>' +
+              '<tfoot><tr style="background:'+meta.color+'11;font-weight:700;border-top:1px solid var(--border);">' +
+                '<td colspan="2" style="padding:6px 8px 6px 20px;font-size:11px;">Total '+meta.label+'</td>' +
+                '<td class="mono" style="text-align:right;color:'+meta.color+';">'+fmt(org.total)+'</td>' +
+                '<td class="mono" style="text-align:right;color:var(--success);">'+(d.totalCogayt>0?'':'')+' </td>' +
+              '</tr></tfoot>' +
+            '</table>' +
+          '</div>' +
+        '</div>';
+    });
+
+    html += '</div>';
+    orgContent.innerHTML = html;
+  }
+
+  // ── VISTA COGAYT ─────────────────────────────────────────────
+  var cogaytContent = document.getElementById('fp-desm-cogayt-content');
+  if (cogaytContent) {
+    var cEntries = Object.keys(d.cogaytPorCarta)
+      .map(function(cid){ return {cid:cid, nombre:d.cartaById[cid]||cid, monto:d.cogaytPorCarta[cid]}; })
+      .sort(function(a,b){ return b.monto-a.monto; });
+
+    var html2 = '';
+
+    // KPI cogayt
+    html2 += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">' +
+      '<div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val">'+fmtM(d.totalCogayt)+'</div><div class="c29-kpi-lbl">Total COGAYT cobrado</div></div>' +
+      '<div class="c29-kpi"><div class="c29-kpi-val">'+cEntries.length+'</div><div class="c29-kpi-lbl">Convenios con COGAYT</div></div>' +
+      '<div class="c29-kpi"><div class="c29-kpi-val">'+(cEntries.length>0?fmtM(d.totalCogayt/cEntries.length):'—')+'</div><div class="c29-kpi-lbl">Promedio por convenio</div></div>' +
+    '</div>';
+
+    // Tabla COGAYT por convenio
+    html2 += '<div class="card"><div class="card-header"><div class="card-title"><i class="ti ti-percentage"></i> COGAYT cobrado por convenio — '+anioSel+'</div></div>' +
+    '<div class="card-body" style="padding:0;">' +
+    '<div class="table-wrap" style="border:none;border-radius:0;"><table style="font-size:11px;">' +
+    '<thead><tr><th>Código</th><th>Convenio</th><th style="text-align:right;">COGAYT cobrado</th><th style="text-align:right;">% del total</th></tr></thead>' +
+    '<tbody>';
+
+    cEntries.forEach(function(e){
+      var pct   = d.totalCogayt > 0 ? e.monto/d.totalCogayt : 0;
+      var orgK  = fpDesmOrgKey(e.nombre);
+      var color = (FP_DESM_ORGS[orgK]||{color:'#95a5a6'}).color;
+      var short = e.nombre;
+      var m3    = short.match(/^(?:10|14|5)\.[A-Z0-9.]+\s*-\s*(.+)$/);
+      if (m3) short = m3[1];
+      html2 += '<tr>' +
+        '<td class="mono" style="font-size:10px;color:var(--muted);">'+e.nombre.split(' - ')[0]+'</td>' +
+        '<td>'+short+'</td>' +
+        '<td class="mono" style="text-align:right;font-weight:500;color:var(--success);">'+fmt(e.monto)+'</td>' +
+        '<td style="padding:4px 10px;">' +
+          '<div style="display:flex;align-items:center;gap:6px;">' +
+            '<div style="flex:1;background:var(--surface-alt);border-radius:2px;height:6px;overflow:hidden;">' +
+              '<div style="height:6px;background:'+color+';width:'+(pct*100).toFixed(1)+'%;"></div>' +
+            '</div>' +
+            '<span style="font-size:10px;width:36px;text-align:right;">'+(pct*100).toFixed(1)+'%</span>' +
+          '</div>' +
+        '</td>' +
+      '</tr>';
+    });
+
+    html2 += '<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--surface-alt);">' +
+      '<td colspan="2" style="padding:8px 10px;">Total COGAYT</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">'+fmt(d.totalCogayt)+'</td>' +
+      '<td></td></tr>';
+
+    html2 += '</tbody></table></div></div></div>';
+    cogaytContent.innerHTML = html2;
+  }
+}
+
+function fpDesmToggle(id) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+function fpDesmToggleConv(id) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = el.style.display==='none' ? 'table-row' : 'none';
 }
 </script>
 </body>
