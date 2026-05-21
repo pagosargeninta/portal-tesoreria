@@ -6262,23 +6262,22 @@ function fpDesmOrgKey(nombre) {
 }
 
 async function fpDesmCargar() {
-  var loading = document.getElementById('fp-desm-loading');
-  var anioSel = (document.getElementById('fp-desm-anio')||{value:'2026'}).value||'2026';
-  var desde   = anioSel === 'todos' ? '2020-01-01' : anioSel+'-01-01';
-  var hasta   = anioSel === 'todos' ? '2030-12-31' : anioSel+'-12-31';
+  var loading  = document.getElementById('fp-desm-loading');
+  var anioSel  = (document.getElementById('fp-desm-anio')||{value:'2026'}).value||'2026';
+  var desde    = anioSel==='todos' ? '2020-01-01' : anioSel+'-01-01';
+  var hasta    = anioSel==='todos' ? '2030-12-31' : anioSel+'-12-31';
 
-  if (loading) { loading.style.display='block'; loading.querySelector('#fp-desm-loading-msg').textContent='Cargando cartas analíticas...'; }
-  var orgContent   = document.getElementById('fp-desm-org-content');
-  var cogaytContent= document.getElementById('fp-desm-cogayt-content');
+  if (loading) { loading.style.display='block'; loading.querySelector('#fp-desm-loading-msg').textContent='Cargando...'; }
+  var orgContent    = document.getElementById('fp-desm-org-content');
+  var cogaytContent = document.getElementById('fp-desm-cogayt-content');
   if (orgContent)    orgContent.innerHTML='';
   if (cogaytContent) cogaytContent.innerHTML='';
-
   ['fp-desm-k-total','fp-desm-k-org','fp-desm-k-conv','fp-desm-k-cogayt'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.textContent='—';
   });
 
   try {
-    // 1. Todas las cartas analíticas activas (10.*, 5.2.*, 14.DEC.*)
+    // 1. Todas las cartas analíticas relevantes (10.*, 14.DEC.*, 5.2.*)
     if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando cartas analíticas...';
     var todasCartas = [];
     var PAGE=500, off=0;
@@ -6290,76 +6289,92 @@ async function fpDesmCargar() {
       if (pg.length < PAGE) break;
       off += PAGE;
     }
-    // Filtrar relevantes
     var cartas = todasCartas.filter(function(c){
       if (!c.name) return false;
       return c.name.match(/^10\./) || c.name.match(/^14\.INTA\.DEC/) || c.name.match(/^5\.2\./);
     });
     var cartaIds  = cartas.map(function(c){ return c.id; });
     var cartaById = {};
-    cartas.forEach(function(c){ cartaById[c.id]=c.name; });
+    cartas.forEach(function(c){ cartaById[c.id] = c.name; });
 
-    // 2. Líneas analíticas de desembolsos (FdT account_id=2379, amount<0) en el período
+    // 2. DESEMBOLSOS: account.move.line con account_id=2379 (FdT), out_invoice, company=1
+    //    La carta está en analytic_distribution (JSON key)
     if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando desembolsos...';
-    var lineas = [];
-    var total  = await odooCall('account.analytic.line','search_count',
-      [[['x_plan2_id','in',cartaIds],['general_account_id','=',2379],
-        ['company_id','=',1],['amount','<',0],['date','>=',desde],['date','<=',hasta]]]);
+    var totalMov = await odooCall('account.move.line','search_count',
+      [[['account_id','=',2379],['move_id.move_type','=','out_invoice'],
+        ['move_id.company_id','=',1],['move_id.state','=','posted'],
+        ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
+        ['analytic_distribution','!=',false]]]);
 
+    var movLines = [];
     off = 0;
-    while (off < total) {
+    while (off < totalMov) {
       if (loading) loading.querySelector('#fp-desm-loading-msg').textContent =
-        'Desembolsos: '+Math.min(off+500,total)+' / '+total;
-      var pg2 = await odooCall('account.analytic.line','search_read',
-        [[['x_plan2_id','in',cartaIds],['general_account_id','=',2379],
-          ['company_id','=',1],['amount','<',0],['date','>=',desde],['date','<=',hasta]]],
-        {fields:['x_plan2_id','amount','date'],limit:500,offset:off,order:'date desc'});
-      pg2.forEach(function(l){ lineas.push(l); });
+        'Desembolsos: '+Math.min(off+500,totalMov)+' / '+totalMov;
+      var pg2 = await odooCall('account.move.line','search_read',
+        [[['account_id','=',2379],['move_id.move_type','=','out_invoice'],
+          ['move_id.company_id','=',1],['move_id.state','=','posted'],
+          ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
+          ['analytic_distribution','!=',false]]],
+        {fields:['analytic_distribution','price_total','move_id'],limit:500,offset:off});
+      pg2.forEach(function(l){ movLines.push(l); });
       off += 500;
     }
 
-    // 3. COGAYT: out_invoice a Fundación con analítica en cartas de convenios
+    // 3. COGAYT: account.analytic.line, cuenta 411000 (id=2395), company=1, amount<0
     if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando COGAYT...';
-    // COGAYT: cuenta 411000 (id=2395), company Fundación ArgenINTA, amount < 0 = ingreso real
     var cogaytLineas = await odooCall('account.analytic.line','search_read',
-      [[['x_plan2_id','in',cartaIds],['general_account_id','=',2395],
-        ['company_id','=',1],['amount','<',0],['date','>=',desde],['date','<=',hasta]]],
-      {fields:['x_plan2_id','amount','date'],limit:10000});
+      [[['general_account_id','=',2395],['company_id','=',1],
+        ['date','>=',desde],['date','<=',hasta]]],
+      {fields:['x_plan2_id','amount','date','name'],limit:20000});
 
-    // 4. Agregar por organismo y por carta
-    var porOrg   = {};  // orgKey → {total, convenios:{cartaId→total}}
-    var porCarta = {};  // cartaId → total
+    // 4. Agregar desembolsos por organismo y carta
+    var porOrg   = {};
+    var porCarta = {};
 
-    lineas.forEach(function(l){
-      var cid  = l.x_plan2_id && l.x_plan2_id[0];
-      if (!cid) return;
-      var nom  = cartaById[cid] || '';
-      var org  = fpDesmOrgKey(nom);
-      var monto= Math.abs(l.amount);
+    movLines.forEach(function(l){
+      if (!l.analytic_distribution) return;
+      Object.keys(l.analytic_distribution).forEach(function(cidStr){
+        var cid   = parseInt(cidStr);
+        var nom   = cartaById[cid];
+        if (!nom) return;  // solo cartas 10.*, 14.DEC.*, 5.2.*
+        var org   = fpDesmOrgKey(nom);
+        var pct   = parseFloat(l.analytic_distribution[cidStr]||100) / 100;
+        var monto = (l.price_total||0) * pct;
+        if (monto <= 0) return;
 
-      if (!porOrg[org]) porOrg[org] = {total:0, convenios:{}};
-      porOrg[org].total += monto;
-      if (!porOrg[org].convenios[cid]) porOrg[org].convenios[cid] = {nombre:nom, total:0};
-      porOrg[org].convenios[cid].total += monto;
+        if (!porOrg[org]) porOrg[org] = {total:0, convenios:{}};
+        porOrg[org].total += monto;
+        if (!porOrg[org].convenios[cid]) porOrg[org].convenios[cid] = {nombre:nom, total:0};
+        porOrg[org].convenios[cid].total += monto;
 
-      if (!porCarta[cid]) porCarta[cid] = 0;
-      porCarta[cid] += monto;
+        if (!porCarta[cid]) porCarta[cid] = 0;
+        porCarta[cid] += monto;
+      });
     });
 
-    // COGAYT por carta
+    // 5. Agregar COGAYT por carta (x_plan2_id puede ser false — igual sumamos al total)
     var cogaytPorCarta = {};
-    var totalCogayt = 0;
+    var totalCogayt    = 0;
     cogaytLineas.forEach(function(l){
-      var cid   = l.x_plan2_id && l.x_plan2_id[0];
-      if (!cid) return;
-      var monto = Math.abs(l.amount);  // amount negativo = ingreso real
-      if (!cogaytPorCarta[cid]) cogaytPorCarta[cid] = 0;
-      cogaytPorCarta[cid] += monto;
+      var monto = Math.abs(l.amount);
       totalCogayt += monto;
+      var cid = l.x_plan2_id && l.x_plan2_id[0];
+      if (cid) {
+        if (!cogaytPorCarta[cid]) cogaytPorCarta[cid] = {nombre:l.x_plan2_id[1]||String(cid), total:0};
+        cogaytPorCarta[cid].total += monto;
+      } else {
+        // Sin carta — agrupar por descripción del movimiento para identificar convenio
+        var key = 'sin_carta';
+        if (!cogaytPorCarta[key]) cogaytPorCarta[key] = {nombre:'Sin carta asignada', total:0, detalle:[]};
+        cogaytPorCarta[key].total += monto;
+        if (l.name) cogaytPorCarta[key].detalle = (cogaytPorCarta[key].detalle||[]).concat([{nombre:l.name.split('\n')[0], monto:monto, fecha:l.date}]);
+      }
     });
 
-    _fpDesmData = {porOrg:porOrg, porCarta:porCarta, cogaytPorCarta:cogaytPorCarta,
-                  totalCogayt:totalCogayt, cartaById:cartaById};
+    _fpDesmData = {porOrg:porOrg, porCarta:porCarta,
+                  cogaytPorCarta:cogaytPorCarta, totalCogayt:totalCogayt,
+                  cartaById:cartaById};
 
     if (loading) loading.style.display='none';
     fpDesmRender(anioSel);
@@ -6369,7 +6384,6 @@ async function fpDesmCargar() {
     console.error(e);
   }
 }
-
 function fpDesmRender(anioSel) {
   var d = _fpDesmData;
   if (!d) return;
@@ -6467,7 +6481,11 @@ function fpDesmRender(anioSel) {
   var cogaytContent = document.getElementById('fp-desm-cogayt-content');
   if (cogaytContent) {
     var cEntries = Object.keys(d.cogaytPorCarta)
-      .map(function(cid){ return {cid:cid, nombre:d.cartaById[cid]||cid, monto:d.cogaytPorCarta[cid]}; })
+      .map(function(cid){
+        var obj = d.cogaytPorCarta[cid];
+        return {cid:cid, nombre:obj.nombre||cid, monto:obj.total||0, detalle:obj.detalle||null};
+      })
+      .filter(function(e){ return e.monto > 0; })
       .sort(function(a,b){ return b.monto-a.monto; });
 
     var html2 = '';
@@ -6493,8 +6511,9 @@ function fpDesmRender(anioSel) {
       var short = e.nombre;
       var m3    = short.match(/^(?:10|14|5)\.[A-Z0-9.]+\s*-\s*(.+)$/);
       if (m3) short = m3[1];
+      var codigo = e.nombre.split(' - ')[0];
       html2 += '<tr>' +
-        '<td class="mono" style="font-size:10px;color:var(--muted);">'+e.nombre.split(' - ')[0]+'</td>' +
+        '<td class="mono" style="font-size:10px;color:var(--muted);">'+codigo+'</td>' +
         '<td>'+short+'</td>' +
         '<td class="mono" style="text-align:right;font-weight:500;color:var(--success);">'+fmt(e.monto)+'</td>' +
         '<td style="padding:4px 10px;">' +
@@ -6506,6 +6525,20 @@ function fpDesmRender(anioSel) {
           '</div>' +
         '</td>' +
       '</tr>';
+      // Si tiene detalle (sin carta asignada), expandir
+      if (e.detalle && e.detalle.length > 0) {
+        e.detalle.slice(0,10).forEach(function(det){
+          html2 += '<tr style="background:var(--surface-alt);opacity:.8;">' +
+            '<td></td>' +
+            '<td style="padding:3px 8px 3px 24px;font-size:10px;color:var(--muted);" colspan="1">'+det.nombre.substring(0,60)+'</td>' +
+            '<td class="mono" style="text-align:right;font-size:10px;color:var(--success);">'+fmt(det.monto)+'</td>' +
+            '<td style="font-size:10px;color:var(--muted);">'+det.fecha+'</td>' +
+          '</tr>';
+        });
+        if (e.detalle.length > 10) {
+          html2 += '<tr><td colspan="4" style="text-align:center;font-size:10px;color:var(--muted);padding:4px;">... y '+(e.detalle.length-10)+' más</td></tr>';
+        }
+      }
     });
 
     html2 += '<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--surface-alt);">' +
