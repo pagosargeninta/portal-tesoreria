@@ -6449,16 +6449,17 @@ function fpDesmRender(anioSel) {
 
       var convRows = convOrden.map(function(cid) {
         var conv    = org.convenios[cid];
-        var cogayt  = d.cogaytPorCarta[cid]||0;
+        var cogaytObj = d.cogaytPorCarta[cid];
+        var cogayt    = cogaytObj ? (typeof cogaytObj==='object' ? (cogaytObj.total||0) : cogaytObj) : 0;
         // Nombre corto: quitar prefijo "10.XXX." y sufijo " - "
         var shortName = conv.nombre;
         var m2 = shortName.match(/^(?:10|14|5)\.[A-Z0-9.]+\s*-\s*(.+)$/);
         if (m2) shortName = m2[1];
         return '<tr onclick="fpDesmToggleConv(\'desm-det-'+cid+'\')" style="cursor:pointer;">' +
           '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);white-space:nowrap;">'+conv.nombre.split(' - ')[0]+'</td>' +
-          '<td style="font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+conv.nombre+'">'+shortName+'</td>' +
-          '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;">'+fmt(conv.total)+'</td>' +
-          '<td class="mono" style="text-align:right;font-size:10px;color:var(--success);">'+(cogayt>0?fmt(cogayt):'—')+'</td>' +
+          '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);">'+conv.nombre.split(' - ')[0]+'</td>' +
+          '<td style="font-size:10px;" title="'+conv.nombre+'">'+shortName+'</td>' +
+          '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;white-space:nowrap;">'+fmt(conv.total)+'</td>' +
         '</tr>';
       }).join('');
 
