@@ -5953,12 +5953,15 @@ function fpIngHandleFile(file) {
         if (wsG) {
           var rawG = XLSX.utils.sheet_to_json(wsG, {header:1, defval:null});
           rawG.forEach(function(row) {
-            if (!row || !row[0] || !row[1]) return;
-            var mes   = String(row[0]).trim();
-            var monto = typeof row[1] === 'number' ? row[1] :
-              parseFloat(String(row[1]).replace(/\$/g,'').replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
-            if (mes && !isNaN(monto) && monto > 0) {
-              d.evolucionMensual.push({mes:mes, monto:monto});
+            if (!row || row[0]===null || row[0]===undefined) return;
+            var mes   = String(row[0]).trim().toUpperCase();
+            var raw1  = row[1];
+            var monto = typeof raw1 === 'number' ? raw1 :
+              parseFloat(String(raw1||'').replace(/[$.\s]/g,'').replace(',','.'));
+            if (mes && mes.length > 0 && !isNaN(monto) && monto > 0) {
+              // Abreviar nombre del mes
+              var short = mes.substring(0,3);
+              d.evolucionMensual.push({mes:short, monto:monto});
             }
           });
         }
@@ -6223,7 +6226,10 @@ function fpColSubtotal(label, capital, intereses, varMes, color, fmtCap, fmtInt)
       (varMes!=null?((varMes>=0?'+':'')+fmt(varMes)):'') +
     '</td>' +
   '</tr>';
+  fpIngRenderChart(d);
 }
+
+function fpIngRenderChart(d) {
   // ── GRÁFICO EVOLUCIÓN MENSUAL (hoja GRAFICO del Excel) ─────────────────
   var evolCard = document.getElementById('fp-col-evol-card');
   var ctxEvM   = document.getElementById('fp-col-chart-evol-mes');
@@ -6232,9 +6238,7 @@ function fpColSubtotal(label, capital, intereses, varMes, color, fmtCap, fmtInt)
     var presupuestoAnual = d.presupuesto || 2043863014;
     var labels   = d.evolucionMensual.map(function(e){ return e.mes; });
     var montos   = d.evolucionMensual.map(function(e){ return e.monto; });
-    // Presupuesto proporcional acumulado
     var presData = labels.map(function(_, i){ return Math.round(presupuestoAnual*(i+1)/12); });
-
     if (window._fpColChartEvolMes) window._fpColChartEvolMes.destroy();
     window._fpColChartEvolMes = new Chart(ctxEvM, {
       type: 'line',
@@ -6264,6 +6268,7 @@ function fpColSubtotal(label, capital, intereses, varMes, color, fmtCap, fmtInt)
   } else if (evolCard) {
     evolCard.style.display = 'none';
   }
+}
 
 function fpColRow(nombre, detalle, capital, intereses, estado, varMes, color) {
   var fmt  = function(n){ if(!n||n===0) return '—'; return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
