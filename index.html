@@ -6329,16 +6329,22 @@ async function fpDesmCargar() {
     //    B) Cobros: in_invoice con producto G3-Gastos Administrativos, analítica de convenios
     if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando COGAYT...';
 
-    // A) Liquidaciones COGAYT — diario 46 (Ventas Preimpreso = COGAYT real), cuenta 411000
-    //    Diario 46 confirmado como el único diario de COGAYT de Fundación
-    var cogaytMoveLines = await odooCall('account.move.line','search_read',
-      [[['account_id','=',2395],['move_id.company_id','=',1],
-        ['move_id.journal_id','=',46],['move_id.state','=','posted'],
-        ['move_id.date','>=',desde],['move_id.date','<=',hasta]]],
-      {fields:['credit','move_id','analytic_distribution'],limit:5000});
-    var totalCogaytLiq = cogaytMoveLines.reduce(function(s,l){ return s+l.credit; }, 0);
-    // Construir cogaytLiqLineas compatible con código siguiente
-    var cogaytLiqLineas = cogaytMoveLines.map(function(l){ return {amount:l.credit}; });
+    // COGAYT: facturas de cliente, diario 46, cuenta 411000
+    // Total liquidado = todas las facturas posted
+    // Total cobrado = paid + in_payment + partial
+    if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando COGAYT...';
+    var cogaytFacturas = await odooCall('account.move','search_read',
+      [[['move_type','=','out_invoice'],['company_id','=',1],
+        ['journal_id','=',46],['state','=','posted'],
+        ['invoice_date','>=',desde],['invoice_date','<=',hasta]]],
+      {fields:['id','name','amount_total','invoice_date','payment_state'],limit:2000});
+
+    var totalCogaytLiq    = cogaytFacturas.reduce(function(s,f){ return s+f.amount_total; }, 0);
+    var totalCogaytCobrado = cogaytFacturas
+      .filter(function(f){ return ['paid','in_payment','partial'].indexOf(f.payment_state)>=0; })
+      .reduce(function(s,f){ return s+f.amount_total; }, 0);
+    var cogaytLiqLineas   = [];  // unused but keeps compatibility
+    var totalCogaytLiqOld = totalCogaytLiq;  // alias
 
     // B) Cobros COGAYT — in_invoice con producto G3-Gastos Administrativos, analítica convenios
     //    Buscar en account.move.line: move_type=in_invoice, account=2379, analytic_distribution
@@ -6400,8 +6406,9 @@ async function fpDesmCargar() {
 
     _fpDesmData = {porOrg:porOrg, porCarta:porCarta,
                   cogaytPorCarta:cogaytPorCarta,
-                  totalCogayt:totalCogayt,
+                  totalCogayt:totalCogaytLiq,
                   totalCogaytLiq:totalCogaytLiq,
+                  totalCogaytCobrado:totalCogaytCobrado,
                   totalCogaytCobros:totalCogaytCobros,
                   cartaById:cartaById};
 
@@ -6514,98 +6521,49 @@ function fpDesmRender(anioSel) {
   if (cogaytContent) {
     var fmt  = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
     var fmtM = function(n){ return '$'+(parseFloat(n||0)/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'M'; };
-    var cobrosTotal = Object.values(d.cogaytPorCarta).reduce(function(s,v){return s+v.total;},0);
+
+    var liq     = d.totalCogaytLiq     || 0;
+    var cobrado = d.totalCogaytCobrado || 0;
+    var pendiente = liq - cobrado;
+    var pctCob  = liq > 0 ? cobrado/liq : 0;
 
     var html2 = '';
 
-    // KPIs
-    var nConv = Object.keys(d.cogaytPorCarta).length;
-    html2 += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">' +
-      '<div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val">'+fmtM(d.totalCogaytLiq||d.totalCogayt)+'</div><div class="c29-kpi-lbl">Liquidaciones cobradas</div></div>' +
-      '<div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val">'+fmtM(cobrosTotal)+'</div><div class="c29-kpi-lbl">Cobros a convenios</div></div>' +
-      '<div class="c29-kpi"><div class="c29-kpi-val">'+nConv+'</div><div class="c29-kpi-lbl">Convenios con cobro</div></div>' +
-      '<div class="c29-kpi"><div class="c29-kpi-val">'+(nConv>0?fmtM(cobrosTotal/nConv):'—')+'</div><div class="c29-kpi-lbl">Promedio por convenio</div></div>' +
+    // KPIs — simple y claro
+    html2 += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">' +
+      '<div class="c29-kpi c29-kpi-ok">' +
+        '<div class="c29-kpi-val" style="font-size:22px;">'+fmtM(liq)+'</div>' +
+        '<div class="c29-kpi-lbl">Total liquidado</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Todas las facturas emitidas</div>' +
+      '</div>' +
+      '<div class="c29-kpi c29-kpi-info">' +
+        '<div class="c29-kpi-val" style="font-size:22px;">'+fmtM(cobrado)+'</div>' +
+        '<div class="c29-kpi-lbl">Total cobrado</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Pagado + en proceso + parcial</div>' +
+      '</div>' +
+      '<div class="c29-kpi c29-kpi-warn">' +
+        '<div class="c29-kpi-val" style="font-size:22px;">'+fmtM(pendiente)+'</div>' +
+        '<div class="c29-kpi-lbl">Pendiente de cobro</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:4px;">'+(pctCob*100).toFixed(1)+'% cobrado del total</div>' +
+      '</div>' +
     '</div>';
 
-    html2 += '<div class="alert info" style="margin-bottom:14px;padding:8px 14px;font-size:11px;">' +
-      '<i class="ti ti-info-circle"></i>' +
-      '<div><strong>Liquidaciones:</strong> total cobrado por Fundación (account 411000, sin discriminar por convenio) · ' +
-      '<strong>Cobros a convenios:</strong> descontado a cada convenio vía in_invoice G3</div>' +
+    // Barra de cobro
+    html2 += '<div style="margin-bottom:20px;">' +
+      '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;">' +
+        '<span>Cobrado: <strong>'+fmt(cobrado)+'</strong></span>' +
+        '<span>Total: <strong>'+fmt(liq)+'</strong></span>' +
+      '</div>' +
+      '<div style="background:var(--surface-alt);border-radius:4px;height:12px;overflow:hidden;">' +
+        '<div style="height:12px;border-radius:4px;background:var(--success);width:'+(pctCob*100).toFixed(1)+'%;transition:width .4s;"></div>' +
+      '</div>' +
     '</div>';
 
-    // Agrupar cobros por organismo
-    var cogOrg = {};
-    Object.keys(d.cogaytPorCarta).forEach(function(cidStr){
-      var cid  = parseInt(cidStr)||cidStr;
-      var obj  = d.cogaytPorCarta[cidStr];
-      var nom  = obj.nombre||String(cid);
-      var org  = fpDesmOrgKey(nom);
-      if (!cogOrg[org]) cogOrg[org] = {total:0, convenios:{}};
-      cogOrg[org].total += obj.total;
-      cogOrg[org].convenios[cid] = {nombre:nom, total:obj.total};
-    });
+    html2 += '<div style="font-size:11px;color:var(--muted);padding:10px;background:var(--surface-alt);border-radius:6px;">' +
+      '<i class="ti ti-info-circle" style="margin-right:5px;"></i>' +
+      'Fuente: facturas de cliente · Diario 46 (Ventas Preimpreso) · Cuenta 411000 COGAYT · Empresa Fundación ArgenINTA' +
+    '</div>';
 
-    var orgsOrden = Object.keys(cogOrg).sort(function(a,b){return cogOrg[b].total-cogOrg[a].total;});
-
-    html2 += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:12px;">';
-
-    orgsOrden.forEach(function(orgKey){
-      var org  = cogOrg[orgKey];
-      var meta = FP_DESM_ORGS[orgKey]||{label:orgKey,color:'#95a5a6'};
-      var pct  = cobrosTotal > 0 ? org.total/cobrosTotal : 0;
-
-      var convOrden = Object.keys(org.convenios).sort(function(a,b){
-        return org.convenios[b].total - org.convenios[a].total;
-      });
-
-      var convRows = convOrden.map(function(cid){
-        var conv     = org.convenios[cid];
-        var shortName= conv.nombre;
-        var m2       = shortName.match(/^(?:10|14|5)\.[A-Z0-9.]+\s*[-–]\s*(.+)$/);
-        if (m2) shortName = m2[1];
-        var codigo   = conv.nombre.split(/\s*[-–]\s*/)[0];
-        return '<tr>' +
-          '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);white-space:nowrap;">'+codigo+'</td>' +
-          '<td style="font-size:11px;" title="'+conv.nombre+'">'+shortName+'</td>' +
-          '<td class="mono" style="text-align:right;font-size:11px;font-weight:600;white-space:nowrap;padding-right:10px;">'+fmt(conv.total)+'</td>' +
-        '</tr>';
-      }).join('');
-
-      html2 +=
-        '<div class="card" style="margin:0;">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--border);" onclick="fpDesmToggle(\'cog-org-\'+orgKey+\'\')">' +
-            '<div style="display:flex;align-items:center;gap:8px;">' +
-              '<span style="width:10px;height:10px;border-radius:50%;background:'+meta.color+';display:inline-block;flex-shrink:0;"></span>' +
-              '<strong style="font-size:12px;">'+meta.label+'</strong>' +
-              '<span style="font-size:10px;color:var(--muted);">('+convOrden.length+' convenios)</span>' +
-            '</div>' +
-            '<div style="display:flex;align-items:center;gap:10px;">' +
-              '<span class="mono" style="font-size:13px;font-weight:600;color:'+meta.color+';">'+fmtM(org.total)+'</span>' +
-              '<span style="font-size:10px;color:var(--muted);">'+(pct*100).toFixed(1)+'%</span>' +
-              '<i class="ti ti-chevron-down" style="font-size:12px;color:var(--muted);"></i>' +
-            '</div>' +
-          '</div>' +
-          '<div style="height:3px;background:var(--surface-alt);">' +
-            '<div style="height:3px;background:'+meta.color+';width:'+(pct*100).toFixed(1)+'%;"></div>' +
-          '</div>' +
-          '<div id="cog-org-'+orgKey+'" style="display:none;">' +
-            '<table style="width:100%;font-size:11px;border-collapse:collapse;">' +
-              '<thead><tr style="background:var(--surface-alt);">' +
-                '<th style="padding:5px 8px 5px 20px;font-size:10px;text-align:left;">Código</th>' +
-                '<th style="font-size:10px;text-align:left;">Convenio</th>' +
-                '<th style="font-size:10px;text-align:right;">COGAYT cobrado</th>' +
-              '</tr></thead>' +
-              '<tbody>'+convRows+'</tbody>' +
-              '<tfoot><tr style="background:'+meta.color+'11;font-weight:700;border-top:1px solid var(--border);">' +
-                '<td colspan="2" style="padding:6px 8px 6px 20px;font-size:11px;">Total '+meta.label+'</td>' +
-                '<td class="mono" style="text-align:right;color:'+meta.color+';">'+fmt(org.total)+'</td>' +
-              '</tr></tfoot>' +
-            '</table>' +
-          '</div>' +
-        '</div>';
-    });
-
-    html2 += '</div>';
     cogaytContent.innerHTML = html2;
   }
 }
