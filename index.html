@@ -1850,10 +1850,12 @@ tbody tr:hover td { background: #f8faf9; }
           </div>
         </div>
 
-        <!-- Evolución mensual intereses -->
-        <div class="card" style="margin-bottom:14px;">
-          <div class="card-header"><div class="card-title"><i class="ti ti-trending-up"></i> Evolución mensual de intereses — Recursos Propios FA</div></div>
-          <div class="card-body" style="padding:12px;"><canvas id="fp-col-chart-evol-mes" height="120"></canvas></div>
+        <!-- Evolución mensual intereses (hoja GRAFICO del Excel) -->
+        <div id="fp-col-evol-card" style="display:none;margin-bottom:14px;">
+          <div class="card" style="margin:0;">
+            <div class="card-header"><div class="card-title"><i class="ti ti-trending-up"></i> Evolución mensual de intereses — Recursos Propios FA</div></div>
+            <div class="card-body" style="padding:12px;"><canvas id="fp-col-chart-evol-mes" height="130"></canvas></div>
+          </div>
         </div>
 
         <!-- Tabla detalle -->
@@ -5944,6 +5946,24 @@ function fpIngHandleFile(file) {
       d.varInt          = d.intTotal - d.intMesAnt;
       d.varPctFA        = d.totalFAMesAnt > 0 ? d.varTotalFA/d.totalFAMesAnt : null;
 
+      // Hoja GRAFICO — datos mensuales de intereses
+      d.evolucionMensual = [];
+      try {
+        var wsG = wb.Sheets['GRAFICO'];
+        if (wsG) {
+          var rawG = XLSX.utils.sheet_to_json(wsG, {header:1, defval:null});
+          rawG.forEach(function(row) {
+            if (!row || !row[0] || !row[1]) return;
+            var mes   = String(row[0]).trim();
+            var monto = typeof row[1] === 'number' ? row[1] :
+              parseFloat(String(row[1]).replace(/\$/g,'').replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
+            if (mes && !isNaN(monto) && monto > 0) {
+              d.evolucionMensual.push({mes:mes, monto:monto});
+            }
+          });
+        }
+      } catch(eG){ console.warn('Hoja GRAFICO no encontrada:', eG.message); }
+
       _fpIngData = d;
       fpIngRender();
     } catch(err) {
@@ -5972,11 +5992,17 @@ function fpIngRender() {
   setK('fp-col-k-pct',   (d.pctVsPres*100).toFixed(1)+'%',
        d.pctVsPres>=1?'var(--success)':d.pctVsPres>=0.85?'var(--warn)':'var(--text)');
 
-  // Fecha
+  // Fecha — solo mostrar si es válida
   var fechaEl = document.getElementById('fp-col-fecha');
   if (fechaEl && d.fecha) {
-    var fd = d.fecha instanceof Date ? d.fecha : new Date(d.fecha);
-    fechaEl.textContent = 'Al ' + fd.toLocaleDateString('es-AR');
+    try {
+      var fd = d.fecha instanceof Date ? d.fecha : new Date(d.fecha);
+      if (!isNaN(fd.getTime()) && fd.getFullYear() > 2000) {
+        fechaEl.textContent = 'Al ' + fd.toLocaleDateString('es-AR');
+      } else {
+        fechaEl.textContent = '';
+      }
+    } catch(e) { fechaEl.textContent = ''; }
   }
 
   // ── VARIACIÓN MES ANTERIOR ──────────────────────────────────────
@@ -6172,33 +6198,7 @@ function fpIngRender() {
     });
   }
 
-  // ── GRÁFICO EVOLUCIÓN MENSUAL INTERESES ──────────────────────
-  var ctxEvM = document.getElementById('fp-col-chart-evol-mes');
-  if (ctxEvM && typeof Chart !== 'undefined' && d && d.intTotal > 0) {
-    var mesesLabels = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-    var fd = d.fecha ? (d.fecha instanceof Date ? d.fecha : new Date(d.fecha)) : new Date();
-    var reportMonth = isNaN(fd.getTime()) ? 4 : fd.getMonth();
-    var labels = mesesLabels.slice(0, reportMonth+1);
-    var intData = labels.map(function(_, i){ return Math.round(d.intTotal*(i+1)/labels.length); });
-    var presData = labels.map(function(_, i){ return Math.round(d.presupuesto*(i+1)/12); });
-    if (window._fpColChartEvolMes) window._fpColChartEvolMes.destroy();
-    window._fpColChartEvolMes = new Chart(ctxEvM, {
-      type:'line',
-      data:{ labels:labels, datasets:[
-        {label:'Intereses FA acumulados', data:intData,
-         borderColor:'#27ae60', backgroundColor:'rgba(39,174,96,.08)',
-         fill:true, tension:.3, pointRadius:5, pointBackgroundColor:'#27ae60', borderWidth:2},
-        {label:'Presupuesto proporcional', data:presData,
-         borderColor:'#e74c3c', borderDash:[6,3], borderWidth:1.5, pointRadius:0, fill:false}
-      ]},
-      options:{responsive:true,maintainAspectRatio:false,
-        interaction:{mode:'index',intersect:false},
-        plugins:{legend:{position:'bottom',labels:{font:{size:10}}},
-          tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': $'+ctx.raw.toLocaleString('es-AR',{maximumFractionDigits:0});}}}},
-        scales:{x:{grid:{display:false}},y:{ticks:{callback:function(v){return '$'+(v/1000000).toFixed(0)+'M';}}}}
-      }
-    });
-  }
+
 }
 
 function fpColSeccion(titulo, icon, color) {
@@ -6224,6 +6224,47 @@ function fpColSubtotal(label, capital, intereses, varMes, color, fmtCap, fmtInt)
     '</td>' +
   '</tr>';
 }
+  // ── GRÁFICO EVOLUCIÓN MENSUAL (hoja GRAFICO del Excel) ─────────────────
+  var evolCard = document.getElementById('fp-col-evol-card');
+  var ctxEvM   = document.getElementById('fp-col-chart-evol-mes');
+  if (d && d.evolucionMensual && d.evolucionMensual.length > 0 && ctxEvM && typeof Chart !== 'undefined') {
+    if (evolCard) evolCard.style.display = 'block';
+    var presupuestoAnual = d.presupuesto || 2043863014;
+    var labels   = d.evolucionMensual.map(function(e){ return e.mes; });
+    var montos   = d.evolucionMensual.map(function(e){ return e.monto; });
+    // Presupuesto proporcional acumulado
+    var presData = labels.map(function(_, i){ return Math.round(presupuestoAnual*(i+1)/12); });
+
+    if (window._fpColChartEvolMes) window._fpColChartEvolMes.destroy();
+    window._fpColChartEvolMes = new Chart(ctxEvM, {
+      type: 'line',
+      data: { labels: labels, datasets: [
+        { label: 'Intereses FA acumulados',
+          data: montos, borderColor: '#27ae60', backgroundColor: 'rgba(39,174,96,.1)',
+          fill: true, tension: .3, pointRadius: 5, pointBackgroundColor: '#27ae60', borderWidth: 2 },
+        { label: 'Presupuesto proporcional',
+          data: presData, borderColor: '#e74c3c', borderDash: [6,3], borderWidth: 1.5,
+          pointRadius: 0, fill: false, tension: 0 }
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 10 } } },
+          tooltip: { callbacks: { label: function(ctx) {
+            return ctx.dataset.label + ': $' + ctx.raw.toLocaleString('es-AR', {maximumFractionDigits:0});
+          }}}
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: { ticks: { callback: function(v){ return '$'+(v/1000000000).toFixed(1)+'B'; } } }
+        }
+      }
+    });
+  } else if (evolCard) {
+    evolCard.style.display = 'none';
+  }
+
 function fpColRow(nombre, detalle, capital, intereses, estado, varMes, color) {
   var fmt  = function(n){ if(!n||n===0) return '—'; return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
   var fmtB = function(n){ if(!n||n===0) return '—'; return '$'+(parseFloat(n||0)/1000000000).toLocaleString('es-AR',{maximumFractionDigits:2})+'B'; };
