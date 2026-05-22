@@ -6329,12 +6329,16 @@ async function fpDesmCargar() {
     //    B) Cobros: in_invoice con producto G3-Gastos Administrativos, analítica de convenios
     if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando COGAYT...';
 
-    // A) Liquidaciones COGAYT — account.analytic.line cuenta 411000 (2395), company=1
-    var cogaytLiqLineas = await odooCall('account.analytic.line','search_read',
-      [[['general_account_id','=',2395],['company_id','=',1],
-        ['date','>=',desde],['date','<=',hasta]]],
-      {fields:['amount','date','name'],limit:20000});
-    var totalCogaytLiq = cogaytLiqLineas.reduce(function(s,l){ return s+Math.abs(l.amount); }, 0);
+    // A) Liquidaciones COGAYT — diario 46 (Ventas Preimpreso = COGAYT real), cuenta 411000
+    //    Diario 46 confirmado como el único diario de COGAYT de Fundación
+    var cogaytMoveLines = await odooCall('account.move.line','search_read',
+      [[['account_id','=',2395],['move_id.company_id','=',1],
+        ['move_id.journal_id','=',46],['move_id.state','=','posted'],
+        ['move_id.date','>=',desde],['move_id.date','<=',hasta]]],
+      {fields:['credit','move_id','analytic_distribution'],limit:5000});
+    var totalCogaytLiq = cogaytMoveLines.reduce(function(s,l){ return s+l.credit; }, 0);
+    // Construir cogaytLiqLineas compatible con código siguiente
+    var cogaytLiqLineas = cogaytMoveLines.map(function(l){ return {amount:l.credit}; });
 
     // B) Cobros COGAYT — in_invoice con producto G3-Gastos Administrativos, analítica convenios
     //    Buscar en account.move.line: move_type=in_invoice, account=2379, analytic_distribution
