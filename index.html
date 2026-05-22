@@ -5949,23 +5949,32 @@ function fpIngHandleFile(file) {
       // Hoja GRAFICO — datos mensuales de intereses
       d.evolucionMensual = [];
       try {
-        var wsG = wb.Sheets['GRAFICO'];
-        if (wsG) {
-          var rawG = XLSX.utils.sheet_to_json(wsG, {header:1, defval:null});
-          rawG.forEach(function(row) {
-            if (!row || row[0]===null || row[0]===undefined) return;
-            var mes   = String(row[0]).trim().toUpperCase();
-            var raw1  = row[1];
-            var monto = typeof raw1 === 'number' ? raw1 :
-              parseFloat(String(raw1||'').replace(/[$.\s]/g,'').replace(',','.'));
-            if (mes && mes.length > 0 && !isNaN(monto) && monto > 0) {
-              // Abreviar nombre del mes
-              var short = mes.substring(0,3);
-              d.evolucionMensual.push({mes:short, monto:monto});
-            }
+        var wsG = wb.Sheets['GRAFICO'] || wb.Sheets['Grafico'] || wb.Sheets['grafico'];
+        if (!wsG) {
+          // Try to find it case-insensitively
+          wb.SheetNames.forEach(function(sn){
+            if (sn.toLowerCase() === 'grafico') wsG = wb.Sheets[sn];
           });
         }
-      } catch(eG){ console.warn('Hoja GRAFICO no encontrada:', eG.message); }
+        console.log('Hojas disponibles:', wb.SheetNames.join(', '));
+        if (wsG) {
+          var rawG = XLSX.utils.sheet_to_json(wsG, {header:1, defval:null});
+          console.log('GRAFICO filas:', rawG.length, 'primera:', JSON.stringify(rawG[0]));
+          rawG.forEach(function(row) {
+            if (!row || row[0]===null || row[0]===undefined) return;
+            var mes   = String(row[0]).trim();
+            var raw1  = row[1];
+            var monto = typeof raw1 === 'number' ? raw1 :
+              parseFloat(String(raw1||'').replace(/\$/g,'').replace(/\s/g,'').replace(/\./g,'').replace(',','.'));
+            if (mes && mes.length > 1 && !isNaN(monto) && monto > 0) {
+              d.evolucionMensual.push({mes:mes.substring(0,3).toUpperCase(), monto:monto});
+            }
+          });
+          console.log('evolucionMensual parseado:', JSON.stringify(d.evolucionMensual));
+        } else {
+          console.warn('Hoja GRAFICO no encontrada en:', wb.SheetNames);
+        }
+      } catch(eG){ console.error('Error leyendo GRAFICO:', eG.message); }
 
       _fpIngData = d;
       fpIngRender();
@@ -6201,6 +6210,8 @@ function fpIngRender() {
     });
   }
 
+  // Gráfico evolución mensual
+  fpIngRenderChart(d);
 
 }
 
@@ -6226,7 +6237,6 @@ function fpColSubtotal(label, capital, intereses, varMes, color, fmtCap, fmtInt)
       (varMes!=null?((varMes>=0?'+':'')+fmt(varMes)):'') +
     '</td>' +
   '</tr>';
-  fpIngRenderChart(d);
 }
 
 function fpIngRenderChart(d) {
