@@ -1815,7 +1815,7 @@ tbody tr:hover td { background: #f8faf9; }
         </div>
 
         <!-- Charts: donut + barras intereses -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 300px;gap:12px;margin-bottom:14px;">
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:12px;margin-bottom:14px;">
 
           <div class="card" style="margin:0;">
             <div class="card-header"><div class="card-title"><i class="ti ti-chart-donut"></i> Composición de colocaciones (FA)</div></div>
@@ -1823,11 +1823,6 @@ tbody tr:hover td { background: #f8faf9; }
               <canvas id="fp-col-donut" width="160" height="160" style="flex-shrink:0;"></canvas>
               <div id="fp-col-donut-legend" style="font-size:10px;flex:1;"></div>
             </div>
-          </div>
-
-          <div class="card" style="margin:0;">
-            <div class="card-header"><div class="card-title"><i class="ti ti-chart-bar"></i> Intereses — cerrados vs en curso</div></div>
-            <div class="card-body" style="padding:12px;"><canvas id="fp-col-bar-int" height="160"></canvas></div>
           </div>
 
           <div class="card" style="margin:0;">
@@ -6465,8 +6460,11 @@ function fpDesmRender(anioSel) {
   var totalDesm = Object.values(d.porOrg).reduce(function(s,o){return s+o.total;},0);
   var totalOrgs = Object.keys(d.porOrg).filter(function(k){return d.porOrg[k].total>0;}).length;
   var totalConv = Object.keys(d.porCarta).length;
-  var setK = function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
+  var presDesm  = 31494800000;
+  var pctDesm   = presDesm > 0 ? totalDesm/presDesm : 0;
+  var setK = function(id,v,c){ var el=document.getElementById(id); if(el){ el.textContent=v; if(c) el.style.color=c; } };
   setK('fp-desm-k-total',  fmtM(totalDesm));
+  setK('fp-desm-k-pct',    (pctDesm*100).toFixed(1)+'%', pctDesm>=1?'var(--danger)':pctDesm>=0.5?'var(--warn)':'var(--text)');
   setK('fp-desm-k-org',    totalOrgs);
   setK('fp-desm-k-conv',   totalConv);
   setK('fp-desm-k-cogayt', fmtM(d.totalCogayt));
@@ -6528,8 +6526,8 @@ function fpDesmRender(anioSel) {
             '<div style="height:3px;background:'+meta.color+';width:'+(pct*100).toFixed(1)+'%;"></div>' +
           '</div>' +
           // Tabla convenios (colapsada por defecto)
-          '<div id="desm-org-'+orgKey+'" style="display:none;">' +
-            '<table style="width:100%;font-size:11px;border-collapse:collapse;">' +
+          '<div id="desm-org-'+orgKey+'" style="display:none;overflow-x:auto;">' +
+            '<table style="width:100%;min-width:420px;font-size:11px;border-collapse:collapse;">' +
               '<thead><tr style="background:var(--surface-alt);">' +
                 '<th style="padding:5px 8px 5px 20px;font-size:10px;text-align:left;">Código</th>' +
                 '<th style="font-size:10px;text-align:left;">Convenio</th>' +
