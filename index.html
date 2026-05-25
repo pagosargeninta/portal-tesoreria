@@ -6404,7 +6404,7 @@ async function fpDesmCargar() {
           ['move_id.payment_state','in',['paid','in_payment','partial']],
           ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
           ['analytic_distribution','!=',false]]],
-        {fields:['analytic_distribution','price_total','move_id'],limit:500,offset:off});
+        {fields:['analytic_distribution','price_total','balance','move_id'],limit:500,offset:off});
       pg2.forEach(function(l){ movLines.push(l); });
       off += 500;
     }
@@ -6442,7 +6442,7 @@ async function fpDesmCargar() {
         ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
         ['analytic_distribution','!=',false],
         ['name','ilike','G3']]],
-      {fields:['analytic_distribution','price_total','move_id','name'],limit:5000});
+      {fields:['analytic_distribution','price_total','balance','move_id','name'],limit:5000});
 
     // Agregar cobros COGAYT por carta
     var cogaytLineas = [];  // compatibilidad con código siguiente
@@ -6481,7 +6481,9 @@ async function fpDesmCargar() {
         var cid   = parseInt(cidStr);
         var nom   = cartaById[cid] || String(cid);
         var pct   = parseFloat(l.analytic_distribution[cidStr]||100)/100;
-        var monto = (l.price_total||0) * pct;
+        // Usar balance (siempre en ARS) en lugar de price_total (puede ser moneda extranjera)
+        var monto = Math.abs(l.balance||0) * pct;
+        if (monto === 0) monto = (l.price_total||0) * pct;  // fallback si balance=0
         if (monto <= 0) return;
         if (!cogaytPorCarta[cid]) cogaytPorCarta[cid] = {nombre:nom, total:0};
         cogaytPorCarta[cid].total += monto;
