@@ -6459,7 +6459,7 @@ async function fpDesmCargar() {
         if (!nom) return;  // solo cartas 10.*, 14.DEC.*, 5.2.*
         var org   = fpDesmOrgKey(nom);
         var pct   = parseFloat(l.analytic_distribution[cidStr]||100) / 100;
-        var monto = (l.price_total||0) * pct;
+        var monto = (l.credit||0) * pct;
         if (monto <= 0) return;
 
         if (!porOrg[org]) porOrg[org] = {total:0, convenios:{}};
