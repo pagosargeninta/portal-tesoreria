@@ -6391,7 +6391,7 @@ async function fpDesmCargar() {
         ['move_id.company_id','=',1],['move_id.state','=','posted'],
         ['move_id.payment_state','in',['paid','in_payment','partial']],
         ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
-        ['analytic_distribution','!=',false]]]);
+        ['analytic_distribution','!=',false],['balance','<',0]]]);
 
     var movLines = [];
     off = 0;
@@ -6403,8 +6403,8 @@ async function fpDesmCargar() {
           ['move_id.company_id','=',1],['move_id.state','=','posted'],
           ['move_id.payment_state','in',['paid','in_payment','partial']],
           ['move_id.invoice_date','>=',desde],['move_id.invoice_date','<=',hasta],
-          ['analytic_distribution','!=',false]]],
-        {fields:['analytic_distribution','price_total','balance','move_id'],limit:500,offset:off});
+          ['analytic_distribution','!=',false],['balance','<',0]]],
+        {fields:['analytic_distribution','balance','move_id'],limit:500,offset:off});
       pg2.forEach(function(l){ movLines.push(l); });
       off += 500;
     }
@@ -6481,9 +6481,7 @@ async function fpDesmCargar() {
         var cid   = parseInt(cidStr);
         var nom   = cartaById[cid] || String(cid);
         var pct   = parseFloat(l.analytic_distribution[cidStr]||100)/100;
-        // Usar balance (siempre en ARS) en lugar de price_total (puede ser moneda extranjera)
-        var monto = Math.abs(l.balance||0) * pct;
-        if (monto === 0) monto = (l.price_total||0) * pct;  // fallback si balance=0
+        var monto = Math.abs(l.balance) * pct;
         if (monto <= 0) return;
         if (!cogaytPorCarta[cid]) cogaytPorCarta[cid] = {nombre:nom, total:0};
         cogaytPorCarta[cid].total += monto;
