@@ -1706,7 +1706,6 @@ tbody tr:hover td { background: #f8faf9; }
       <!-- KPI STRIP -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;" id="fp-kpis">
         <div class="c29-kpi"><div class="c29-kpi-val" id="fp-k-saldo">—</div><div class="c29-kpi-lbl">Saldo financiero</div></div>
-        <div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val" id="fp-k-ing">—</div><div class="c29-kpi-lbl">Ingresos YTD</div></div>
         <div class="c29-kpi c29-kpi-danger"><div class="c29-kpi-val" id="fp-k-egr">—</div><div class="c29-kpi-lbl">Egresos YTD</div></div>
         <div class="c29-kpi c29-kpi-warn"><div class="c29-kpi-val" id="fp-k-ret">—</div><div class="c29-kpi-lbl">Retenciones</div></div>
         <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="fp-k-mov">—</div><div class="c29-kpi-lbl">Movimientos</div></div>
@@ -5593,7 +5592,7 @@ function fpRender() {
   if (lbls[1]) lbls[1].textContent='Presupuesto total';
   if (lbls[2]) lbls[2].textContent='% Ejecución';
   if (lbls[3]) lbls[3].textContent='Disponible';
-  if (lbls[4]) lbls[4].textContent='Ingresos YTD';
+  
 
   var kpis = ['fp-k-saldo','fp-k-ing','fp-k-egr','fp-k-ret','fp-k-mov'];
   var vals = [fmtM(totEjec), fmtM(totPres), (pctGlobal*100).toFixed(1)+'%', fmtM(totDiff), fmtM(ingresos)];
@@ -6625,7 +6624,7 @@ function fpDesmRender(anioSel) {
       '<div class="c29-kpi"><div class="c29-kpi-val" style="font-size:20px;">'+fmtM(presCog)+'</div><div class="c29-kpi-lbl">Presupuestado</div></div>' +
       '<div class="c29-kpi c29-kpi-ok"><div class="c29-kpi-val" style="font-size:20px;">'+fmtM(liq)+'</div><div class="c29-kpi-lbl">Liquidado</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">'+(pctPres*100).toFixed(1)+'% del presupuesto</div></div>' +
       '<div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" style="font-size:20px;">'+fmtM(cobrado)+'</div><div class="c29-kpi-lbl">Cobrado</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">'+(pctCob*100).toFixed(1)+'% del liquidado</div></div>' +
-      '<div class="c29-kpi c29-kpi-warn"><div class="c29-kpi-val" style="font-size:20px;">'+fmtM(presCog-liq)+'</div><div class="c29-kpi-lbl">Disponible</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">Sin liquidar</div></div>' +
+      
     '</div>';
     // Barra vs presupuesto
     html2 += '<div style="margin-bottom:16px;">' +
