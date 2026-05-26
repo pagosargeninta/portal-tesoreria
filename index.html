@@ -301,6 +301,14 @@ body {
 .badge-danger { background: var(--danger-bg); color: var(--danger); }
 .badge-info { background: var(--info-bg); color: var(--info); }
 .badge-muted { background: #f0f0f0; color: var(--muted); }
+.badge-paid { background: #e8f5ee; color: #1a5c38; border: 1px solid rgba(26,92,56,.25); }
+.badge-draft { background: #eaf2fb; color: #155fa0; border: 1px solid rgba(21,95,160,.25); }
+.badge-process { background: #fef8f0; color: #b7600a; border: 1px solid rgba(183,96,10,.25); }
+.badge-missing { background: #fdf2f1; color: #c0392b; border: 1px solid rgba(192,57,43,.25); }
+.badge-cbu-ok { background: #e8f5ee; color: #1a5c38; border: 1px solid rgba(26,92,56,.25); }
+.badge-cbu-new { background: #fef8f0; color: #b7600a; border: 1px solid rgba(183,96,10,.25); }
+.badge-cbu-diff { background: #fff3e0; color: #e65100; border: 1px solid rgba(230,81,0,.25); }
+.badge-cbu-none { background: #fdf2f1; color: #c0392b; border: 1px solid rgba(192,57,43,.25); }
 
 /* ── ALERTS ── */
 .alert {
@@ -1057,13 +1065,23 @@ tbody tr:hover td { background: #f8faf9; }
                 <div id="plan-fileInfo" style="display:none;padding:8px 12px;background:var(--success-bg);border-radius:7px;font-size:12px;color:var(--success);margin-bottom:8px;"></div>
               </div>
               <div id="plan-col-section" style="display:none;">
-                <div class="field">
-                  <label>Columna CUIT <span style="color:var(--danger);">*</span></label>
-                  <select id="plan-col-cuit" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></select>
-                </div>
-                <div class="field">
-                  <label>Columna Nombre</label>
-                  <select id="plan-col-nombre" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></select>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                  <div class="field">
+                    <label>Columna CUIT <span style="color:var(--danger);">*</span></label>
+                    <select id="plan-col-cuit" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></select>
+                  </div>
+                  <div class="field">
+                    <label>Columna Nombre</label>
+                    <select id="plan-col-nombre" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></select>
+                  </div>
+                  <div class="field">
+                    <label>Columna CBU <span style="font-size:10px;color:var(--muted);">(opcional)</span></label>
+                    <select id="plan-col-cbu" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></select>
+                  </div>
+                  <div class="field">
+                    <label>Columna Monto <span style="font-size:10px;color:var(--muted);">(opcional)</span></label>
+                    <select id="plan-col-monto" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;"></select>
+                  </div>
                 </div>
               </div>
               <div class="field">
@@ -1095,6 +1113,7 @@ tbody tr:hover td { background: #f8faf9; }
           </div>
         </div>
 
+        <div id="plan-cbu-alertas"></div>
         <div id="plan-resultados" style="display:none;">
           <div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
             <div class="metric-card success"><div class="metric-label">Pagadas</div><div class="metric-value" id="plan-cnt-pagadas">0</div></div>
@@ -4176,7 +4195,8 @@ document.querySelector('.nav-item[onclick*="honorarios"]')?.addEventListener('cl
 
 const HON_CARTAS_FILTRO = [
   '10.SENASA.CA23.1', '10.SENASA.CA27.1', '10.SENASA.28.1', '10.SENASA.29',
-  '10.INTA.CTRAL.C93.CA13.1', '10.INTA.CTRAL.C93.CA36.1', '10.MAABA.613.1'
+  '10.INTA.CTRAL.C93.CA13.1', '10.INTA.CTRAL.C93.CA36.1',
+  '10.MAABA.613.1', '10.MAABA.513.1', '10.CFP.153.1'
 ];
 const CICLO_ANT_DESDE = '2026-04-20';
 const CICLO_ANT_HASTA = '2026-05-15';
@@ -4517,18 +4537,8 @@ function honRenderControl() {
   // CBU nuevos / saldos
   var preSaldosBody = el('pre-saldos-body');
   if (preSaldosBody) {
-    var rows = cartasOrdenadas.map(function(c) {
-      var cbuNuevoStr = c.cbuNuevo.length > 0
-        ? '<span class="badge badge-warn">' + c.cbuNuevo.length + ' CBU nuevo</span>'
-        : '<span class="badge badge-ok">CBUs OK</span>';
-      return '<div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;justify-content:space-between;gap:10px;">' +
-        '<div style="font-size:12px;font-weight:500;">' + c.name.split(' ')[0] + '</div>' +
-        '<div style="text-align:right;">' +
-        '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:600;">' + fmt(c.montoAct) + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);">' + c.actual + ' facturas</div></div>' +
-        cbuNuevoStr + '</div>';
-    }).join('');
-    preSaldosBody.innerHTML = rows || '<div style="padding:16px;color:var(--muted);">Sin datos</div>';
+    preSaldosBody.innerHTML = '<div style="padding:16px;color:var(--muted);text-align:center;"><i class="ti ti-loader"></i> Cargando saldos...</div>';
+    honCargarSaldosFinancieros(cartasOrdenadas, preSaldosBody, fmt, fmtN);
   }
 
   // ── POST-PAGO ──
@@ -5149,12 +5159,45 @@ async function planComparar() {
   var cartaId = parseInt(document.getElementById('plan-sel-carta').value);
   if (!cartaId) { showToast('Selecciona una carta', 'err'); return; }
   var colCuit   = document.getElementById('plan-col-cuit').value;
-  var colNombre = document.getElementById('plan-col-nombre').value;
+  var colNombre = document.getElementById('plan-col-nombre') ? document.getElementById('plan-col-nombre').value : '';
+  var colCBU    = document.getElementById('plan-col-cbu') ? document.getElementById('plan-col-cbu').value : '';
+  var colMonto  = document.getElementById('plan-col-monto') ? document.getElementById('plan-col-monto').value : '';
   if (!colCuit) { showToast('Selecciona la columna CUIT', 'err'); return; }
 
   var btn = document.getElementById('plan-btn-comparar');
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader"></i> Consultando Odoo...';
+
+  // Normalizar monto: "1.234,56" o "1234.56" o "1,234.56" → número
+  function parseMonto(v) {
+    if (!v) return null;
+    var s = String(v).trim().replace(/[^0-9.,]/g,'');
+    if (!s) return null;
+    // Si tiene coma Y punto: el último separador es decimal
+    if (s.indexOf(',')>=0 && s.indexOf('.')>=0) {
+      // formato 1.234,56 → eliminar puntos, cambiar coma
+      if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+        s = s.replace(/\./g,'').replace(',','.');
+      } else {
+        s = s.replace(/,/g,'');
+      }
+    } else if (s.indexOf(',')>=0) {
+      // solo coma: puede ser decimal o miles
+      var parts = s.split(',');
+      if (parts.length===2 && parts[1].length<=2) {
+        s = s.replace(',','.');
+      } else {
+        s = s.replace(/,/g,'');
+      }
+    }
+    return parseFloat(s) || null;
+  }
+
+  // Normalizar CBU: 22 dígitos numéricos
+  function parseCBU(v) {
+    if (!v) return '';
+    return String(v).replace(/\D/g,'').substring(0,22);
+  }
 
   try {
     var desdeInput = document.getElementById('plan-desde');
@@ -5164,12 +5207,15 @@ async function planComparar() {
     var domFact = [['move_type','=','in_invoice'],['state','in',['draft','posted']]];
     if (planDesde) domFact.push(['date','>=',planDesde]);
     if (planHasta) domFact.push(['date','<=',planHasta]);
-    var facturas = await odooCall('account.move','search_read',[domFact],{fields:['id','name','partner_id','amount_total','invoice_date','payment_state','state'],limit:5000});
+    var facturas = await odooCall('account.move','search_read',[domFact],
+      {fields:['id','name','partner_id','amount_total','invoice_date','payment_state','state','partner_bank_id'],limit:5000});
 
     var moveIds = facturas.map(function(f){ return f.id; });
     var moveHon = new Set();
     if (moveIds.length > 0) {
-      var lineas = await odooCall('account.move.line','search_read',[[['move_id','in',moveIds],['analytic_distribution','!=',false]]],{fields:['move_id','analytic_distribution'],limit:5000});
+      var lineas = await odooCall('account.move.line','search_read',
+        [[['move_id','in',moveIds],['analytic_distribution','!=',false]]],
+        {fields:['move_id','analytic_distribution'],limit:5000});
       lineas.forEach(function(l){
         if (!l.analytic_distribution) return;
         if (Object.keys(l.analytic_distribution).map(Number).some(function(id){ return id === cartaId; }))
@@ -5179,12 +5225,12 @@ async function planComparar() {
 
     var facturasHon = facturas.filter(function(f){ return moveHon.has(f.id); });
     var pids = [];
-    facturasHon.forEach(function(f){ var pid = f.partner_id && f.partner_id[0]; if(pid && pids.indexOf(pid)<0) pids.push(pid); });
+    facturasHon.forEach(function(f){ var pid=f.partner_id&&f.partner_id[0]; if(pid&&pids.indexOf(pid)<0) pids.push(pid); });
 
     var cuitMap = {};
     if (pids.length > 0) {
       var partners = await odooCall('res.partner','search_read',[[['id','in',pids]]],{fields:['id','vat'],limit:500});
-      partners.forEach(function(p){ cuitMap[p.id] = (p.vat || '').replace(/\D/g,''); });
+      partners.forEach(function(p){ cuitMap[p.id]=(p.vat||'').replace(/\D/g,''); });
     }
 
     var facturasPorCuit = {};
@@ -5195,9 +5241,12 @@ async function planComparar() {
     });
 
     _planResultados = _planRows.map(function(row) {
-      var cuitRaw = (row[colCuit] || '').replace(/\D/g,'');
-      var nombre  = colNombre ? (row[colNombre] || '—') : '—';
-      var factura = facturasPorCuit[cuitRaw];
+      var cuitRaw    = (row[colCuit] || '').replace(/\D/g,'');
+      var nombre     = colNombre ? (row[colNombre] || '—') : '—';
+      var cbuPlan    = colCBU ? parseCBU(row[colCBU]) : '';
+      var montoPlan  = colMonto ? parseMonto(row[colMonto]) : null;
+      var factura    = facturasPorCuit[cuitRaw];
+
       var estado, estadoKey;
       if (!cuitRaw) {
         estado = 'Sin CUIT'; estadoKey = 'faltante';
@@ -5212,14 +5261,44 @@ async function planComparar() {
       } else {
         estado = 'Confirmada'; estadoKey = 'proceso';
       }
+
+      // CBU comparison
+      var cbuOdoo = '';
+      var cbuEstado = 'sin_col'; // sin_col | ok | diff | sin_cbu_odoo | sin_cbu_plan
+      if (factura && factura.partner_bank_id) {
+        cbuOdoo = parseCBU(factura.partner_bank_id[1] || '');
+      }
+      if (colCBU && cbuPlan) {
+        if (!factura) {
+          cbuEstado = 'sin_col';
+        } else if (!cbuOdoo) {
+          cbuEstado = 'sin_cbu_odoo';
+        } else if (cbuPlan === cbuOdoo) {
+          cbuEstado = 'ok';
+        } else {
+          cbuEstado = 'diff';
+        }
+      } else if (colCBU && !cbuPlan) {
+        cbuEstado = 'sin_cbu_plan';
+      }
+
+      // Monto comparison
+      var montoOdoo  = factura ? (factura.amount_total || 0) : 0;
+      var montoDiff  = false;
+      var montoPct   = null;
+      if (colMonto && montoPlan !== null && factura) {
+        montoDiff = Math.abs(montoPlan - montoOdoo) > 1; // tolerancia $1
+        if (montoOdoo > 0) montoPct = ((montoPlan - montoOdoo) / montoOdoo * 100).toFixed(1);
+      }
+
       return {
-        nombre: nombre,
-        cuit: cuitRaw || (row[colCuit] || '—'),
-        nro_factura: factura ? (factura.name || '—') : '—',
-        monto: factura ? (factura.amount_total || 0) : 0,
-        fecha: factura ? (factura.invoice_date || '—') : '—',
-        estado: estado,
-        estadoKey: estadoKey
+        nombre: nombre, cuit: cuitRaw || (row[colCuit]||'—'),
+        nro_factura: factura ? (factura.name||'—') : '—',
+        monto: montoOdoo, montoPlan: montoPlan,
+        montoDiff: montoDiff, montoPct: montoPct,
+        fecha: factura ? (factura.invoice_date||'—') : '—',
+        estado: estado, estadoKey: estadoKey,
+        cbuPlan: cbuPlan, cbuOdoo: cbuOdoo, cbuEstado: cbuEstado
       };
     });
 
@@ -5227,38 +5306,99 @@ async function planComparar() {
   } catch(e) {
     showToast('Error: ' + e.message, 'err');
   }
-
   btn.disabled = false;
   btn.innerHTML = '<i class="ti ti-search"></i> Comparar con Odoo';
 }
 
 function planRenderResultados(data) {
   var cnt = { pagada:0, proceso:0, borrador:0, faltante:0 };
-  data.forEach(function(r){ if (cnt[r.estadoKey] !== undefined) cnt[r.estadoKey]++; });
+  data.forEach(function(r){ if(cnt[r.estadoKey]!==undefined) cnt[r.estadoKey]++; });
   document.getElementById('plan-cnt-pagadas').textContent  = cnt.pagada;
   document.getElementById('plan-cnt-proceso').textContent  = cnt.proceso;
   document.getElementById('plan-cnt-borrador').textContent = cnt.borrador;
   document.getElementById('plan-cnt-faltantes').textContent= cnt.faltante;
 
+  // Detectar si hay columnas de CBU y monto en los datos
+  var hasCBU   = data.some(function(r){ return r.cbuEstado && r.cbuEstado !== 'sin_col'; });
+  var hasMonto = data.some(function(r){ return r.montoPlan !== null && r.montoPlan !== undefined; });
+
   var fmt = function(n){ return n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—'; };
+
+  // Estado badge con colores diferenciados
+  function estadoBadge(r) {
+    if (r.estadoKey==='pagada')   return '<span class="badge badge-paid">✓ Pagada</span>';
+    if (r.estadoKey==='borrador') return '<span class="badge badge-draft">📝 Borrador</span>';
+    if (r.estadoKey==='proceso')  return '<span class="badge badge-process">🔄 ' + r.estado + '</span>';
+    return '<span class="badge badge-missing">✗ ' + r.estado + '</span>';
+  }
+
+  // CBU badge
+  function cbuBadge(r) {
+    if (!hasCBU || r.cbuEstado==='sin_col') return '';
+    if (r.cbuEstado==='ok')           return '<span class="badge badge-cbu-ok" title="CBU coincide">✓ CBU OK</span>';
+    if (r.cbuEstado==='diff')         return '<span class="badge badge-cbu-diff" title="Plan: ' + r.cbuPlan + ' | Odoo: ' + r.cbuOdoo + '">⚠ CBU difiere</span>';
+    if (r.cbuEstado==='sin_cbu_odoo') return '<span class="badge badge-cbu-none" title="No tiene CBU en Odoo">✗ Sin CBU Odoo</span>';
+    if (r.cbuEstado==='sin_cbu_plan') return '<span class="badge badge-cbu-new" title="Planilla sin CBU">— Sin CBU plan</span>';
+    return '';
+  }
+
+  // Monto cell
+  function montoCells(r) {
+    if (!hasMonto) return '<td class="mono">' + fmt(r.monto) + '</td>';
+    var odooCell = '<td class="mono">' + fmt(r.monto) + '</td>';
+    var planCell = '<td class="mono">';
+    if (r.montoPlan !== null) {
+      planCell += fmt(r.montoPlan);
+      if (r.montoDiff) {
+        var color = r.montoPlan > r.monto ? 'var(--danger)' : 'var(--warn)';
+        planCell += ' <span style="font-size:10px;color:' + color + ';">(' + (r.montoPct > 0 ? '+' : '') + r.montoPct + '%)</span>';
+      }
+    } else {
+      planCell += '—';
+    }
+    planCell += '</td>';
+    return odooCell + planCell;
+  }
+
+  var thead = '<thead><tr>' +
+    '<th>Nombre</th><th>CUIT</th><th>Nro Factura</th>' +
+    '<th>Monto Odoo</th>' + (hasMonto ? '<th>Monto Plan</th>' : '') +
+    '<th>Fecha</th>' + (hasCBU ? '<th>CBU</th>' : '') +
+    '<th>Estado</th></tr></thead>';
+
   var rows = '';
   data.forEach(function(r) {
-    var cls = r.estadoKey === 'pagada' ? 'badge-ok' : r.estadoKey === 'proceso' ? 'badge-info' : r.estadoKey === 'borrador' ? 'badge-muted' : 'badge-danger';
-    rows += '<tr>';
+    var rowBg = r.cbuEstado==='diff' ? 'background:#fff8f0;' : '';
+    if (r.montoDiff) rowBg = 'background:#fff8f0;';
+    rows += '<tr style="' + rowBg + '">';
     rows += '<td style="font-weight:500;">' + r.nombre + '</td>';
     rows += '<td class="mono" style="font-size:11px;">' + r.cuit + '</td>';
     rows += '<td class="mono" style="font-size:11px;">' + r.nro_factura + '</td>';
-    rows += '<td class="mono">' + fmt(r.monto) + '</td>';
+    rows += montoCells(r);
     rows += '<td style="color:var(--muted);font-size:11px;">' + r.fecha + '</td>';
-    rows += '<td><span class="badge ' + cls + '">' + r.estado + '</span></td>';
+    if (hasCBU) rows += '<td>' + cbuBadge(r) + '</td>';
+    rows += '<td>' + estadoBadge(r) + '</td>';
     rows += '</tr>';
   });
 
   var tbody = document.getElementById('plan-tbody');
-  if (tbody) tbody.innerHTML = rows || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">Sin resultados</td></tr>';
+  if (tbody) tbody.innerHTML = '<table>' + thead + '<tbody>' + (rows || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted);">Sin resultados</td></tr>') + '</tbody></table>';
 
   var res = document.getElementById('plan-resultados');
   if (res) res.style.display = 'block';
+
+  // Alertas de CBU
+  var alertDiv = document.getElementById('plan-cbu-alertas');
+  if (alertDiv) {
+    var cbuDiff = data.filter(function(r){ return r.cbuEstado==='diff'; });
+    var cbuNone = data.filter(function(r){ return r.cbuEstado==='sin_cbu_odoo'; });
+    var html = '';
+    if (cbuDiff.length > 0)
+      html += '<div class="alert warn" style="margin-bottom:8px;"><i class="ti ti-alert-triangle"></i><div><strong>' + cbuDiff.length + ' CBU(s) difieren</strong> entre la planilla y Odoo. Verificar antes del pago.</div></div>';
+    if (cbuNone.length > 0)
+      html += '<div class="alert danger" style="margin-bottom:8px;"><i class="ti ti-credit-card-off"></i><div><strong>' + cbuNone.length + ' proveedor(es) sin CBU en Odoo</strong> — no van a entrar al lote.</div></div>';
+    alertDiv.innerHTML = html;
+  }
 }
 
 function planFiltrar() {
@@ -5292,7 +5432,7 @@ function planExcel() {
   showToast(data.length + ' filas exportadas', 'ok');
 }
 
-const HON_CARTAS_FILTRO_DET = ['10.SENASA.CA23.1','10.SENASA.CA27.1','10.SENASA.28.1','10.SENASA.29','10.INTA.CTRAL.C93.CA13.1','10.INTA.CTRAL.C93.CA36.1','10.MAABA.613.1'];
+const HON_CARTAS_FILTRO_DET = ['10.SENASA.CA23.1','10.SENASA.CA27.1','10.SENASA.28.1','10.SENASA.29','10.INTA.CTRAL.C93.CA13.1','10.INTA.CTRAL.C93.CA36.1','10.MAABA.613.1','10.MAABA.513.1','10.CFP.153.1'];
 var _honDetalleData = [];
 
 async function honDetalleCargar() {
@@ -5375,6 +5515,72 @@ function honDetalleExcel(){
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<script>
+
+// === SALDOS FINANCIEROS ===
+async function honCargarSaldosFinancieros(cartasOrdenadas, container, fmt, fmtN) {
+  try {
+    var html = '';
+    for (var i = 0; i < cartasOrdenadas.length; i++) {
+      var carta = cartasOrdenadas[i];
+      try {
+        var lineas = await odooCall('account.analytic.line', 'search_read',
+          [[['x_plan2_id','=',carta.id]]],
+          {fields:['amount','general_account_id'], limit:10000});
+
+        var accountIds = [];
+        lineas.forEach(function(l){ var aid=l.general_account_id&&l.general_account_id[0]; if(aid&&accountIds.indexOf(aid)<0) accountIds.push(aid); });
+
+        var accountTypes = {};
+        if (accountIds.length > 0) {
+          var accounts = await odooCall('account.account','search_read',
+            [[['id','in',accountIds]]],
+            {fields:['id','account_type','name'],limit:500});
+          accounts.forEach(function(a){
+            var nm = typeof a.name==='object' ? (a.name.es_AR||a.name.en_US||'') : (a.name||'');
+            accountTypes[a.id] = {type:a.account_type, name:nm.toLowerCase()};
+          });
+        }
+
+        var saldo = 0;
+        lineas.forEach(function(l){
+          var aid = l.general_account_id&&l.general_account_id[0];
+          if (!aid) return;
+          var acc = accountTypes[aid];
+          if (!acc) return;
+          if (['asset_cash','asset_current'].indexOf(acc.type)<0) return;
+          if (acc.name.indexOf('anticipo')>=0||acc.name.indexOf('fondos de terceros')>=0) return;
+          saldo += l.amount;
+        });
+        saldo = saldo * -1;
+
+        var saldoColor = saldo > 0 ? 'var(--success)' : 'var(--danger)';
+        var saldoIcon  = saldo > 0 ? '✓' : '✗';
+        var montoAct   = carta.montoAct || 0;
+        var ok         = saldo >= montoAct;
+
+        html += '<div style="padding:10px 16px;border-bottom:1px solid #f0f4f1;display:flex;align-items:center;justify-content:space-between;gap:10px;">' +
+          '<div><div style="font-size:12px;font-weight:500;">' + carta.name.split(' ')[0] + '</div>' +
+          '<div style="font-size:10px;color:var(--muted);">Lote: ' + fmtN(montoAct) + '</div></div>' +
+          '<div style="text-align:right;">' +
+          '<div style="font-family:\'JetBrains Mono\',monospace;font-size:13px;font-weight:600;color:' + saldoColor + ';">' + fmtN(saldo) + '</div>' +
+          '<div style="font-size:10px;color:var(--muted);">Saldo financiero</div></div>' +
+          '<span class="badge ' + (ok?'badge-ok':'badge-danger') + '">' + saldoIcon + ' ' + (ok?'OK':'Insuficiente') + '</span>' +
+          '</div>';
+      } catch(e2) {
+        html += '<div style="padding:8px 16px;font-size:11px;color:var(--muted);">' + carta.name.split(' ')[0] + ': error cargando saldo</div>';
+      }
+    }
+    container.innerHTML = html || '<div style="padding:16px;color:var(--muted);">Sin datos</div>';
+  } catch(e) {
+    container.innerHTML = '<div class="alert danger" style="margin:8px;"><i class="ti ti-x"></i><div>Error saldos: ' + e.message + '</div></div>';
+  }
+}
+
+
+</script>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
