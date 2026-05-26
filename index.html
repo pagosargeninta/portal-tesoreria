@@ -1707,8 +1707,8 @@ tbody tr:hover td { background: #f8faf9; }
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;" id="fp-kpis">
         <div class="c29-kpi"><div class="c29-kpi-val" id="fp-k-saldo">—</div><div class="c29-kpi-lbl">Saldo financiero</div></div>
         <div class="c29-kpi c29-kpi-danger"><div class="c29-kpi-val" id="fp-k-egr">—</div><div class="c29-kpi-lbl">Egresos YTD</div></div>
-        <div class="c29-kpi c29-kpi-warn"><div class="c29-kpi-val" id="fp-k-ret">—</div><div class="c29-kpi-lbl">Retenciones</div></div>
-        <div class="c29-kpi c29-kpi-info"><div class="c29-kpi-val" id="fp-k-mov">—</div><div class="c29-kpi-lbl">Movimientos</div></div>
+        <div class="c29-kpi c29-kpi-warn"><div class="c29-kpi-val" id="fp-k-ret">—</div><div class="c29-kpi-lbl">% Ejecución</div></div>
+        <div class="c29-kpi"><div class="c29-kpi-val" id="fp-k-mov">—</div><div class="c29-kpi-lbl">Disponible</div></div>
       </div>
 
       <!-- LOADING -->
@@ -5594,15 +5594,12 @@ function fpRender() {
   if (lbls[3]) lbls[3].textContent='Disponible';
   
 
-  var kpis = ['fp-k-saldo','fp-k-ing','fp-k-egr','fp-k-ret','fp-k-mov'];
-  var vals = [fmtM(totEjec), fmtM(totPres), (pctGlobal*100).toFixed(1)+'%', fmtM(totDiff), fmtM(ingresos)];
-  var colors = ['var(--text)','var(--text)',
-    pctGlobal>1?'var(--danger)':pctGlobal>0.85?'var(--warn)':'var(--success)',
-    totDiff>=0?'var(--success)':'var(--danger)', 'var(--success)'];
-  kpis.forEach(function(id,i){
-    var el=document.getElementById(id);
-    if(el){ el.textContent=vals[i]; el.style.color=colors[i]; }
-  });
+  // KPI values — Ejecutado / Presupuesto / % / Disponible
+  var setKG = function(id,v,c){ var el=document.getElementById(id); if(el){ el.textContent=v; if(c) el.style.color=c; } };
+  setKG('fp-k-saldo', fmtM(totEjec),  'var(--text)');
+  setKG('fp-k-egr',   fmtM(totPres),  'var(--text)');
+  setKG('fp-k-ret',   (pctGlobal*100).toFixed(1)+'%', pctGlobal>1?'var(--danger)':pctGlobal>0.85?'var(--warn)':'var(--success)');
+  setKG('fp-k-mov',   fmtM(totDiff),  totDiff>=0?'var(--success)':'var(--danger)');
 
   // ── TABLA: cards por bloque ────────────────────────────────────────────────
   var tbody = document.getElementById('fp-tbody');
