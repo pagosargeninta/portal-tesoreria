@@ -7026,9 +7026,11 @@ async function envioRefresh(silent = false) {
   }
 
   const domain = [
-  ['state', 'in', ['posted', 'paid', 'in_process']],
-  ['payment_type', '=', 'outbound'],
-];
+    ['state', 'in', ['posted', 'paid', 'in_process']],
+    ['payment_type', '=', 'outbound'],
+    ['company_id', '=', 1],                          // Fundación Argeninta
+    ['create_uid', 'in', [97, 102, 115]],            // Tesorería: Ramiro, Leandro, Facundo
+  ];
   if (envioFiltro.estado) domain.push(['x_estado_comprobante', '=', envioFiltro.estado]);
   if (envioFiltro.desde) domain.push(['date', '>=', envioFiltro.desde]);
   if (envioFiltro.hasta) domain.push(['date', '<=', envioFiltro.hasta]);
