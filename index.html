@@ -7026,9 +7026,9 @@ async function envioRefresh(silent = false) {
   }
 
   const domain = [
-    ['state', '=', 'posted'],
-    ['payment_type', '=', 'outbound'],
-  ];
+  ['state', 'in', ['posted', 'paid', 'in_process']],
+  ['payment_type', '=', 'outbound'],
+];
   if (envioFiltro.estado) domain.push(['x_estado_comprobante', '=', envioFiltro.estado]);
   if (envioFiltro.desde) domain.push(['date', '>=', envioFiltro.desde]);
   if (envioFiltro.hasta) domain.push(['date', '<=', envioFiltro.hasta]);
