@@ -1284,6 +1284,112 @@ tbody tr:hover td { background: #f8faf9; }
           <div id="comp-errorsList" style="font-size:11px;color:var(--danger);font-family:'JetBrains Mono',monospace;"></div>
         </div>
       </div>
+
+      <!-- ══════════ MONITOR DE ENVÍOS DE COMPROBANTES ══════════ -->
+      <div class="card" id="envio-monitor-card" style="margin-top:16px;">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="ti ti-mail-fast"></i> Monitor de envíos
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="envio-last-update" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;"></span>
+            <button class="btn" onclick="envioRefresh()" id="envio-btn-refresh" style="padding:6px 12px;font-size:11px;">
+              <i class="ti ti-refresh"></i> Actualizar
+            </button>
+          </div>
+        </div>
+
+        <div class="card-body">
+
+          <!-- Métricas -->
+          <div class="metrics-grid" style="margin-bottom:16px;">
+            <div class="metric-card">
+              <div class="metric-label">En cola</div>
+              <div class="metric-value" id="envio-m-cola" style="color:var(--verde);">0</div>
+              <div class="metric-sub">listo para enviar</div>
+            </div>
+            <div class="metric-card success">
+              <div class="metric-label">Enviados</div>
+              <div class="metric-value success" id="envio-m-enviados" style="color:var(--success);">0</div>
+              <div class="metric-sub">comprobantes</div>
+            </div>
+            <div class="metric-card warn">
+              <div class="metric-label">Sin destinatario</div>
+              <div class="metric-value" id="envio-m-sindest" style="color:var(--warn);">0</div>
+              <div class="metric-sub">requieren revisión</div>
+            </div>
+            <div class="metric-card danger">
+              <div class="metric-label">Con error</div>
+              <div class="metric-value" id="envio-m-error" style="color:var(--danger);">0</div>
+              <div class="metric-sub">reenviar manual</div>
+            </div>
+          </div>
+
+          <!-- Filtros -->
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:end;margin-bottom:14px;">
+            <div style="flex:1;min-width:240px;">
+              <div class="section-title" style="margin-top:0;">Filtrar por estado</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="tab-btn active" data-estado="" onclick="envioFiltroEstado(this,'')">
+                  <i class="ti ti-list"></i> Todos
+                </button>
+                <button class="tab-btn" data-estado="listo_para_enviar" onclick="envioFiltroEstado(this,'listo_para_enviar')">
+                  <i class="ti ti-clock"></i> En cola
+                </button>
+                <button class="tab-btn" data-estado="enviado" onclick="envioFiltroEstado(this,'enviado')">
+                  <i class="ti ti-mail-check"></i> Enviados
+                </button>
+                <button class="tab-btn" data-estado="sin_destinatario" onclick="envioFiltroEstado(this,'sin_destinatario')">
+                  <i class="ti ti-alert-triangle"></i> Sin dest.
+                </button>
+                <button class="tab-btn" data-estado="error" onclick="envioFiltroEstado(this,'error')">
+                  <i class="ti ti-x"></i> Error
+                </button>
+                <button class="tab-btn" data-estado="pendiente" onclick="envioFiltroEstado(this,'pendiente')">
+                  <i class="ti ti-hourglass"></i> Pendientes
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div class="section-title" style="margin-top:0;">Rango</div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="date" id="envio-f-desde" onchange="envioRefresh()"
+                       style="padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+                <span style="font-size:11px;color:var(--muted);">a</span>
+                <input type="date" id="envio-f-hasta" onchange="envioRefresh()"
+                       style="padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla -->
+          <div class="table-wrap" style="border:1px solid var(--border);border-radius:7px;max-height:520px;overflow-y:auto;">
+            <table>
+              <thead style="position:sticky;top:0;background:#fafafa;z-index:1;">
+                <tr>
+                  <th style="width:120px;">Pago</th>
+                  <th>Beneficiario</th>
+                  <th style="width:120px;text-align:right;">Importe</th>
+                  <th style="width:90px;">Fecha</th>
+                  <th style="width:90px;">Origen</th>
+                  <th>Destinatario</th>
+                  <th style="width:130px;">Estado</th>
+                  <th style="width:60px;"></th>
+                </tr>
+              </thead>
+              <tbody id="envio-tbody">
+                <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;font-size:12px;">
+                  <i class="ti ti-loader"></i> Cargando...
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+      <!-- ══════════ FIN MONITOR DE ENVÍOS ══════════ -->
+
     </div>
 
     <!-- ══════════ INTERBANKING ══════════ -->
@@ -6868,6 +6974,226 @@ function fpDesmToggleConv(id) {
   var el = document.getElementById(id);
   if (el) el.style.display = el.style.display==='none' ? 'table-row' : 'none';
 }
+
+// ════════════════════════════════════════════════════════════════
+// MONITOR DE ENVÍOS DE COMPROBANTES
+// ════════════════════════════════════════════════════════════════
+
+let envioFiltro = { estado: '', desde: null, hasta: null };
+let envioPagos = [];
+let envioAutoRefreshTimer = null;
+
+function envioInit() {
+  const hoy = new Date().toISOString().split('T')[0];
+  const desde = document.getElementById('envio-f-desde');
+  const hasta = document.getElementById('envio-f-hasta');
+  if (desde && !desde.value) desde.value = hoy;
+  if (hasta && !hasta.value) hasta.value = hoy;
+  envioRefresh();
+  envioStartAutoRefresh();
+}
+
+function envioStartAutoRefresh() {
+  envioStopAutoRefresh();
+  envioAutoRefreshTimer = setInterval(() => {
+    const pageVisible = document.getElementById('page-comprobantes')?.classList.contains('active');
+    if (pageVisible) envioRefresh(true);
+  }, 30000);
+}
+function envioStopAutoRefresh() {
+  if (envioAutoRefreshTimer) clearInterval(envioAutoRefreshTimer);
+  envioAutoRefreshTimer = null;
+}
+
+function envioFiltroEstado(btn, estado) {
+  document.querySelectorAll('#envio-monitor-card .tab-btn[data-estado]')
+    .forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  envioFiltro.estado = estado;
+  envioRefresh();
+}
+
+async function envioRefresh(silent = false) {
+  envioFiltro.desde = document.getElementById('envio-f-desde')?.value || null;
+  envioFiltro.hasta = document.getElementById('envio-f-hasta')?.value || null;
+
+  const tbody = document.getElementById('envio-tbody');
+  if (!tbody) return;
+
+  if (!silent) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;font-size:12px;">
+      <i class="ti ti-loader"></i> Cargando...</td></tr>`;
+  }
+
+  const domain = [
+    ['state', '=', 'posted'],
+    ['payment_type', '=', 'outbound'],
+  ];
+  if (envioFiltro.estado) domain.push(['x_estado_comprobante', '=', envioFiltro.estado]);
+  if (envioFiltro.desde) domain.push(['date', '>=', envioFiltro.desde]);
+  if (envioFiltro.hasta) domain.push(['date', '<=', envioFiltro.hasta]);
+
+  try {
+    const pagos = await odooCall('account.payment', 'search_read', [
+      domain,
+      ['id', 'name', 'partner_id', 'amount', 'currency_id', 'date',
+       'reconciled_bill_ids', 'x_estado_comprobante', 'x_comprobante_enviado']
+    ], { limit: 300, order: 'date desc, id desc' });
+
+    envioPagos = pagos;
+    envioRenderTabla();
+    envioRenderMetricas();
+    const lu = document.getElementById('envio-last-update');
+    if (lu) lu.textContent = 'actualizado ' + new Date().toLocaleTimeString('es-AR');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:24px;font-size:12px;">
+      <i class="ti ti-x"></i> Error al cargar: ${e.message}</td></tr>`;
+  }
+}
+
+function envioRenderMetricas() {
+  const c = { cola: 0, enviados: 0, sindest: 0, error: 0 };
+  envioPagos.forEach(p => {
+    const e = p.x_estado_comprobante;
+    if (e === 'listo_para_enviar') c.cola++;
+    else if (e === 'enviado') c.enviados++;
+    else if (e === 'sin_destinatario') c.sindest++;
+    else if (e === 'error') c.error++;
+  });
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('envio-m-cola', c.cola);
+  set('envio-m-enviados', c.enviados);
+  set('envio-m-sindest', c.sindest);
+  set('envio-m-error', c.error);
+}
+
+function envioRenderTabla() {
+  const tbody = document.getElementById('envio-tbody');
+  if (!tbody) return;
+  if (!envioPagos.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;font-size:12px;">
+      Sin resultados para los filtros aplicados.</td></tr>`;
+    return;
+  }
+
+  const estadoMap = {
+    'listo_para_enviar': { cls: 'badge-warn',   txt: '📬 En cola' },
+    'enviado':           { cls: 'badge-ok',     txt: '✅ Enviado' },
+    'pendiente':         { cls: 'badge-muted',  txt: '⏳ Pendiente' },
+    'sin_destinatario':  { cls: 'badge-warn',   txt: '⚠️ Sin dest.' },
+    'error':             { cls: 'badge-danger', txt: '❌ Error' },
+  };
+
+  tbody.innerHTML = envioPagos.map(p => {
+    const tieneFactura = p.reconciled_bill_ids && p.reconciled_bill_ids.length > 0;
+    const origenBadge = tieneFactura
+      ? '<span class="badge badge-ok" style="font-size:10px;">Factura</span>'
+      : '<span class="badge badge-warn" style="font-size:10px;">Banco/Caja</span>';
+
+    const est = estadoMap[p.x_estado_comprobante] || { cls: 'badge-muted', txt: '—' };
+    const importe = new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: (p.currency_id && p.currency_id[1]) || 'ARS',
+      minimumFractionDigits: 2,
+    }).format(p.amount);
+
+    const fecha = p.date ? p.date.split('-').reverse().join('/') : '—';
+    const canRetry = (p.x_estado_comprobante === 'error' ||
+                       p.x_estado_comprobante === 'sin_destinatario');
+    const accion = canRetry
+      ? `<button class="btn" onclick="envioReintentar(${p.id})" title="Reintentar envío"
+                 style="padding:4px 8px;font-size:11px;">
+           <i class="ti ti-refresh"></i>
+         </button>`
+      : '';
+
+    return `
+      <tr data-id="${p.id}">
+        <td style="font-family:'JetBrains Mono',monospace;font-size:11px;">${p.name || '-'}</td>
+        <td style="font-size:12px;">${(p.partner_id && p.partner_id[1]) || '—'}</td>
+        <td style="text-align:right;font-weight:600;font-size:12px;">${importe}</td>
+        <td style="font-size:11px;color:var(--muted);">${fecha}</td>
+        <td>${origenBadge}</td>
+        <td id="dest-${p.id}" style="font-size:11px;color:var(--muted);">
+          <button onclick="envioVerDestinatario(${p.id})"
+                  style="background:none;border:none;color:var(--verde);cursor:pointer;font-size:11px;padding:0;text-decoration:underline;">
+            ver
+          </button>
+        </td>
+        <td><span class="badge ${est.cls}">${est.txt}</span></td>
+        <td>${accion}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function envioVerDestinatario(pagoId) {
+  const cell = document.getElementById('dest-' + pagoId);
+  if (!cell) return;
+  cell.innerHTML = '<i class="ti ti-loader"></i>';
+  const pago = envioPagos.find(p => p.id === pagoId);
+  if (!pago) { cell.innerHTML = '—'; return; }
+
+  try {
+    let emails = null;
+    let fuente = '';
+
+    if (pago.reconciled_bill_ids && pago.reconciled_bill_ids.length) {
+      const facturas = await odooCall('account.move', 'read',
+        [pago.reconciled_bill_ids, ['x_destinatarios_comprobante']]);
+      const dest = facturas[0] && facturas[0].x_destinatarios_comprobante;
+      if (dest) {
+        emails = dest.split(',').map(e => e.trim()).filter(Boolean);
+        fuente = 'factura';
+      }
+    }
+
+    if (!emails && pago.partner_id) {
+      const partner = await odooCall('res.partner', 'read', [[pago.partner_id[0]], ['email']]);
+      if (partner[0] && partner[0].email) {
+        emails = [partner[0].email];
+        fuente = 'partner directo';
+      }
+    }
+
+    if (emails && emails.length) {
+      cell.innerHTML = `<div style="color:#1a5c38;font-size:11px;">${emails.join(', ')}</div>
+                       <div style="font-size:10px;color:var(--muted);">via ${fuente}</div>`;
+    } else {
+      cell.innerHTML = `<span style="color:var(--danger);font-size:11px;">no resuelto</span>`;
+    }
+  } catch (e) {
+    cell.innerHTML = `<span style="color:var(--danger);font-size:11px;">err: ${e.message}</span>`;
+  }
+}
+
+async function envioReintentar(pagoId) {
+  if (!confirm('¿Reintentar envío? Se va a marcar como "listo para enviar" y la regla de Odoo lo va a procesar.')) return;
+  try {
+    await odooCall('account.payment', 'write', [
+      [pagoId],
+      { x_estado_comprobante: 'listo_para_enviar' }
+    ]);
+    await envioRefresh();
+  } catch (e) {
+    alert('Error al reintentar: ' + e.message);
+  }
+}
+
+// Hook al showPage para auto-cargar al entrar a comprobantes
+if (typeof window._origShowPageEnvio === 'undefined') {
+  window._origShowPageEnvio = window.showPage;
+  window.showPage = function(id, el) {
+    window._origShowPageEnvio(id, el);
+    if (id === 'comprobantes') {
+      envioInit();
+    } else {
+      envioStopAutoRefresh();
+    }
+  };
+}
+
+
 </script>
 </body>
 </html>
