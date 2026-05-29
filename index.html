@@ -1361,6 +1361,22 @@ tbody tr:hover td { background: #f8faf9; }
                        style="padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
               </div>
             </div>
+
+            <div style="flex:1;min-width:240px;">
+              <div class="section-title" style="margin-top:0;">Buscar beneficiario</div>
+              <div style="position:relative;display:flex;align-items:center;">
+                <i class="ti ti-search" style="position:absolute;left:10px;color:var(--muted);font-size:13px;pointer-events:none;"></i>
+                <input type="text" id="envio-f-buscar" placeholder="ej: zabala, alippi, raposo..."
+                       oninput="envioBuscarDebounced()"
+                       style="width:100%;padding:7px 32px 7px 30px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+                <button id="envio-f-buscar-clear" onclick="envioLimpiarBusqueda()"
+                        style="position:absolute;right:6px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;display:none;padding:2px 6px;line-height:1;"
+                        title="Limpiar búsqueda">×</button>
+              </div>
+              <div id="envio-busqueda-hint" style="font-size:10px;color:var(--muted);margin-top:4px;display:none;">
+                💡 Buscando en todo el historial — el rango de fechas se ignora
+              </div>
+            </div>
           </div>
 
           <!-- Tabla -->
@@ -5162,7 +5178,7 @@ async function planCargarCartas() {
     var hon = cartas.filter(function(ca){
       return Array.isArray(HON_CARTAS_FILTRO_DET) && HON_CARTAS_FILTRO_DET.some(function(f){ return ca.name && ca.name.indexOf(f) >= 0; });
     });
-    var html = '<option value="todas">⬛ Todas las cartas</option><option value="">-- Carta específica --</option>';
+    var html = '<option value="todas">⬛ Todas las cartas</option><option value="" disabled>── Carta específica ──</option>';
     hon.forEach(function(ca){ html += '<option value="' + ca.id + '">' + ca.name + '</option>'; });
     sel.innerHTML = html;
   } catch(e) { sel.innerHTML = '<option value="">Error: ' + e.message + '</option>'; }
@@ -5332,7 +5348,6 @@ async function planComparar() {
     var moveIds = facturas.map(function(f){ return f.id; });
     var facturasHon;
     if (cartaId === null) {
-      // Todas las cartas — sin filtro analítico
       facturasHon = facturas;
     } else {
       var moveHon = new Set();
@@ -5347,7 +5362,6 @@ async function planComparar() {
         });
       }
       facturasHon = facturas.filter(function(f){ return moveHon.has(f.id); });
-    }
     var pids = [];
     facturasHon.forEach(function(f){ var pid=f.partner_id&&f.partner_id[0]; if(pid&&pids.indexOf(pid)<0) pids.push(pid); });
 
@@ -7034,9 +7048,16 @@ function envioFiltroEstado(btn, estado) {
 async function envioRefresh(silent = false) {
   envioFiltro.desde = document.getElementById('envio-f-desde')?.value || null;
   envioFiltro.hasta = document.getElementById('envio-f-hasta')?.value || null;
+  envioFiltro.buscar = (document.getElementById('envio-f-buscar')?.value || '').trim();
 
   const tbody = document.getElementById('envio-tbody');
   if (!tbody) return;
+
+  // Mostrar/ocultar botón clear y hint
+  const clearBtn = document.getElementById('envio-f-buscar-clear');
+  const hint = document.getElementById('envio-busqueda-hint');
+  if (clearBtn) clearBtn.style.display = envioFiltro.buscar ? 'block' : 'none';
+  if (hint) hint.style.display = envioFiltro.buscar ? 'block' : 'none';
 
   if (!silent) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;font-size:12px;">
@@ -7050,15 +7071,27 @@ async function envioRefresh(silent = false) {
     ['create_uid', 'in', [97, 102, 115]],            // Tesorería: Ramiro, Leandro, Facundo
   ];
   if (envioFiltro.estado) domain.push(['x_estado_comprobante', '=', envioFiltro.estado]);
-  if (envioFiltro.desde) domain.push(['date', '>=', envioFiltro.desde]);
-  if (envioFiltro.hasta) domain.push(['date', '<=', envioFiltro.hasta]);
+
+  // Si hay búsqueda por nombre: buscar en todo el historial (ignorar fechas).
+  // Si no: aplicar el rango de fechas normal.
+  if (envioFiltro.buscar) {
+    // OR: buscar en partner_id (factura) Y en x_studio_colaborador (banco/caja)
+    domain.push('|',
+      ['partner_id.name', 'ilike', envioFiltro.buscar],
+      ['x_studio_colaborador.name', 'ilike', envioFiltro.buscar]
+    );
+  } else {
+    if (envioFiltro.desde) domain.push(['date', '>=', envioFiltro.desde]);
+    if (envioFiltro.hasta) domain.push(['date', '<=', envioFiltro.hasta]);
+  }
 
   try {
     const pagos = await odooCall('account.payment', 'search_read', [
       domain,
       ['id', 'name', 'partner_id', 'amount', 'currency_id', 'date',
-       'reconciled_bill_ids', 'x_estado_comprobante', 'x_comprobante_enviado']
-    ], { limit: 300, order: 'date desc, id desc' });
+       'reconciled_bill_ids', 'x_estado_comprobante', 'x_comprobante_enviado',
+       'x_studio_colaborador']
+    ], { limit: envioFiltro.buscar ? 500 : 300, order: 'date desc, id desc' });
 
     envioPagos = pagos;
     envioRenderTabla();
@@ -7118,12 +7151,16 @@ function envioRenderTabla() {
     }).format(p.amount);
 
     const fecha = p.date ? p.date.split('-').reverse().join('/') : '—';
-    const canRetry = (p.x_estado_comprobante === 'error' ||
-                       p.x_estado_comprobante === 'sin_destinatario');
+    // Mostrar retry siempre, salvo en estados intermedios donde no tiene sentido
+    const canRetry = p.x_estado_comprobante &&
+                     p.x_estado_comprobante !== 'listo_para_enviar' &&
+                     p.x_estado_comprobante !== 'pendiente';
+    const yaEnviado = p.x_estado_comprobante === 'enviado';
     const accion = canRetry
-      ? `<button class="btn" onclick="envioReintentar(${p.id})" title="Reintentar envío"
-                 style="padding:4px 8px;font-size:11px;">
-           <i class="ti ti-refresh"></i>
+      ? `<button class="btn" onclick="envioReintentar(${p.id}, ${yaEnviado})"
+                 title="${yaEnviado ? 'Reenviar (ya fue enviado)' : 'Reintentar envío'}"
+                 style="padding:4px 8px;font-size:11px;${yaEnviado ? 'color:#1a5c38;' : ''}">
+           <i class="ti ti-${yaEnviado ? 'send' : 'refresh'}"></i>
          </button>`
       : '';
 
@@ -7187,17 +7224,41 @@ async function envioVerDestinatario(pagoId) {
   }
 }
 
-async function envioReintentar(pagoId) {
-  if (!confirm('¿Reintentar envío? Se va a marcar como "listo para enviar" y la regla de Odoo lo va a procesar.')) return;
+async function envioReintentar(pagoId, yaEnviado = false) {
+  const pago = envioPagos.find(p => p.id === pagoId);
+  const nombrePago = pago ? pago.name : pagoId;
+  
+  const msg = yaEnviado
+    ? `⚠️ Este comprobante YA FUE ENVIADO.\n\n¿Reenviar de todas formas?\n\nPago: ${nombrePago}\n\n(Se va a marcar como "listo para enviar" y la regla de Odoo lo va a procesar nuevamente)`
+    : `¿Reintentar envío del pago ${nombrePago}?\n\nSe va a marcar como "listo para enviar" y la regla de Odoo lo va a procesar.`;
+  
+  if (!confirm(msg)) return;
   try {
-    await odooCall('account.payment', 'write', [
-      [pagoId],
-      { x_estado_comprobante: 'listo_para_enviar' }
-    ]);
+    // Si ya fue enviado, también hay que destildar x_comprobante_enviado
+    // (porque la regla 3 tiene dominio: x_comprobante_enviado != True)
+    const vals = { x_estado_comprobante: 'listo_para_enviar' };
+    if (yaEnviado) vals.x_comprobante_enviado = false;
+    
+    await odooCall('account.payment', 'write', [[pagoId], vals]);
     await envioRefresh();
   } catch (e) {
     alert('Error al reintentar: ' + e.message);
   }
+}
+
+// ─── Búsqueda por beneficiario con debounce ───
+let envioBuscarTimer = null;
+function envioBuscarDebounced() {
+  if (envioBuscarTimer) clearTimeout(envioBuscarTimer);
+  envioBuscarTimer = setTimeout(() => {
+    envioRefresh();
+  }, 350);  // espera 350ms después de la última tecla
+}
+
+function envioLimpiarBusqueda() {
+  const input = document.getElementById('envio-f-buscar');
+  if (input) input.value = '';
+  envioRefresh();
 }
 
 // Hook al showPage para auto-cargar al entrar a comprobantes
