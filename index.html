@@ -5362,6 +5362,7 @@ async function planComparar() {
         });
       }
       facturasHon = facturas.filter(function(f){ return moveHon.has(f.id); });
+    }
     var pids = [];
     facturasHon.forEach(function(f){ var pid=f.partner_id&&f.partner_id[0]; if(pid&&pids.indexOf(pid)<0) pids.push(pid); });
 
