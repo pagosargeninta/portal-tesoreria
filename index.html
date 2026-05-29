@@ -5213,15 +5213,27 @@ function planApplyParsed(file, hdrs, rows) {
   _planRows    = rows;
   var info = document.getElementById('plan-fileInfo');
   if (info) { info.style.display='block'; info.textContent=file.name+' — '+_planRows.length+' registros'; }
-  var colCuit   = document.getElementById('plan-col-cuit');
-  var colNombre = document.getElementById('plan-col-nombre');
+
   var opts = '<option value="">-- seleccionar --</option>';
   _planHeaders.forEach(function(h){ opts += '<option value="'+h+'">'+h+'</option>'; });
-  if (colCuit)   colCuit.innerHTML   = opts;
-  if (colNombre) colNombre.innerHTML = opts;
+
   function guessCol(kws){ return _planHeaders.find(function(h){ return kws.some(function(k){ return h.toLowerCase().indexOf(k)>=0; }); })||''; }
-  if (colCuit)   colCuit.value   = guessCol(['cuit','cuil','vat','nit','tax']);
-  if (colNombre) colNombre.value = guessCol(['nombre','name','razon','apellido','empresa']);
+
+  var selects = {
+    'plan-col-cuit':   guessCol(['cuit','cuil','vat','nit','tax']),
+    'plan-col-nombre': guessCol(['nombre','name','razon','apellido','empresa']),
+    'plan-col-cbu':    guessCol(['cbu','cuenta','account','bank','cci']),
+    'plan-col-monto':  guessCol(['monto','importe','total','honorario','haber'])
+  };
+
+  Object.keys(selects).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.innerHTML = opts;
+      if (selects[id]) el.value = selects[id];
+    }
+  });
+
   var sec = document.getElementById('plan-col-section');
   if (sec) sec.style.display='block';
   var btn = document.getElementById('plan-btn-comparar');
