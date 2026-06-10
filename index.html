@@ -3440,11 +3440,15 @@ function c29AbrirDetalle(idx) {
     return '<span class="badge '+(c2[s]||'badge-muted')+'">'+(m[s]||'Pendiente')+'</span>';
   };
   var fRow = function(f){
+    var fecha = (f.invoice_date || f.date || '').split('-').reverse().join('/');
+    var partner = f.partner_id ? (Array.isArray(f.partner_id) ? f.partner_id[1] : f.partner_id) : '—';
     return '<tr>' +
-          '<td style="padding:5px 8px 5px 20px;font-size:10px;color:var(--muted);white-space:nowrap;">'+codigo+'</td>' +
-          '<td style="font-size:11px;" title="'+conv.nombre+'">'+shortName+'</td>' +
-          '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;color:var(--success);white-space:nowrap;padding-right:10px;">'+fmt(conv.total)+'</td>' +
-        '</tr>';
+      '<td style="white-space:nowrap;font-size:11px;">'+fecha+'</td>' +
+      '<td style="font-size:11px;">'+(f.name||'—')+'</td>' +
+      '<td class="mono" style="text-align:right;font-size:11px;font-weight:500;">'+fmt(f.amount_total||0)+'</td>' +
+      '<td>'+fmtF(f)+'</td>' +
+      '<td style="font-size:11px;">'+partner+'</td>' +
+    '</tr>';
   };
   var tbl = function(rows, empty){
     return '<div class="table-wrap" style="margin-top:8px;margin-bottom:0;">' +
