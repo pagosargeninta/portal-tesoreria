@@ -1268,6 +1268,7 @@ tbody tr:hover td { background: #f8faf9; }
             <div style="display:flex;gap:8px;margin-bottom:14px;">
               <button class="tab-btn active" id="banco-ib" onclick="selectBancoPortal('interbanking',this)"><i class="ti ti-building-bank"></i> Interbanking</button>
               <button class="tab-btn" id="banco-nac" onclick="selectBancoPortal('nacion',this)"><i class="ti ti-building"></i> Banco Nación</button>
+              <button class="tab-btn" id="banco-nac-lote" onclick="selectBancoPortal('nacion_lote',this)"><i class="ti ti-building"></i> BNA Lote</button>
               <button class="tab-btn" id="banco-auto" onclick="selectBancoPortal('auto',this)"><i class="ti ti-scan"></i> Auto-detectar</button>
             </div>
             <div class="dropzone" id="comp-dropzone" onclick="document.getElementById('comp-fileInput').click()">
@@ -1504,7 +1505,7 @@ tbody tr:hover td { background: #f8faf9; }
           <table style="font-size:12px;">
             <thead style="position:sticky;top:0;background:#fafafa;z-index:1;"><tr>
               <th>Lote</th>
-              <th>Fecha</th>
+              <th style="white-space:nowrap;">Fecha</th>
               <th>Cuenta BNA</th>
               <th style="text-align:right;">Pagos</th>
               <th style="text-align:center;">Comprobante</th>
@@ -5135,6 +5136,68 @@ async function compSubirOdoo(filename, pdfBytes) {
   return docId;
 }
 
+async function compSubirOdooLote(filename, pdfBytes, cuit, monto) {
+  // Para lotes BNA: adjuntar directo al account.payment via ir.attachment
+  // NO usar documents.document para no triggerizar automatizaciones de mail
+  const b64 = compSafeBase64(pdfBytes);
+
+  let paymentId = null;
+  try {
+    if (cuit) {
+      const partners = await odooCall('res.partner', 'search_read',
+        [[['vat','=',cuit]]],
+        { fields: ['id'], limit: 5 }
+      );
+      if (partners && partners.length > 0) {
+        const pids = partners.map(p => p.id);
+        const montoNum = parseFloat(monto);
+        const pagos = await odooCall('account.payment', 'search_read',
+          [[['partner_id','in',pids],
+            ['payment_type','=','outbound'],
+            ['batch_payment_id','!=',false],
+            ['state','in',['posted','paid','in_process']]]],
+          { fields: ['id','amount','date'], limit: 50, order: 'date desc' }
+        );
+        if (pagos && pagos.length > 0) {
+          const match = pagos.find(p => Math.abs(p.amount - montoNum) / Math.max(montoNum, 1) <= 0.02);
+          paymentId = match ? match.id : pagos[0].id;
+        }
+      }
+    }
+  } catch(e) {
+    console.warn('compSubirOdooLote match error:', e.message);
+  }
+
+  // Adjuntar al payment (no dispara automatizaciones de mail)
+  const adjData = {
+    name: filename,
+    datas: b64,
+    mimetype: 'application/pdf',
+    type: 'binary',
+  };
+  if (paymentId) {
+    adjData.res_model = 'account.payment';
+    adjData.res_id    = paymentId;
+  }
+  const adjId = await odooCall('ir.attachment', 'create', [adjData]);
+
+  // También subir a Documents para registro (puede fallar sin problema)
+  try {
+    const folderId = await compGetFolderId();
+    await odooCall('documents.document', 'create', [{
+      name: filename,
+      folder_id: folderId,
+      mimetype: 'application/pdf',
+      type: 'binary',
+      datas: b64,
+    }]);
+  } catch(e) {
+    console.warn('compSubirOdooLote documents fallback error:', e.message);
+  }
+
+  return adjId;
+}
+
 function compParseInterbanking(text) {
   const dm = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
   let fecha = dm ? `${dm[3].slice(2)}-${dm[2]}-${dm[1]}` : null;
@@ -5210,7 +5273,7 @@ async function procesarComprobantes() {
       const page = await pdfjsDoc.getPage(i+1);
       const content = await page.getTextContent();
       const text = content.items.map(x=>x.str).join(' ');
-      let parsed = compBanco==='interbanking' ? compParseInterbanking(text) : compBanco==='nacion' ? compParseNacion(text) : (text.includes('Interbanking')?compParseInterbanking(text):compParseNacion(text));
+      let parsed = compBanco==='interbanking' ? compParseInterbanking(text) : (compBanco==='nacion'||compBanco==='nacion_lote') ? compParseNacion(text) : (text.includes('Interbanking')?compParseInterbanking(text):compParseNacion(text));
       const hasError = !parsed.cuit || !parsed.monto || !parsed.fecha;
       if (hasError) errors.push({page:i+1,...parsed});
       const c=parsed.cuit||'CUIT_FALTANTE', m=parsed.monto||'MONTO_FALTANTE', f=parsed.fecha||'FECHA_FALTANTE';
@@ -5225,10 +5288,15 @@ async function procesarComprobantes() {
       zip.file(fn, pb);
       let odooStatus = 'pendiente', odooId = null;
       try {
-        odooId=await compSubirOdoo(fn,pb);
+        if (compBanco === 'nacion_lote') {
+          // BNA Lote: adjuntar directo al payment sin triggerizar mail
+          odooId = await compSubirOdooLote(fn, pb, parsed.cuit, parsed.monto);
+        } else {
+          odooId = await compSubirOdoo(fn, pb);
+          // Delay anti-spam: solo para Interbanking/Nacion normal
+          if (i < total - 1) await new Promise(r => setTimeout(r, 4000));
+        }
         odooStatus='ok';
-        // Delay anti-spam: esperar entre subidas para que ODOO no dispare mails en ráfaga
-        if (i < total - 1) await new Promise(r => setTimeout(r, 4000));
       } catch(e) {
         odooStatus='error';
         console.error('compSubirOdoo error:', e.message, e);
@@ -8129,37 +8197,40 @@ async function bnaCargar() {
       return;
     }
 
-    // 2. Verificar adjuntos buscando directamente en ir.attachment por batch
-    //    Buscamos adjuntos en account.batch.payment (más liviano que buscar en cada payment)
-    var batchIds = batches.map(function(b){ return b.id; });
-    var adjBatchMap = {};  // batchId -> cantidad de adjuntos
-    var adjBatch = await odooCall('ir.attachment', 'search_read',
-      [[['res_model','=','account.batch.payment'],['res_id','in',batchIds]]],
-      { fields: ['res_id','name'], limit: 500 }
-    );
-    adjBatch.forEach(function(a){
-      adjBatchMap[a.res_id] = (adjBatchMap[a.res_id]||0) + 1;
+    // 2. Filtrar solo batches de pagos outbound con pagos reales
+    batches = batches.filter(function(b){
+      return b.payment_ids && b.payment_ids.length > 0 &&
+             !b.name.startsWith('BATCH/IN/');
     });
 
-    // También buscar en account.payment para los primeros pagos de cada batch (muestra)
-    // Solo tomamos el primer payment_id de cada batch para verificar si tiene adjunto
-    var primerosIds = batches.map(function(b){ return (b.payment_ids||[])[0]; }).filter(Boolean);
+    if (batches.length === 0) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">Sin lotes de pago encontrados</td></tr>';
+      return;
+    }
+
+    // 3. Verificar adjuntos: buscar en los primeros 3 pagos de cada batch
+    //    Si al menos uno tiene adjunto → tiene comprobante (ya fue procesado)
+    var muestrasIds = [];
+    batches.forEach(function(b){
+      (b.payment_ids||[]).slice(0,3).forEach(function(id){
+        if (muestrasIds.indexOf(id) < 0) muestrasIds.push(id);
+      });
+    });
+
     var adjPayMap = {};
-    if (primerosIds.length > 0) {
+    if (muestrasIds.length > 0) {
       var adjPay = await odooCall('ir.attachment', 'search_read',
-        [[['res_model','=','account.payment'],['res_id','in',primerosIds]]],
-        { fields: ['res_id'], limit: 200 }
+        [[['res_model','=','account.payment'],['res_id','in',muestrasIds]]],
+        { fields: ['res_id'], limit: 1000 }
       );
       adjPay.forEach(function(a){ adjPayMap[a.res_id] = true; });
     }
 
-    // 3. Construir datos por batch
+    // 4. Construir datos por batch
     _bnaBatches = batches.map(function(b){
       var pids = b.payment_ids || [];
-      // Tiene comprobante si: tiene adjunto en el batch O el primer pago tiene adjunto
-      var tieneEnBatch = (adjBatchMap[b.id]||0) > 0;
-      var tieneEnPago  = pids.length > 0 && adjPayMap[pids[0]];
-      var tieneComp = tieneEnBatch || tieneEnPago;
+      // Tiene comprobante si alguno de los primeros 3 pagos tiene adjunto
+      var tieneComp = pids.slice(0,3).some(function(id){ return adjPayMap[id]; });
       return {
         id: b.id,
         nombre: b.name,
@@ -8167,9 +8238,7 @@ async function bnaCargar() {
         journal: b.journal_id ? (Array.isArray(b.journal_id) ? b.journal_id[1] : b.journal_id) : '—',
         state: b.state,
         pids: pids,
-        monto: 0,  // no traemos montos para no saturar
-        tieneComp: tieneComp,
-        adjEnBatch: adjBatchMap[b.id]||0
+        tieneComp: tieneComp
       };
     });
 
