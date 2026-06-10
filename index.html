@@ -8064,7 +8064,7 @@ async function dashInit() {
         if (bnaCard && bnaTbody) {
           bnaTbody.innerHTML = sinComp.map(function(b){
             var f = (b.date||'').split('-').reverse().join('/');
-            return '<tr style="cursor:pointer;" onclick="showPage('comprobantes',document.querySelector('.nav-item[onclick*=comprobantes]'))">' +
+            return '<tr style="cursor:pointer;" onclick="showPage(\'comprobantes\',document.querySelectorAll(\'.nav-item\')[3])">' +
               '<td style="white-space:nowrap;color:var(--muted);">'+f+'</td>' +
               '<td style="font-weight:500;">'+b.name+'</td>' +
               '<td style="text-align:center;"><span class="badge badge-danger">'+b.payment_ids.length+' pagos</span></td>' +
@@ -8234,19 +8234,10 @@ function bnaSeleccionarLote(idx) {
   if (!batch) return;
   _bnaBatchActual = batch;
   // Mostrar confirm antes de abrir el file picker
-  var msg = 'Subir comprobante para:
-
-"' + batch.nombre + '"
-' +
-            'Fecha: ' + (batch.fecha||'').split('-').reverse().join('/') + '
-' +
-            'Pagos: ' + batch.pids.length + '
-
-' +
-            'El PDF se adjuntará a TODOS los pagos del lote.
-NO se enviarán mails.
-
-¿Continuar?';
+  var msg = 'Subir comprobante para: "' + batch.nombre + '"\n' +
+            'Fecha: ' + (batch.fecha||'').split('-').reverse().join('/') + '\n' +
+            'Pagos: ' + batch.pids.length + '\n\n' +
+            'El PDF se adjuntara a TODOS los pagos del lote. NO se enviaran mails. Continuar?';
   if (!confirm(msg)) return;
   var input = document.getElementById('bna-file-input');
   if (input) { input.value = ''; input.click(); }
