@@ -762,6 +762,29 @@ tbody tr:hover td { background: #f8faf9; }
         </div>
       </div>
 
+      <!-- Alertas lotes BNA sin comprobante -->
+      <div id="dash-bna-card" class="card" style="display:none;border-left:3px solid var(--danger);margin-bottom:16px;">
+        <div class="card-header" style="padding-bottom:8px;">
+          <div class="card-title" style="color:var(--danger);">
+            <i class="ti ti-building"></i> Lotes BNA sin comprobante adjunto
+          </div>
+          <button class="btn" style="padding:4px 10px;font-size:11px;"
+            onclick="showPage('comprobantes', document.querySelector('.nav-item[onclick*=comprobantes]'))">
+            <i class="ti ti-arrow-right"></i> Ir a Lotes BNA
+          </button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap" style="border:none;border-radius:0;">
+            <table style="font-size:12px;">
+              <thead><tr>
+                <th>Fecha</th><th>Lote</th><th style="text-align:center;">Pagos sin adjunto</th>
+              </tr></thead>
+              <tbody id="dash-bna-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header">
           <div class="card-title"><i class="ti ti-layout-dashboard"></i> Accesos rápidos</div>
@@ -1443,6 +1466,64 @@ tbody tr:hover td { background: #f8faf9; }
         </div>
       </div>
       <!-- ══════════ FIN MONITOR DE ENVÍOS ══════════ -->
+
+      <!-- ══════════ LOTES BNA ══════════ -->
+      <div class="card" style="margin-top:16px;border-left:3px solid var(--info);">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-building"></i> Lotes BNA — adjuntar comprobantes</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="bna-last-update" style="font-size:11px;color:var(--muted);"></span>
+            <button class="btn" onclick="bnaCargar()" id="bna-btn-refresh" style="padding:6px 12px;font-size:11px;">
+              <i class="ti ti-refresh"></i> Actualizar
+            </button>
+          </div>
+        </div>
+
+        <!-- Métricas -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);">
+          <div style="background:var(--surface);padding:10px 16px;">
+            <div style="font-size:18px;font-weight:700;" id="bna-m-total">—</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Lotes totales</div>
+          </div>
+          <div style="background:var(--surface);padding:10px 16px;">
+            <div style="font-size:18px;font-weight:700;color:var(--danger);" id="bna-m-sin">—</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Sin comprobante</div>
+          </div>
+          <div style="background:var(--surface);padding:10px 16px;">
+            <div style="font-size:18px;font-weight:700;color:var(--success);" id="bna-m-con">—</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Con comprobante</div>
+          </div>
+          <div style="background:var(--surface);padding:10px 16px;">
+            <div style="font-size:18px;font-weight:700;" id="bna-m-pagos">—</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Pagos totales</div>
+          </div>
+        </div>
+
+        <!-- Tabla de lotes -->
+        <div class="table-wrap" style="border:none;border-radius:0;max-height:480px;overflow-y:auto;">
+          <table style="font-size:12px;">
+            <thead style="position:sticky;top:0;background:#fafafa;z-index:1;"><tr>
+              <th>Lote</th>
+              <th>Fecha</th>
+              <th>Cuenta BNA</th>
+              <th style="text-align:right;">Pagos</th>
+              <th style="text-align:right;">Monto total</th>
+              <th style="text-align:center;">Comprobante</th>
+              <th style="text-align:center;">Acción</th>
+            </tr></thead>
+            <tbody id="bna-tbody">
+              <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;">
+                <i class="ti ti-loader"></i> Cargando lotes...
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- ══════════ FIN LOTES BNA ══════════ -->
+
+      <!-- Input oculto para subir PDF de lote -->
+      <input type="file" id="bna-file-input" accept=".pdf" style="display:none" onchange="bnaSubirPDF(this)">
+
 
     </div>
 
@@ -7953,6 +8034,48 @@ async function dashInit() {
     var countEl = document.getElementById('dash-alertas-count');
     if (countEl) { countEl.textContent = pagos.length; }
 
+  // También verificar lotes BNA sin comprobante
+  try {
+    var batches = await odooCall('account.batch.payment', 'search_read',
+      [[]],
+      { fields: ['id','name','date','payment_ids'], order: 'date desc', limit: 50 }
+    );
+    if (batches && batches.length > 0) {
+      var todosPids = [];
+      batches.forEach(function(b){ (b.payment_ids||[]).forEach(function(id){ if(todosPids.indexOf(id)<0) todosPids.push(id); }); });
+      var adjMap = {};
+      if (todosPids.length > 0) {
+        var chunks = [];
+        for (var ci = 0; ci < todosPids.length; ci += 200) chunks.push(todosPids.slice(ci, ci+200));
+        for (var ck = 0; ck < chunks.length; ck++) {
+          var adj = await odooCall('ir.attachment', 'search_read',
+            [[['res_model','=','account.payment'],['res_id','in',chunks[ck]]]],
+            { fields: ['res_id'], limit: 5000 }
+          );
+          adj.forEach(function(a){ adjMap[a.res_id] = true; });
+        }
+      }
+      var sinComp = batches.filter(function(b){
+        return b.payment_ids && b.payment_ids.length > 0 && !b.payment_ids.some(function(id){ return adjMap[id]; });
+      });
+      if (sinComp.length > 0) {
+        var bnaCard = document.getElementById('dash-bna-card');
+        var bnaTbody = document.getElementById('dash-bna-tbody');
+        if (bnaCard && bnaTbody) {
+          bnaTbody.innerHTML = sinComp.map(function(b){
+            var f = (b.date||'').split('-').reverse().join('/');
+            return '<tr style="cursor:pointer;" onclick="showPage('comprobantes',document.querySelector('.nav-item[onclick*=comprobantes]'))">' +
+              '<td style="white-space:nowrap;color:var(--muted);">'+f+'</td>' +
+              '<td style="font-weight:500;">'+b.name+'</td>' +
+              '<td style="text-align:center;"><span class="badge badge-danger">'+b.payment_ids.length+' pagos</span></td>' +
+            '</tr>';
+          }).join('');
+          bnaCard.style.display = 'block';
+        }
+      }
+    }
+  } catch(eBna) { console.warn('dash BNA check:', eBna); }
+
   } catch(e) {
     console.warn('dashInit error:', e);
   }
@@ -7976,6 +8099,221 @@ function dashIrAComprobante(pagoId) {
     }
   }, 800);
 }
+
+
+// ═══════════════════════════════════════════════════════
+// LOTES BNA — adjuntar comprobantes sin mandar mails
+// ═══════════════════════════════════════════════════════
+
+var _bnaBatchActual = null;  // batch seleccionado para subir PDF
+var _bnaBatches = [];        // cache de batches cargados
+
+async function bnaCargar() {
+  var tbody  = document.getElementById('bna-tbody');
+  var btn    = document.getElementById('bna-btn-refresh');
+  var lu     = document.getElementById('bna-last-update');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Cargando...'; }
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;"><i class="ti ti-loader"></i> Cargando lotes...</td></tr>';
+
+  try {
+    // 1. Traer todos los batches
+    var batches = await odooCall('account.batch.payment', 'search_read',
+      [[]],
+      { fields: ['id','name','date','journal_id','state','payment_ids'], order: 'date desc, id desc', limit: 100 }
+    );
+
+    if (!batches || batches.length === 0) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;">Sin lotes encontrados</td></tr>';
+      return;
+    }
+
+    // 2. Traer montos de todos los pagos de todos los batches
+    var todosPagosIds = [];
+    batches.forEach(function(b){ (b.payment_ids||[]).forEach(function(id){ if(todosPagosIds.indexOf(id)<0) todosPagosIds.push(id); }); });
+
+    var pagosData = {};
+    if (todosPagosIds.length > 0) {
+      var pagos = await odooCall('account.payment', 'search_read',
+        [[['id','in',todosPagosIds]]],
+        { fields: ['id','amount'], limit: 10000 }
+      );
+      pagos.forEach(function(p){ pagosData[p.id] = p.amount; });
+    }
+
+    // 3. Verificar adjuntos — buscar en ir.attachment por res_model + res_id
+    var adjuntosMap = {};  // paymentId -> true
+    if (todosPagosIds.length > 0) {
+      // Odoo limita, hacer por chunks de 200
+      var chunks = [];
+      for (var i = 0; i < todosPagosIds.length; i += 200) chunks.push(todosPagosIds.slice(i, i+200));
+      for (var ci = 0; ci < chunks.length; ci++) {
+        var adj = await odooCall('ir.attachment', 'search_read',
+          [[['res_model','=','account.payment'],['res_id','in',chunks[ci]]]],
+          { fields: ['res_id'], limit: 5000 }
+        );
+        adj.forEach(function(a){ adjuntosMap[a.res_id] = true; });
+      }
+    }
+
+    // 4. Calcular por batch si tiene comprobante (todos sus pagos tienen adjunto)
+    _bnaBatches = batches.map(function(b){
+      var pids   = b.payment_ids || [];
+      var monto  = pids.reduce(function(s,id){ return s + (pagosData[id]||0); }, 0);
+      var conAdj = pids.filter(function(id){ return adjuntosMap[id]; }).length;
+      var tieneComp = pids.length > 0 && conAdj > 0;
+      var completo  = pids.length > 0 && conAdj === pids.length;
+      return {
+        id: b.id,
+        nombre: b.name,
+        fecha: b.date,
+        journal: b.journal_id ? (Array.isArray(b.journal_id) ? b.journal_id[1] : b.journal_id) : '—',
+        state: b.state,
+        pids: pids,
+        monto: monto,
+        conAdj: conAdj,
+        tieneComp: tieneComp,
+        completo: completo
+      };
+    });
+
+    // 5. Métricas
+    var sinComp = _bnaBatches.filter(function(b){ return !b.tieneComp; }).length;
+    var conComp = _bnaBatches.filter(function(b){ return b.completo; }).length;
+    var totPagos = _bnaBatches.reduce(function(s,b){ return s+b.pids.length; },0);
+    var set = function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
+    set('bna-m-total', _bnaBatches.length);
+    set('bna-m-sin',   sinComp);
+    set('bna-m-con',   conComp);
+    set('bna-m-pagos', totPagos);
+
+    // 6. Renderizar tabla
+    var fmt = function(n){ return '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+    var rows = _bnaBatches.map(function(b, idx){
+      var fechaStr = (b.fecha||'').split('-').reverse().join('/');
+      // Journal: acortar para que quepa
+      var journal = b.journal.replace('BANCO $ NACIÓN - ','').replace('BANCO $ ','');
+      // Estado comprobante
+      var compCell;
+      if (b.completo) {
+        compCell = '<span class="badge badge-ok">✅ Completo</span>';
+      } else if (b.tieneComp) {
+        compCell = '<span class="badge badge-warn">⚠ Parcial ('+b.conAdj+'/'+b.pids.length+')</span>';
+      } else {
+        compCell = '<span class="badge badge-danger">❌ Sin adjuntar</span>';
+      }
+      // Acción
+      var accion = b.completo
+        ? '<span style="font-size:11px;color:var(--muted);">—</span>'
+        : '<button class="btn btn-primary" style="padding:4px 10px;font-size:11px;" onclick="bnaSeleccionarLote('+idx+')"><i class="ti ti-upload"></i> Subir PDF</button>';
+
+      var rowStyle = !b.tieneComp ? 'background:rgba(192,57,43,.04);' : '';
+      return '<tr style="'+rowStyle+'">' +
+        '<td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+b.nombre+'">'+b.nombre+'</td>' +
+        '<td style="white-space:nowrap;color:var(--muted);">'+fechaStr+'</td>' +
+        '<td style="font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+b.journal+'">'+journal+'</td>' +
+        '<td style="text-align:right;">'+b.pids.length+'</td>' +
+        '<td class="mono" style="text-align:right;font-weight:600;">'+fmt(b.monto)+'</td>' +
+        '<td style="text-align:center;">'+compCell+'</td>' +
+        '<td style="text-align:center;">'+accion+'</td>' +
+      '</tr>';
+    }).join('');
+
+    if (tbody) tbody.innerHTML = rows || '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;">Sin lotes</td></tr>';
+    if (lu) lu.textContent = 'actualizado ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+
+  } catch(e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:24px;">Error: '+e.message+'</td></tr>';
+    console.error('bnaCargar error:', e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i> Actualizar'; }
+  }
+}
+
+function bnaSeleccionarLote(idx) {
+  var batch = _bnaBatches[idx];
+  if (!batch) return;
+  _bnaBatchActual = batch;
+  // Mostrar confirm antes de abrir el file picker
+  var msg = 'Subir comprobante para:
+
+"' + batch.nombre + '"
+' +
+            'Fecha: ' + (batch.fecha||'').split('-').reverse().join('/') + '
+' +
+            'Pagos: ' + batch.pids.length + '
+
+' +
+            'El PDF se adjuntará a TODOS los pagos del lote.
+NO se enviarán mails.
+
+¿Continuar?';
+  if (!confirm(msg)) return;
+  var input = document.getElementById('bna-file-input');
+  if (input) { input.value = ''; input.click(); }
+}
+
+async function bnaSubirPDF(input) {
+  if (!input.files || !input.files[0]) return;
+  var batch = _bnaBatchActual;
+  if (!batch) return;
+
+  var file = input.files[0];
+  var tbody = document.getElementById('bna-tbody');
+
+  // Leer como base64
+  var base64 = await new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onload = function(e){ resolve(e.target.result.split(',')[1]); };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  var total = batch.pids.length;
+  var ok = 0, err = 0;
+
+  // Mostrar progreso en el toast
+  showToast('Adjuntando a ' + total + ' pagos...', 'ok');
+
+  // Adjuntar de a uno (sin mandar mails — ir.attachment no dispara notificaciones)
+  for (var i = 0; i < batch.pids.length; i++) {
+    var pid = batch.pids[i];
+    try {
+      await odooCall('ir.attachment', 'create', [{
+        name: file.name,
+        datas: base64,
+        res_model: 'account.payment',
+        res_id: pid,
+        type: 'binary'
+      }]);
+      ok++;
+    } catch(e) {
+      err++;
+      console.warn('Error adjuntando pago '+pid+':', e.message);
+    }
+  }
+
+  if (err === 0) {
+    showToast('✅ ' + ok + ' comprobantes adjuntados correctamente', 'ok');
+  } else {
+    showToast('⚠ ' + ok + ' OK · ' + err + ' errores', 'error');
+  }
+
+  // Recargar la tabla
+  await bnaCargar();
+}
+
+// Auto-cargar al entrar a comprobantes
+(function(){
+  var origShow = window._origShowPageEnvio || window.showPage;
+  var wrapped  = window.showPage;
+  var _origBna = wrapped;
+  window.showPage = function(id, el) {
+    _origBna(id, el);
+    if (id === 'comprobantes') {
+      setTimeout(bnaCargar, 300);
+    }
+  };
+})();
 
 </script>
 </body>
