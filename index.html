@@ -664,6 +664,9 @@ tbody tr:hover td { background: #f8faf9; }
   <div class="nav-item" onclick="showPage('reportes',this)">
     <i class="ti ti-chart-bar"></i> Saldos
   </div>
+  <div class="nav-item" onclick="showPage('convenios',this)">
+    <i class="ti ti-file-invoice"></i> Convenios
+  </div>
   <div class="nav-item" onclick="showPage('fondos',this)">
     <i class="ti ti-coin"></i> Fondos Propios
   </div>
@@ -1807,6 +1810,67 @@ tbody tr:hover td { background: #f8faf9; }
       </div>
     </div>
 
+
+    <!-- ══════════ CONVENIOS ══════════ -->
+    <div id="page-convenios" class="page">
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap;">
+        <div style="position:relative;flex:1;min-width:260px;max-width:520px;">
+          <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;pointer-events:none;"></i>
+          <input type="text" id="conv-search-input" placeholder="Buscar convenio por nombre (mín. 3 caracteres)..."
+            style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+            oninput="convBuscar(this.value)" autocomplete="off">
+        </div>
+        <div id="conv-search-estado" style="font-size:12px;color:var(--muted);white-space:nowrap;">Escribí para buscar</div>
+      </div>
+
+      <!-- Resultados -->
+      <div id="conv-resultados" style="display:none;">
+        <div class="table-wrap">
+          <table id="conv-tabla" style="font-size:12px;">
+            <thead><tr>
+              <th>Convenio</th>
+              <th style="text-align:right;">Ingresos</th>
+              <th style="text-align:right;">Liquidaciones</th>
+              <th style="text-align:right;">Egresos</th>
+              <th style="text-align:right;">Saldo</th>
+              <th style="text-align:center;">Estado</th>
+            </tr></thead>
+            <tbody id="conv-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sin resultados -->
+      <div id="conv-empty" style="display:none;text-align:center;padding:48px 20px;color:var(--muted);">
+        <i class="ti ti-search" style="font-size:32px;display:block;margin-bottom:8px;"></i>
+        Sin resultados para esa búsqueda
+      </div>
+
+      <!-- Panel detalle -->
+      <div id="conv-overlay" onclick="convCerrar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;"></div>
+      <div id="conv-panel" style="display:none;position:fixed;top:0;right:0;width:min(680px,100vw);height:100vh;background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.18);z-index:1001;flex-direction:column;overflow:hidden;">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0;">
+          <div>
+            <div id="conv-det-nombre" style="font-size:14px;font-weight:700;color:var(--text);line-height:1.3;"></div>
+            <div id="conv-det-id" style="font-size:10px;color:var(--muted);margin-top:2px;"></div>
+          </div>
+          <button onclick="convCerrar()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;padding:2px;flex-shrink:0;"><i class="ti ti-x"></i></button>
+        </div>
+        <!-- KPIs -->
+        <div id="conv-det-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);flex-shrink:0;"></div>
+        <!-- Tabs -->
+        <div class="tab-row" id="conv-det-tabs" style="padding:0 16px;margin:0;border-bottom:1px solid var(--border);flex-shrink:0;">
+          <button class="tab-btn active" onclick="convDetTab(this,'ingresos')">Ingresos</button>
+          <button class="tab-btn" onclick="convDetTab(this,'liquidaciones')">Liquidaciones</button>
+          <button class="tab-btn" onclick="convDetTab(this,'egresos')">Egresos</button>
+          <button class="tab-btn" onclick="convDetTab(this,'historial')">Historial</button>
+        </div>
+        <!-- Body -->
+        <div id="conv-det-body" style="flex:1;overflow-y:auto;padding:16px 20px;"></div>
+      </div>
+
+    </div>
 
     <!-- ══════════ FONDOS PROPIOS ══════════ -->
     <div id="page-fondos" class="page">
@@ -7415,6 +7479,368 @@ if (typeof window._origShowPageEnvio === 'undefined') {
   };
 }
 
+
+
+// ═══════════════════════════════════════════════════════
+// CONVENIOS — búsqueda libre + detalle completo
+// ═══════════════════════════════════════════════════════
+
+var _convTimer = null;
+var _convCache = {};   // cache por query para no re-consultar
+var _convDetData = {}; // datos del convenio abierto en el panel
+
+function convBuscar(q) {
+  q = (q||'').trim();
+  var estado = document.getElementById('conv-search-estado');
+  var res    = document.getElementById('conv-resultados');
+  var empty  = document.getElementById('conv-empty');
+  var tbody  = document.getElementById('conv-tbody');
+
+  if (q.length < 3) {
+    if (estado) estado.textContent = 'Escribí para buscar';
+    if (res)    res.style.display  = 'none';
+    if (empty)  empty.style.display= 'none';
+    if (tbody)  tbody.innerHTML    = '';
+    clearTimeout(_convTimer);
+    return;
+  }
+
+  if (estado) estado.textContent = 'Buscando...';
+  clearTimeout(_convTimer);
+  _convTimer = setTimeout(function(){ _convEjecutarBusqueda(q); }, 350);
+}
+
+async function _convEjecutarBusqueda(q) {
+  var estado = document.getElementById('conv-search-estado');
+  var res    = document.getElementById('conv-resultados');
+  var empty  = document.getElementById('conv-empty');
+  var tbody  = document.getElementById('conv-tbody');
+
+  try {
+    // Buscar cuentas analíticas que matcheen
+    var analiticas = await odooCall('account.analytic.account', 'search_read',
+      [[['active','=',true],['name','ilike',q]]],
+      { fields: ['id','name'], order: 'name asc', limit: 50 }
+    );
+
+    if (!analiticas || analiticas.length === 0) {
+      if (estado) estado.textContent = 'Sin resultados';
+      if (res)    res.style.display  = 'none';
+      if (empty)  empty.style.display= 'block';
+      return;
+    }
+
+    if (estado) estado.textContent = 'Cargando movimientos...';
+
+    var ids = analiticas.map(function(a){ return a.id; });
+    var idMap = {};
+    analiticas.forEach(function(a){ idMap[a.id] = a.name; });
+
+    // Traer líneas de out_invoice (ingresos + liquidaciones)
+    var lineasOut = await odooCall('account.move.line', 'search_read',
+      [[['analytic_distribution','!=',false],
+        ['move_id.move_type','=','out_invoice'],
+        ['move_id.state','=','posted']]],
+      { fields: ['move_id','analytic_distribution'], limit: 10000 }
+    );
+
+    // Traer líneas de in_invoice (egresos)
+    var lineasIn = await odooCall('account.move.line', 'search_read',
+      [[['analytic_distribution','!=',false],
+        ['move_id.move_type','=','in_invoice'],
+        ['move_id.state','=','posted']]],
+      { fields: ['move_id','analytic_distribution'], limit: 10000 }
+    );
+
+    // Mapear move_ids por carta
+    var outMoveMap = {};  // cartaId -> [moveId]
+    var inMoveMap  = {};
+    ids.forEach(function(id){ outMoveMap[id]=[]; inMoveMap[id]=[]; });
+
+    function _mapLines(lineas, mapa) {
+      lineas.forEach(function(l){
+        Object.keys(l.analytic_distribution).map(Number).forEach(function(cid){
+          if (mapa[cid] !== undefined && mapa[cid].indexOf(l.move_id[0]) < 0) {
+            mapa[cid].push(l.move_id[0]);
+          }
+        });
+      });
+    }
+    _mapLines(lineasOut, outMoveMap);
+    _mapLines(lineasIn,  inMoveMap);
+
+    // Traer facturas out_invoice
+    var allOutIds = [];
+    ids.forEach(function(id){ outMoveMap[id].forEach(function(m){ if(allOutIds.indexOf(m)<0) allOutIds.push(m); }); });
+    var allInIds  = [];
+    ids.forEach(function(id){ inMoveMap[id].forEach(function(m){ if(allInIds.indexOf(m)<0) allInIds.push(m); }); });
+
+    var outFacturas = {}, inFacturas = {};
+    var FIELDS_MOVE = ['id','name','amount_total','invoice_date','date','payment_state','partner_id','state'];
+
+    if (allOutIds.length > 0) {
+      var outList = await odooCall('account.move','search_read',
+        [[['id','in',allOutIds]]],
+        { fields: FIELDS_MOVE, limit: 5000 }
+      );
+      outList.forEach(function(f){ outFacturas[f.id]=f; });
+    }
+    if (allInIds.length > 0) {
+      var inList = await odooCall('account.move','search_read',
+        [[['id','in',allInIds]]],
+        { fields: FIELDS_MOVE, limit: 5000 }
+      );
+      inList.forEach(function(f){ inFacturas[f.id]=f; });
+    }
+
+    // Construir datos por carta
+    var cartasData = analiticas.map(function(a){
+      var cid = a.id;
+      var outFactsList = outMoveMap[cid].map(function(mid){ return outFacturas[mid]; }).filter(Boolean);
+      var inFactsList  = inMoveMap[cid].map(function(mid){ return inFacturas[mid]; }).filter(Boolean);
+
+      var ingresos      = outFactsList.filter(function(f){ return ['in_payment','paid','partial'].indexOf(f.payment_state) >= 0; });
+      var liquidaciones = outFactsList.filter(function(f){ return f.payment_state === 'not_paid'; });
+
+      var totalIngresos      = ingresos.reduce(function(s,f){ return s+f.amount_total; },0);
+      var totalLiquidaciones = liquidaciones.reduce(function(s,f){ return s+f.amount_total; },0);
+      var totalEgresos       = inFactsList.reduce(function(s,f){ return s+f.amount_total; },0);
+      var saldo              = totalIngresos - totalEgresos;
+
+      // Sort desc
+      function sortDesc(arr){ return arr.slice().sort(function(a,b){ return (b.invoice_date||b.date||'').localeCompare(a.invoice_date||a.date||''); }); }
+
+      return {
+        id: cid,
+        nombre: a.name,
+        ingresos:      sortDesc(ingresos),
+        liquidaciones: sortDesc(liquidaciones),
+        egresos:       sortDesc(inFactsList),
+        totalIngresos:      totalIngresos,
+        totalLiquidaciones: totalLiquidaciones,
+        totalEgresos:       totalEgresos,
+        saldo:              saldo
+      };
+    }).filter(function(c){ return c.ingresos.length > 0 || c.liquidaciones.length > 0 || c.egresos.length > 0; });
+
+    // Guardar en cache
+    _convCache[q] = cartasData;
+
+    // Renderizar tabla
+    _convRenderTabla(cartasData);
+    if (estado) estado.textContent = cartasData.length + ' convenio' + (cartasData.length!==1?'s':'') + ' con movimientos';
+
+  } catch(e) {
+    if (estado) estado.textContent = 'Error: ' + e.message;
+    console.error('convBuscar error:', e);
+  }
+}
+
+function _convRenderTabla(data) {
+  var res   = document.getElementById('conv-resultados');
+  var empty = document.getElementById('conv-empty');
+  var tbody = document.getElementById('conv-tbody');
+
+  if (!data || data.length === 0) {
+    if (res)   res.style.display  = 'none';
+    if (empty) empty.style.display= 'block';
+    return;
+  }
+
+  var fmt = function(n){ return '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+
+  var rows = data.map(function(c, idx){
+    var saldoColor = c.saldo >= 0 ? 'var(--success)' : 'var(--danger)';
+    var estadoBadge = c.ingresos.length > 0
+      ? '<span class="badge badge-ok">Con ingresos</span>'
+      : c.liquidaciones.length > 0
+        ? '<span class="badge badge-warn">Solo liquidaciones</span>'
+        : '<span class="badge badge-muted">Solo egresos</span>';
+    return '<tr style="cursor:pointer;" onclick="convAbrirDetalle('+idx+')">' +
+      '<td style="font-weight:500;max-width:260px;">' +
+        '<div style="font-size:12px;line-height:1.3;">'+c.nombre+'</div>' +
+        '<div style="font-size:10px;color:var(--muted);">'+c.ingresos.length+' ing · '+c.liquidaciones.length+' liq · '+c.egresos.length+' egr</div>' +
+      '</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">'+(c.totalIngresos>0?fmt(c.totalIngresos):'—')+'</td>' +
+      '<td class="mono" style="text-align:right;color:var(--warn);">'+(c.totalLiquidaciones>0?fmt(c.totalLiquidaciones):'—')+'</td>' +
+      '<td class="mono" style="text-align:right;color:var(--danger);">'+(c.totalEgresos>0?fmt(c.totalEgresos):'—')+'</td>' +
+      '<td class="mono" style="text-align:right;font-weight:700;color:'+saldoColor+';">'+fmt(c.saldo)+'</td>' +
+      '<td style="text-align:center;">'+estadoBadge+'</td>' +
+    '</tr>';
+  }).join('');
+
+  if (tbody) tbody.innerHTML = rows;
+  if (res)   res.style.display  = 'block';
+  if (empty) empty.style.display= 'none';
+
+  // Guardar data para acceso por índice
+  window._convTableData = data;
+}
+
+function convAbrirDetalle(idx) {
+  var data = window._convTableData;
+  if (!data || !data[idx]) return;
+  var d = data[idx];
+  _convDetData = d;
+
+  var fmt = function(n){ return '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+
+  // Header
+  document.getElementById('conv-det-nombre').textContent = d.nombre;
+  document.getElementById('conv-det-id').textContent = 'ID analítica: ' + d.id;
+
+  // KPIs
+  var saldoColor = d.saldo >= 0 ? 'var(--success)' : 'var(--danger)';
+  document.getElementById('conv-det-kpis').innerHTML =
+    _convKpi(fmt(d.totalIngresos), 'Ingresos cobrados', 'var(--success)') +
+    _convKpi(d.totalLiquidaciones>0 ? fmt(d.totalLiquidaciones) : '—', 'Liquidaciones pendientes', 'var(--warn)') +
+    _convKpi(fmt(d.totalEgresos), 'Egresos totales', 'var(--danger)') +
+    _convKpi(fmt(d.saldo), 'Saldo neto', saldoColor);
+
+  // Render tabs
+  _convRenderDetalle('ingresos');
+
+  // Reset tabs
+  document.querySelectorAll('#conv-det-tabs .tab-btn').forEach(function(b,i){ b.classList.toggle('active', i===0); });
+
+  // Mostrar panel
+  document.getElementById('conv-panel').style.display   = 'flex';
+  document.getElementById('conv-overlay').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+
+function _convKpi(val, lbl, color) {
+  return '<div style="background:var(--surface);padding:10px 14px;">' +
+    '<div style="font-size:14px;font-weight:700;color:'+(color||'var(--text)')+';">'+val+'</div>' +
+    '<div style="font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.04em;">'+lbl+'</div>' +
+  '</div>';
+}
+
+function convDetTab(btn, tab) {
+  document.querySelectorAll('#conv-det-tabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  _convRenderDetalle(tab);
+}
+
+function _convRenderDetalle(tab) {
+  var body = document.getElementById('conv-det-body');
+  if (!body || !_convDetData) return;
+  var d = _convDetData;
+  var fmt = function(n){ return '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+
+  function fRow(f, tipo) {
+    var fecha   = (f.invoice_date||f.date||'').split('-').reverse().join('/');
+    var partner = f.partner_id ? (Array.isArray(f.partner_id) ? f.partner_id[1] : f.partner_id) : '—';
+    var estadoPill;
+    if (tipo === 'liquidacion') {
+      estadoPill = '<span class="badge badge-warn">Pendiente</span>';
+    } else if (f.payment_state === 'paid') {
+      estadoPill = '<span class="badge badge-ok">Pagado</span>';
+    } else if (f.payment_state === 'in_payment') {
+      estadoPill = '<span class="badge badge-info">En proceso</span>';
+    } else if (f.payment_state === 'partial') {
+      estadoPill = '<span class="badge badge-warn">Parcial</span>';
+    } else {
+      estadoPill = '<span class="badge badge-muted">—</span>';
+    }
+    var montoColor = tipo === 'egreso' ? 'color:var(--danger);' : tipo === 'liquidacion' ? 'color:var(--warn);' : 'color:var(--success);';
+    return '<tr>' +
+      '<td style="white-space:nowrap;font-size:11px;">'+fecha+'</td>' +
+      '<td style="font-size:11px;">'+( f.name||'—')+'</td>' +
+      '<td class="mono" style="text-align:right;font-size:11px;font-weight:600;'+montoColor+'">'+fmt(f.amount_total||0)+'</td>' +
+      '<td>'+estadoPill+'</td>' +
+      '<td style="font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+partner+'">'+partner+'</td>' +
+    '</tr>';
+  }
+
+  function buildTable(lista, tipo, emptyMsg) {
+    if (!lista || lista.length === 0) {
+      return '<div style="text-align:center;padding:32px;color:var(--muted);font-size:13px;">'+emptyMsg+'</div>';
+    }
+    var total = lista.reduce(function(s,f){ return s+f.amount_total; },0);
+    var totalColor = tipo === 'egreso' ? 'color:var(--danger);' : tipo === 'liquidacion' ? 'color:var(--warn);' : 'color:var(--success);';
+    var rows = lista.map(function(f){ return fRow(f, tipo); }).join('');
+    var subtotal = '<tr style="border-top:2px solid var(--border);background:var(--surface-alt,#f8faf9);">' +
+      '<td colspan="2" style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">'+
+        'Total — '+lista.length+' comprobante'+(lista.length!==1?'s':'')+
+      '</td>' +
+      '<td class="mono" style="text-align:right;font-size:13px;font-weight:700;'+totalColor+'padding-right:8px;">'+fmt(total)+'</td>' +
+      '<td colspan="2"></td>' +
+    '</tr>';
+    return '<div class="table-wrap" style="margin-top:8px;">' +
+      '<table style="font-size:11px;"><thead><tr>' +
+        '<th>Fecha</th><th>Comprobante</th><th style="text-align:right;">Monto</th><th>Estado</th><th>Partner</th>' +
+      '</tr></thead>' +
+      '<tbody>'+rows+subtotal+'</tbody>' +
+      '</table></div>';
+  }
+
+  function buildHistorial() {
+    var histMeses = {};
+    function addToMes(lista, tipo) {
+      (lista||[]).forEach(function(f){
+        var fd = f.invoice_date||f.date||'';
+        var km = fd.substring(0,7);
+        if (!km) return;
+        if (!histMeses[km]) histMeses[km] = { ingresos:[], liquidaciones:[], egresos:[] };
+        histMeses[km][tipo].push(f);
+      });
+    }
+    addToMes(d.ingresos,      'ingresos');
+    addToMes(d.liquidaciones, 'liquidaciones');
+    addToMes(d.egresos,       'egresos');
+
+    var meses = Object.keys(histMeses).sort().reverse();
+    if (meses.length === 0) return '<div style="text-align:center;padding:32px;color:var(--muted);">Sin historial</div>';
+
+    var rows = meses.map(function(km){
+      var p   = histMeses[km];
+      var ti  = p.ingresos.reduce(function(s,f){ return s+f.amount_total; },0);
+      var tl  = p.liquidaciones.reduce(function(s,f){ return s+f.amount_total; },0);
+      var te  = p.egresos.reduce(function(s,f){ return s+f.amount_total; },0);
+      var nt  = ti - te;
+      var label = new Date(km+'-15').toLocaleString('es-AR',{month:'short',year:'2-digit'});
+      return '<tr>' +
+        '<td style="font-weight:600;white-space:nowrap;">'+label+'</td>' +
+        '<td class="mono" style="text-align:right;color:var(--success);">'+(ti>0?fmt(ti):'—')+'</td>' +
+        '<td class="mono" style="text-align:right;color:var(--warn);">'+(tl>0?fmt(tl):'—')+'</td>' +
+        '<td class="mono" style="text-align:right;color:var(--danger);">'+(te>0?fmt(te):'—')+'</td>' +
+        '<td class="mono" style="text-align:right;font-weight:600;color:'+(nt>=0?'var(--success)':'var(--danger)')+';">'+(ti>0||te>0?fmt(nt):'—')+'</td>' +
+      '</tr>';
+    }).join('');
+
+    return '<div class="table-wrap" style="margin-top:8px;">' +
+      '<table style="font-size:11px;"><thead><tr>' +
+        '<th>Mes</th>' +
+        '<th style="text-align:right;">Ingresos</th>' +
+        '<th style="text-align:right;">Liquidaciones</th>' +
+        '<th style="text-align:right;">Egresos</th>' +
+        '<th style="text-align:right;">Neto</th>' +
+      '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }
+
+  var html = '';
+  if (tab === 'ingresos') {
+    html = '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Facturas de cliente cobradas (in_payment / paid / partial) — historial completo</div>' +
+      buildTable(d.ingresos, 'ingreso', 'Sin ingresos cobrados registrados');
+  } else if (tab === 'liquidaciones') {
+    html = '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Facturas de cliente sin cobrar (not_paid) — saldo pendiente de ingreso</div>' +
+      buildTable(d.liquidaciones, 'liquidacion', 'Sin liquidaciones pendientes');
+  } else if (tab === 'egresos') {
+    html = '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Facturas de proveedor (in_invoice) — todos los egresos del convenio</div>' +
+      buildTable(d.egresos, 'egreso', 'Sin egresos registrados');
+  } else if (tab === 'historial') {
+    html = buildHistorial();
+  }
+
+  body.innerHTML = html;
+}
+
+function convCerrar() {
+  document.getElementById('conv-panel').style.display   = 'none';
+  document.getElementById('conv-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
 
 </script>
 </body>
