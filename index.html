@@ -704,87 +704,129 @@ tbody tr:hover td { background: #f8faf9; }
 
     <!-- ══════════ DASHBOARD ══════════ -->
     <div id="page-dashboard" class="page active">
-      <div class="metrics-grid">
-        <div class="metric-card success">
-          <div class="metric-label">Honorarios cargados hoy</div>
-          <div class="metric-value" id="dash-hon-count">—</div>
-          <div class="metric-sub" id="dash-hon-sub">usá el módulo Honorarios</div>
-        </div>
-        <div class="metric-card info">
-          <div class="metric-label">Comprobantes separados</div>
-          <div class="metric-value" id="dash-comp-count">—</div>
-          <div class="metric-sub">en esta sesión</div>
-        </div>
+
+      <!-- KPIs -->
+      <div class="metrics-grid" style="margin-bottom:16px;">
         <div class="metric-card">
           <div class="metric-label">Portal</div>
-          <div class="metric-value" style="font-size:16px;color:var(--success);">✓ Conectado</div>
+          <div class="metric-value" style="font-size:15px;color:var(--success);">✓ Conectado</div>
           <div class="metric-sub">Odoo + Railway activos</div>
         </div>
-        <div class="metric-card" id="dash-pendientes-card" style="display:none;">
-          <div class="metric-label">Sin enviar (7 días)</div>
-          <div class="metric-value" id="dash-alertas-count" style="color:var(--warn);">—</div>
-          <div class="metric-sub">comprobantes pendientes</div>
+        <div class="metric-card" id="dash-k-ib">
+          <div class="metric-label">Interbanking sin enviar</div>
+          <div class="metric-value" id="dash-k-ib-val" style="color:var(--warn);">—</div>
+          <div class="metric-sub" id="dash-k-ib-sub">cargando...</div>
         </div>
-        <div class="metric-card">
-          <div class="metric-label">Versión</div>
-          <div class="metric-value" style="font-size:16px;">v1.0</div>
-          <div class="metric-sub">ArgenINTA · Tesorería</div>
+        <div class="metric-card" id="dash-k-bna">
+          <div class="metric-label">Lotes BNA sin adjunto</div>
+          <div class="metric-value" id="dash-k-bna-val" style="color:var(--danger);">—</div>
+          <div class="metric-sub" id="dash-k-bna-sub">cargando...</div>
+        </div>
+        <div class="metric-card" id="dash-k-error">
+          <div class="metric-label">Errores de envío</div>
+          <div class="metric-value" id="dash-k-error-val" style="color:var(--danger);">—</div>
+          <div class="metric-sub">últimos 7 días</div>
         </div>
       </div>
 
-      <!-- Alertas comprobantes sin enviar -->
-      <div id="dash-alertas-card" class="card" style="display:none;border-left:3px solid var(--warn);margin-bottom:16px;">
-        <div class="card-header" style="padding-bottom:8px;">
-          <div class="card-title" style="color:var(--warn);">
-            <i class="ti ti-bell-ringing"></i> Comprobantes pendientes de envío
-          </div>
+      <!-- Panel de alertas unificado -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-bell-ringing"></i> Panel de alertas</div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span id="dash-alertas-fecha" style="font-size:11px;color:var(--muted);"></span>
-            <button class="btn" style="padding:4px 10px;font-size:11px;"
-              onclick="showPage('comprobantes', document.querySelector('.nav-item[onclick*=comprobantes]'))">
-              <i class="ti ti-arrow-right"></i> Ver todos
+            <button class="btn" style="padding:5px 12px;font-size:11px;" onclick="dashInit()">
+              <i class="ti ti-refresh"></i> Actualizar
             </button>
           </div>
         </div>
-        <div class="card-body" style="padding:0;">
-          <div class="table-wrap" style="border:none;border-radius:0;max-height:280px;overflow-y:auto;">
-            <table style="font-size:12px;">
-              <thead><tr>
-                <th>Fecha</th>
-                <th>Beneficiario</th>
-                <th style="text-align:right;">Monto</th>
-                <th style="text-align:center;">Estado</th>
-              </tr></thead>
-              <tbody id="dash-alertas-tbody">
-              </tbody>
-            </table>
-          </div>
+        <div id="dash-alertas-loading" style="text-align:center;padding:32px;color:var(--muted);font-size:12px;">
+          <i class="ti ti-loader" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+          Cargando alertas...
         </div>
+        <div id="dash-alertas-ok" style="display:none;text-align:center;padding:32px;color:var(--success);">
+          <i class="ti ti-circle-check" style="font-size:32px;display:block;margin-bottom:8px;"></i>
+          <div style="font-size:14px;font-weight:600;">Todo en orden</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Sin alertas pendientes al día de hoy</div>
+        </div>
+        <div id="dash-alertas-body" style="display:none;">
+
+          <!-- Sección 1: Interbanking sin enviar -->
+          <div id="dash-sec-ib" style="display:none;">
+            <div style="padding:10px 18px;background:rgba(183,96,10,.06);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+              <div style="font-size:12px;font-weight:600;color:var(--warn);">
+                <i class="ti ti-mail-x"></i> Comprobantes Interbanking sin enviar
+                <span id="dash-sec-ib-count" class="badge badge-warn" style="margin-left:6px;"></span>
+              </div>
+              <button class="btn" style="padding:3px 10px;font-size:11px;"
+                onclick="showPage('comprobantes',document.querySelectorAll('.nav-item')[3])">
+                Ver en Comprobantes →
+              </button>
+            </div>
+            <div class="table-wrap" style="border:none;border-radius:0;max-height:240px;overflow-y:auto;">
+              <table style="font-size:12px;">
+                <thead><tr>
+                  <th>Fecha</th><th>Beneficiario</th>
+                  <th style="text-align:right;">Monto</th>
+                  <th style="text-align:center;">Estado</th>
+                  <th style="text-align:center;">Días</th>
+                </tr></thead>
+                <tbody id="dash-alertas-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Sección 2: Errores de envío -->
+          <div id="dash-sec-err" style="display:none;">
+            <div style="padding:10px 18px;background:rgba(192,57,43,.06);border-bottom:1px solid var(--border);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+              <div style="font-size:12px;font-weight:600;color:var(--danger);">
+                <i class="ti ti-alert-triangle"></i> Errores de envío
+                <span id="dash-sec-err-count" class="badge badge-danger" style="margin-left:6px;"></span>
+              </div>
+              <button class="btn" style="padding:3px 10px;font-size:11px;"
+                onclick="showPage('comprobantes',document.querySelectorAll('.nav-item')[3])">
+                Ver en Comprobantes →
+              </button>
+            </div>
+            <div class="table-wrap" style="border:none;border-radius:0;max-height:200px;overflow-y:auto;">
+              <table style="font-size:12px;">
+                <thead><tr>
+                  <th>Fecha</th><th>Beneficiario</th>
+                  <th style="text-align:right;">Monto</th>
+                  <th style="text-align:center;">Estado</th>
+                </tr></thead>
+                <tbody id="dash-err-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Sección 3: Lotes BNA sin comprobante -->
+          <div id="dash-sec-bna" style="display:none;">
+            <div style="padding:10px 18px;background:rgba(192,57,43,.06);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+              <div style="font-size:12px;font-weight:600;color:var(--danger);">
+                <i class="ti ti-building"></i> Lotes BNA sin comprobante adjunto
+                <span id="dash-sec-bna-count" class="badge badge-danger" style="margin-left:6px;"></span>
+              </div>
+              <button class="btn" style="padding:3px 10px;font-size:11px;"
+                onclick="showPage('comprobantes',document.querySelectorAll('.nav-item')[3])">
+                Ver en Comprobantes →
+              </button>
+            </div>
+            <div class="table-wrap" style="border:none;border-radius:0;max-height:200px;overflow-y:auto;">
+              <table style="font-size:12px;">
+                <thead><tr>
+                  <th>Fecha</th><th>Lote</th><th>Cuenta</th>
+                  <th style="text-align:right;">Pagos</th>
+                </tr></thead>
+                <tbody id="dash-bna-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div><!-- /dash-alertas-body -->
       </div>
 
-      <!-- Alertas lotes BNA sin comprobante -->
-      <div id="dash-bna-card" class="card" style="display:none;border-left:3px solid var(--danger);margin-bottom:16px;">
-        <div class="card-header" style="padding-bottom:8px;">
-          <div class="card-title" style="color:var(--danger);">
-            <i class="ti ti-building"></i> Lotes BNA sin comprobante adjunto
-          </div>
-          <button class="btn" style="padding:4px 10px;font-size:11px;"
-            onclick="showPage('comprobantes', document.querySelector('.nav-item[onclick*=comprobantes]'))">
-            <i class="ti ti-arrow-right"></i> Ir a Lotes BNA
-          </button>
-        </div>
-        <div class="card-body" style="padding:0;">
-          <div class="table-wrap" style="border:none;border-radius:0;">
-            <table style="font-size:12px;">
-              <thead><tr>
-                <th>Fecha</th><th>Lote</th><th style="text-align:center;">Pagos sin adjunto</th>
-              </tr></thead>
-              <tbody id="dash-bna-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
+      <!-- Accesos rápidos -->
       <div class="card">
         <div class="card-header">
           <div class="card-title"><i class="ti ti-layout-dashboard"></i> Accesos rápidos</div>
@@ -5204,7 +5246,8 @@ async function compSubirOdooLote(filename, pdfBytes, cuit, monto) {
     adjData.res_model = 'account.payment';
     adjData.res_id    = paymentId;
   }
-  return await odooCall('ir.attachment', 'create', [adjData]);
+  const adjId = await odooCall('ir.attachment', 'create', [adjData]);
+  return { adjId, paymentId };
 }
 
 function compParseInterbanking(text) {
@@ -5303,21 +5346,24 @@ async function procesarComprobantes() {
       sd.addPage(cp);
       const pb = await sd.save();
       zip.file(fn, pb);
-      let odooStatus = 'pendiente', odooId = null;
+      let odooStatus = 'pendiente', odooId = null, matchedPayment = null;
       try {
         if (compBanco === 'nacion_lote') {
-          odooId = await compSubirOdooLote(fn, pb, parsed.cuit, parsed.monto);
+          const loteResult = await compSubirOdooLote(fn, pb, parsed.cuit, parsed.monto);
+          odooId = loteResult.adjId;
+          matchedPayment = loteResult.paymentId;
+          odooStatus = 'ok';
         } else {
           odooId = await compSubirOdoo(fn, pb);
           // Delay anti-spam: solo para Interbanking/Nacion normal
           if (i < total - 1) await new Promise(r => setTimeout(r, 4000));
+          odooStatus='ok';
         }
-        odooStatus='ok';
       } catch(e) {
         odooStatus='error';
         console.error('compSubirOdoo error:', e.message, e);
       }
-      results.push({page:i+1, filename:fn, hasError, odooStatus, odooId});
+      results.push({page:i+1, filename:fn, hasError, odooStatus, odooId, matchedPayment});
       await new Promise(r=>setTimeout(r,0));
     }
 
@@ -5340,14 +5386,27 @@ function compMostrarResultados(results, errors, total, okCount) {
   document.getElementById('comp-statOk').textContent = `${total} archivos`;
   const as = document.getElementById('comp-alertSuccess');
   const ae = document.getElementById('comp-alertError');
-  if (okCount>0) { as.style.display='flex'; as.innerHTML=`<i class="ti ti-check"></i><div>${okCount} comprobante(s) subidos a Odoo Documents.</div>`; }
+  const matchedCount = results.filter(r=>r.matchedPayment).length;
+  if (okCount>0) {
+    as.style.display='flex';
+    if (matchedCount > 0) {
+      const sinMatch = okCount - matchedCount;
+      as.innerHTML=`<i class="ti ti-check"></i><div>${okCount} comprobantes procesados — <strong>${matchedCount} adjuntados a gestiones</strong>${sinMatch>0?' · '+sinMatch+' sin match (CUIT/monto no encontrado)':''}.</div>`;
+    } else {
+      as.innerHTML=`<i class="ti ti-check"></i><div>${okCount} comprobante(s) subidos a Odoo Documents.</div>`;
+    }
+  }
   if (errors.length>0) { ae.style.display='flex'; ae.innerHTML=`<i class="ti ti-alert-triangle"></i><div>${errors.length} comprobante(s) con datos incompletos. Están en el ZIP.</div>`; }
   const tbody = document.getElementById('comp-resultsBody');
   tbody.innerHTML = results.map(r => {
     const pc = r.hasError?'badge-warn':'badge-ok', pt2=r.hasError?'⚠ Incompleto':'✓ OK';
-    const oc = r.odooStatus==='ok'?'badge-ok':r.odooStatus==='pendiente'?'badge-muted':'badge-danger';
-    const ot = r.odooStatus==='ok'?'✓ Subido':r.odooStatus==='pendiente'?'— Sin conexión':'✗ Error';
-    return `<tr><td style="color:var(--muted);">${r.page}</td><td style="font-family:'JetBrains Mono',monospace;font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.filename}">${r.filename}</td><td><span class="badge ${pc}">${pt2}</span></td><td><span class="badge ${oc}">${ot}</span></td></tr>`;
+    let oc, ot;
+    if (r.odooStatus==='ok' && r.matchedPayment) { oc='badge-ok'; ot='✓ Adjuntado (ID '+r.matchedPayment+')'; }
+    else if (r.odooStatus==='ok' && r.matchedPayment===null) { oc='badge-warn'; ot='⚠ Sin match'; }
+    else if (r.odooStatus==='ok') { oc='badge-ok'; ot='✓ Subido'; }
+    else if (r.odooStatus==='pendiente') { oc='badge-muted'; ot='— Sin conexión'; }
+    else { oc='badge-danger'; ot='✗ Error'; }
+    return `<tr><td style="color:var(--muted);">${r.page}</td><td style="font-family:monospace;font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.filename}">${r.filename}</td><td><span class="badge ${pc}">${pt2}</span></td><td><span class="badge ${oc}">${ot}</span></td></tr>`;
   }).join('');
   const es = document.getElementById('comp-errorsSection');
   if (errors.length>0) { es.style.display='block'; document.getElementById('comp-errorsList').innerHTML = errors.map(e=>`· Pág ${e.page}: CUIT=${e.cuit||'?'} | Monto=${e.monto||'?'} | Fecha=${e.fecha||'?'}`).join('<br>'); }
@@ -8048,124 +8107,173 @@ function convCerrar() {
 // ═══════════════════════════════════════════════════════
 
 async function dashInit() {
+  var loading = document.getElementById('dash-alertas-loading');
+  var bodyEl  = document.getElementById('dash-alertas-body');
+  var okEl    = document.getElementById('dash-alertas-ok');
+  var fechaEl = document.getElementById('dash-alertas-fecha');
+
+  if (loading) loading.style.display = 'block';
+  if (bodyEl)  bodyEl.style.display  = 'none';
+  if (okEl)    okEl.style.display    = 'none';
+
+  var set = function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
+  var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+  var fmtDias = function(dateStr){
+    var d = Math.floor((new Date() - new Date(dateStr)) / 86400000);
+    return d === 0 ? 'hoy' : d === 1 ? '1 día' : d+' días';
+  };
+
+  var hoy  = new Date();
+  var ayer = new Date(hoy); ayer.setDate(ayer.getDate()-1);
+  var hace7= new Date(hoy); hace7.setDate(hace7.getDate()-7);
+  var fmtD = function(d){ return d.toISOString().split('T')[0]; };
+
+  var hayAlertas = false;
+
   try {
-    // Últimos 7 días
-    var hoy   = new Date();
-    var desde = new Date(hoy); desde.setDate(desde.getDate() - 7);
-    var fmtDate = function(d){ return d.toISOString().split('T')[0]; };
-
-    var estadoMap = {
-      'listo_para_enviar': { cls: 'badge-warn',   txt: '📬 En cola'   },
-      'pendiente':         { cls: 'badge-muted',  txt: '⏳ Pendiente' },
-      'error':             { cls: 'badge-danger', txt: '❌ Error'     },
-    };
-
-    var ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1);
-
-    var pagos = await odooCall('account.payment', 'search_read', [[
-      ['state',             'in',  ['posted','paid','in_process']],
-      ['payment_type',      '=',   'outbound'],
-      ['company_id',        '=',   1],
-      ['create_uid',        'in',  [97,102,115]],
-      ['date',              '>=',  fmtDate(desde)],
-      ['date',              '<=',  fmtDate(ayer)],
-      ['batch_payment_id',  '=',   false],
+    // ── 1. Interbanking sin enviar (días anteriores, sin batch, sin sin_destinatario/enviado) ──
+    var pagosIB = await odooCall('account.payment', 'search_read', [[
+      ['state',            'in',  ['posted','paid','in_process']],
+      ['payment_type',     '=',   'outbound'],
+      ['company_id',       '=',   1],
+      ['create_uid',       'in',  [97,102,115]],
+      ['date',             '>=',  fmtD(hace7)],
+      ['date',             '<=',  fmtD(ayer)],
+      ['batch_payment_id', '=',   false],
       ['x_estado_comprobante', 'not in', ['enviado','sin_destinatario']]
     ], ['id','name','partner_id','amount','currency_id','date','x_estado_comprobante']],
     { limit: 100, order: 'date desc, id desc' });
 
-    var card  = document.getElementById('dash-alertas-card');
-    var tbody = document.getElementById('dash-alertas-tbody');
-    var fecha = document.getElementById('dash-alertas-fecha');
+    var errores  = (pagosIB||[]).filter(function(p){ return p.x_estado_comprobante === 'error'; });
+    var pendientes = (pagosIB||[]).filter(function(p){ return p.x_estado_comprobante !== 'error'; });
 
-    if (!card || !tbody) return;
+    // KPI Interbanking
+    set('dash-k-ib-val', pendientes.length || '✓');
+    set('dash-k-ib-sub', pendientes.length > 0 ? 'días anteriores sin enviar' : 'al día');
+    var kib = document.getElementById('dash-k-ib');
+    if (kib) kib.className = 'metric-card ' + (pendientes.length > 0 ? 'warn' : 'success');
 
-    if (!pagos || pagos.length === 0) {
-      card.style.display = 'none';
-      return;
+    // KPI Errores
+    set('dash-k-error-val', errores.length || '✓');
+    var kerr = document.getElementById('dash-k-error');
+    if (kerr) kerr.className = 'metric-card ' + (errores.length > 0 ? 'danger' : 'success');
+
+    // Sección Interbanking pendientes
+    if (pendientes.length > 0) {
+      hayAlertas = true;
+      set('dash-sec-ib-count', pendientes.length);
+      var tbody = document.getElementById('dash-alertas-tbody');
+      if (tbody) tbody.innerHTML = pendientes.map(function(p){
+        var f = (p.date||'').split('-').reverse().join('/');
+        var partner = p.partner_id ? (Array.isArray(p.partner_id)?p.partner_id[1]:p.partner_id) : '—';
+        var est = p.x_estado_comprobante === 'listo_para_enviar'
+          ? '<span class="badge badge-warn">📬 En cola</span>'
+          : '<span class="badge badge-muted">⏳ Pendiente</span>';
+        var dias = fmtDias(p.date);
+        var diasColor = parseInt(dias) > 3 ? 'color:var(--danger);font-weight:700;' : 'color:var(--warn);';
+        return '<tr style="cursor:pointer;" onclick="dashIrAComprobante('+p.id+')">' +
+          '<td style="white-space:nowrap;color:var(--muted);">'+f+'</td>' +
+          '<td style="font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+partner+'">'+partner+'</td>' +
+          '<td class="mono" style="text-align:right;font-weight:600;">'+fmt(p.amount)+'</td>' +
+          '<td style="text-align:center;">'+est+'</td>' +
+          '<td style="text-align:center;font-size:11px;'+diasColor+'">'+dias+'</td>' +
+        '</tr>';
+      }).join('');
+      var secIb = document.getElementById('dash-sec-ib');
+      if (secIb) secIb.style.display = 'block';
     }
 
-    // Actualizar badge de métrica si existe
-    var metricEl = document.getElementById('dash-alertas-count');
-    if (metricEl) metricEl.textContent = pagos.length;
-    if (fecha) fecha.textContent = 'últimos 7 días · actualizado ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    // Sección Errores
+    if (errores.length > 0) {
+      hayAlertas = true;
+      set('dash-sec-err-count', errores.length);
+      var tbodyErr = document.getElementById('dash-err-tbody');
+      if (tbodyErr) tbodyErr.innerHTML = errores.map(function(p){
+        var f = (p.date||'').split('-').reverse().join('/');
+        var partner = p.partner_id ? (Array.isArray(p.partner_id)?p.partner_id[1]:p.partner_id) : '—';
+        return '<tr style="cursor:pointer;" onclick="dashIrAComprobante('+p.id+')">' +
+          '<td style="white-space:nowrap;color:var(--muted);">'+f+'</td>' +
+          '<td style="font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+partner+'</td>' +
+          '<td class="mono" style="text-align:right;font-weight:600;">'+fmt(p.amount)+'</td>' +
+          '<td style="text-align:center;"><span class="badge badge-danger">❌ Error</span></td>' +
+        '</tr>';
+      }).join('');
+      var secErr = document.getElementById('dash-sec-err');
+      if (secErr) secErr.style.display = 'block';
+    }
 
-    var fmt = function(n,cur){ 
-      var s = '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0});
-      if (cur && Array.isArray(cur) && cur[1] && cur[1] !== 'ARS') s = cur[1]+' '+s;
-      return s;
-    };
-
-    tbody.innerHTML = pagos.map(function(p){
-      var fechaStr = (p.date||'').split('-').reverse().join('/');
-      var partner  = p.partner_id ? (Array.isArray(p.partner_id) ? p.partner_id[1] : p.partner_id) : '—';
-      var est      = estadoMap[p.x_estado_comprobante] || { cls:'badge-muted', txt: p.x_estado_comprobante||'—' };
-      return '<tr style="cursor:pointer;" onclick="dashIrAComprobante('+p.id+')">' +
-        '<td style="white-space:nowrap;color:var(--muted);">'+fechaStr+'</td>' +
-        '<td style="font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+partner+'">'+partner+'</td>' +
-        '<td class="mono" style="text-align:right;font-weight:600;">'+fmt(p.amount,p.currency_id)+'</td>' +
-        '<td style="text-align:center;"><span class="badge '+est.cls+'">'+est.txt+'</span></td>' +
-      '</tr>';
-    }).join('');
-
-    // Cambiar color del card border según si hay errores
-    var hayError = pagos.some(function(p){ return p.x_estado_comprobante === 'error'; });
-    card.style.borderLeftColor = hayError ? 'var(--danger)' : 'var(--warn)';
-    var title = card.querySelector('.card-title');
-    if (title) title.style.color = hayError ? 'var(--danger)' : 'var(--warn)';
-
-    card.style.display = 'block';
-    var pendCard = document.getElementById('dash-pendientes-card');
-    if (pendCard) { pendCard.style.display = 'block'; }
-    var countEl = document.getElementById('dash-alertas-count');
-    if (countEl) { countEl.textContent = pagos.length; }
-
-  // También verificar lotes BNA sin comprobante
-  try {
+    // ── 2. Lotes BNA sin comprobante ──
     var batches = await odooCall('account.batch.payment', 'search_read',
-      [[]],
-      { fields: ['id','name','date','payment_ids'], order: 'date desc', limit: 50 }
+      [[['payment_ids','!=',false]]],
+      { fields: ['id','name','date','journal_id','payment_ids'], order: 'date desc', limit: 50 }
     );
-    if (batches && batches.length > 0) {
-      var todosPids = [];
-      batches.forEach(function(b){ (b.payment_ids||[]).forEach(function(id){ if(todosPids.indexOf(id)<0) todosPids.push(id); }); });
-      var adjMap = {};
-      if (todosPids.length > 0) {
-        var chunks = [];
-        for (var ci = 0; ci < todosPids.length; ci += 200) chunks.push(todosPids.slice(ci, ci+200));
-        for (var ck = 0; ck < chunks.length; ck++) {
-          var adj = await odooCall('ir.attachment', 'search_read',
-            [[['res_model','=','account.payment'],['res_id','in',chunks[ck]]]],
-            { fields: ['res_id'], limit: 5000 }
-          );
-          adj.forEach(function(a){ adjMap[a.res_id] = true; });
-        }
+
+    // Filtrar BATCH/IN y vacíos
+    batches = (batches||[]).filter(function(b){
+      return b.payment_ids && b.payment_ids.length > 0 && !b.name.startsWith('BATCH/IN/');
+    });
+
+    if (batches.length > 0) {
+      // Muestra primeros 3 pagos de cada batch para verificar adjunto
+      var muestras = [];
+      batches.forEach(function(b){ (b.payment_ids||[]).slice(0,3).forEach(function(id){ if(muestras.indexOf(id)<0) muestras.push(id); }); });
+      var adjPayMap = {};
+      if (muestras.length > 0) {
+        var adjPay = await odooCall('ir.attachment', 'search_read',
+          [[['res_model','=','account.payment'],['res_id','in',muestras]]],
+          { fields: ['res_id'], limit: 500 }
+        );
+        adjPay.forEach(function(a){ adjPayMap[a.res_id] = true; });
       }
       var sinComp = batches.filter(function(b){
-        return b.payment_ids && b.payment_ids.length > 0 && !b.payment_ids.some(function(id){ return adjMap[id]; });
+        return !(b.payment_ids||[]).slice(0,3).some(function(id){ return adjPayMap[id]; });
       });
+
+      set('dash-k-bna-val', sinComp.length || '✓');
+      set('dash-k-bna-sub', sinComp.length > 0 ? 'lotes sin comprobante' : 'todos con comprobante');
+      var kbna = document.getElementById('dash-k-bna');
+      if (kbna) kbna.className = 'metric-card ' + (sinComp.length > 0 ? 'danger' : 'success');
+
       if (sinComp.length > 0) {
-        var bnaCard = document.getElementById('dash-bna-card');
+        hayAlertas = true;
+        set('dash-sec-bna-count', sinComp.length);
         var bnaTbody = document.getElementById('dash-bna-tbody');
-        if (bnaCard && bnaTbody) {
-          bnaTbody.innerHTML = sinComp.map(function(b){
-            var f = (b.date||'').split('-').reverse().join('/');
-            return '<tr style="cursor:pointer;" onclick="showPage(\'comprobantes\',document.querySelectorAll(\'.nav-item\')[3])">' +
-              '<td style="white-space:nowrap;color:var(--muted);">'+f+'</td>' +
-              '<td style="font-weight:500;">'+b.name+'</td>' +
-              '<td style="text-align:center;"><span class="badge badge-danger">'+b.payment_ids.length+' pagos</span></td>' +
-            '</tr>';
-          }).join('');
-          bnaCard.style.display = 'block';
-        }
+        if (bnaTbody) bnaTbody.innerHTML = sinComp.map(function(b){
+          var f = (b.date||'').split('-').reverse().join('/');
+          var journal = b.journal_id ? (Array.isArray(b.journal_id)?b.journal_id[1]:b.journal_id) : '—';
+          var cuenta = journal.replace('BANCO $ NACIÓN - ','').replace('BANCO $ ','');
+          return '<tr style="cursor:pointer;" onclick="showPage(\'comprobantes\',document.querySelectorAll(\'.nav-item\')[3])">' +
+            '<td style="white-space:nowrap;color:var(--muted);">'+f+'</td>' +
+            '<td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+b.name+'">'+b.name+'</td>' +
+            '<td style="font-size:11px;color:var(--muted);">'+cuenta+'</td>' +
+            '<td style="text-align:right;"><span class="badge badge-danger">'+b.payment_ids.length+'</span></td>' +
+          '</tr>';
+        }).join('');
+        var secBna = document.getElementById('dash-sec-bna');
+        if (secBna) secBna.style.display = 'block';
       }
     }
-  } catch(eBna) { console.warn('dash BNA check:', eBna); }
+
+    // ── Mostrar resultado ──
+    if (loading) loading.style.display = 'none';
+    if (fechaEl) fechaEl.textContent = 'actualizado ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+
+    if (hayAlertas) {
+      if (bodyEl) bodyEl.style.display = 'block';
+    } else {
+      if (okEl) okEl.style.display = 'block';
+      set('dash-k-ib-val', '✓'); set('dash-k-ib-sub', 'al día');
+      set('dash-k-error-val', '✓');
+      set('dash-k-bna-val', '✓'); set('dash-k-bna-sub', 'todos con comprobante');
+    }
 
   } catch(e) {
+    if (loading) loading.style.display = 'none';
+    if (okEl) { okEl.style.display='block'; okEl.innerHTML='<i class="ti ti-alert-triangle" style="font-size:24px;display:block;margin-bottom:8px;color:var(--danger);"></i><div style="color:var(--danger);">Error al cargar alertas: '+e.message+'</div>'; }
     console.warn('dashInit error:', e);
   }
 }
+
 
 function dashIrAComprobante(pagoId) {
   // Navegar a comprobantes y forzar búsqueda del pago
