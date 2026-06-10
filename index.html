@@ -5136,39 +5136,64 @@ async function compSubirOdoo(filename, pdfBytes) {
   return docId;
 }
 
+// Cache de pagos del lote BNA para no re-consultar en cada página
+let _bnaLoteCache = null;
+
+async function bnaLotePrecargar() {
+  // Carga TODOS los pagos de batches activos con su partner y CUIT una sola vez
+  if (_bnaLoteCache) return _bnaLoteCache;
+
+  const pagos = await odooCall('account.payment', 'search_read',
+    [[['payment_type','=','outbound'],
+      ['batch_payment_id','!=',false],
+      ['state','in',['posted','paid','in_process']],
+      ['x_comprobante_enviado','!=',true]]],
+    { fields: ['id','amount','partner_id'], limit: 5000, order: 'id desc' }
+  );
+
+  // Traer CUITs de los partners
+  const partnerIds = [...new Set(pagos.map(p => p.partner_id?.[0]).filter(Boolean))];
+  const partners = await odooCall('res.partner', 'search_read',
+    [[['id','in',partnerIds]]],
+    { fields: ['id','vat'], limit: partnerIds.length + 10 }
+  );
+  const vatMap = {};
+  partners.forEach(p => { if (p.vat) vatMap[p.id] = p.vat.replace(/[^0-9]/g,''); });
+
+  // Indexar por CUIT para búsqueda rápida
+  const porCuit = {};
+  pagos.forEach(p => {
+    const pid = p.partner_id?.[0];
+    const cuit = vatMap[pid];
+    if (!cuit) return;
+    if (!porCuit[cuit]) porCuit[cuit] = [];
+    porCuit[cuit].push({ id: p.id, amount: p.amount });
+  });
+
+  _bnaLoteCache = porCuit;
+  return porCuit;
+}
+
 async function compSubirOdooLote(filename, pdfBytes, cuit, monto) {
   // Para lotes BNA: adjuntar directo al account.payment via ir.attachment
-  // NO usar documents.document para no triggerizar automatizaciones de mail
+  // NO usar documents.document — triggeriza automatización de mail
   const b64 = compSafeBase64(pdfBytes);
 
   let paymentId = null;
   try {
-    if (cuit) {
-      const partners = await odooCall('res.partner', 'search_read',
-        [[['vat','=',cuit]]],
-        { fields: ['id'], limit: 5 }
-      );
-      if (partners && partners.length > 0) {
-        const pids = partners.map(p => p.id);
-        const montoNum = parseFloat(monto);
-        const pagos = await odooCall('account.payment', 'search_read',
-          [[['partner_id','in',pids],
-            ['payment_type','=','outbound'],
-            ['batch_payment_id','!=',false],
-            ['state','in',['posted','paid','in_process']]]],
-          { fields: ['id','amount','date'], limit: 50, order: 'date desc' }
-        );
-        if (pagos && pagos.length > 0) {
-          const match = pagos.find(p => Math.abs(p.amount - montoNum) / Math.max(montoNum, 1) <= 0.02);
-          paymentId = match ? match.id : pagos[0].id;
-        }
-      }
+    if (cuit && _bnaLoteCache) {
+      const candidatos = _bnaLoteCache[cuit] || [];
+      const montoNum = parseFloat(monto);
+      // Match exacto igual al script de Odoo (amount exacto)
+      const match = candidatos.find(p => p.amount === montoNum);
+      // Fallback: diferencia menor a $1 (centavos de redondeo)
+      const matchAprox = match || candidatos.find(p => Math.abs(p.amount - montoNum) < 1);
+      if (matchAprox) paymentId = matchAprox.id;
     }
   } catch(e) {
     console.warn('compSubirOdooLote match error:', e.message);
   }
 
-  // Adjuntar al payment (no dispara automatizaciones de mail)
   const adjData = {
     name: filename,
     datas: b64,
@@ -5179,23 +5204,7 @@ async function compSubirOdooLote(filename, pdfBytes, cuit, monto) {
     adjData.res_model = 'account.payment';
     adjData.res_id    = paymentId;
   }
-  const adjId = await odooCall('ir.attachment', 'create', [adjData]);
-
-  // También subir a Documents para registro (puede fallar sin problema)
-  try {
-    const folderId = await compGetFolderId();
-    await odooCall('documents.document', 'create', [{
-      name: filename,
-      folder_id: folderId,
-      mimetype: 'application/pdf',
-      type: 'binary',
-      datas: b64,
-    }]);
-  } catch(e) {
-    console.warn('compSubirOdooLote documents fallback error:', e.message);
-  }
-
-  return adjId;
+  return await odooCall('ir.attachment', 'create', [adjData]);
 }
 
 function compParseInterbanking(text) {
@@ -5267,8 +5276,16 @@ async function procesarComprobantes() {
     const zip = new JSZip();
     pt.textContent = `${total} páginas detectadas. Procesando...`;
 
+    // Pre-cargar cache de pagos BNA para no consultar Odoo en cada página
+    if (compBanco === 'nacion_lote') {
+      pt.textContent = 'Cargando pagos del lote...'; pf.style.width = '10%';
+      _bnaLoteCache = null;
+      await bnaLotePrecargar();
+      pt.textContent = 'Cache listo. Procesando páginas...';
+    }
+
     for (let i = 0; i < total; i++) {
-      pf.style.width = Math.round(8 + ((i+1)/total)*85) + '%';
+      pf.style.width = Math.round(12 + ((i+1)/total)*85) + '%';
       pt.textContent = `Página ${i+1} de ${total}...`;
       const page = await pdfjsDoc.getPage(i+1);
       const content = await page.getTextContent();
@@ -5289,7 +5306,6 @@ async function procesarComprobantes() {
       let odooStatus = 'pendiente', odooId = null;
       try {
         if (compBanco === 'nacion_lote') {
-          // BNA Lote: adjuntar directo al payment sin triggerizar mail
           odooId = await compSubirOdooLote(fn, pb, parsed.cuit, parsed.monto);
         } else {
           odooId = await compSubirOdoo(fn, pb);
