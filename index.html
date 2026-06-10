@@ -720,10 +720,45 @@ tbody tr:hover td { background: #f8faf9; }
           <div class="metric-value" style="font-size:16px;color:var(--success);">✓ Conectado</div>
           <div class="metric-sub">Odoo + Railway activos</div>
         </div>
+        <div class="metric-card" id="dash-pendientes-card" style="display:none;">
+          <div class="metric-label">Sin enviar (7 días)</div>
+          <div class="metric-value" id="dash-alertas-count" style="color:var(--warn);">—</div>
+          <div class="metric-sub">comprobantes pendientes</div>
+        </div>
         <div class="metric-card">
           <div class="metric-label">Versión</div>
           <div class="metric-value" style="font-size:16px;">v1.0</div>
           <div class="metric-sub">ArgenINTA · Tesorería</div>
+        </div>
+      </div>
+
+      <!-- Alertas comprobantes sin enviar -->
+      <div id="dash-alertas-card" class="card" style="display:none;border-left:3px solid var(--warn);margin-bottom:16px;">
+        <div class="card-header" style="padding-bottom:8px;">
+          <div class="card-title" style="color:var(--warn);">
+            <i class="ti ti-bell-ringing"></i> Comprobantes pendientes de envío
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="dash-alertas-fecha" style="font-size:11px;color:var(--muted);"></span>
+            <button class="btn" style="padding:4px 10px;font-size:11px;"
+              onclick="showPage('comprobantes', document.querySelector('.nav-item[onclick*=comprobantes]'))">
+              <i class="ti ti-arrow-right"></i> Ver todos
+            </button>
+          </div>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap" style="border:none;border-radius:0;max-height:280px;overflow-y:auto;">
+            <table style="font-size:12px;">
+              <thead><tr>
+                <th>Fecha</th>
+                <th>Beneficiario</th>
+                <th style="text-align:right;">Monto</th>
+                <th style="text-align:center;">Estado</th>
+              </tr></thead>
+              <tbody id="dash-alertas-tbody">
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -2357,6 +2392,7 @@ async function doLogin() {
       document.querySelector('.main').style.display = 'flex';
       document.querySelector('.sidebar').style.display = 'flex';
       loadConfigUI();
+      dashInit();
     } else {
       err.style.display = 'block';
     }
@@ -7840,6 +7876,105 @@ function convCerrar() {
   document.getElementById('conv-panel').style.display   = 'none';
   document.getElementById('conv-overlay').style.display = 'none';
   document.body.style.overflow = '';
+}
+
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD — alertas de comprobantes sin enviar
+// ═══════════════════════════════════════════════════════
+
+async function dashInit() {
+  try {
+    // Últimos 7 días
+    var hoy   = new Date();
+    var desde = new Date(hoy); desde.setDate(desde.getDate() - 7);
+    var fmtDate = function(d){ return d.toISOString().split('T')[0]; };
+
+    var estadoMap = {
+      'listo_para_enviar': { cls: 'badge-warn',   txt: '📬 En cola'   },
+      'pendiente':         { cls: 'badge-muted',  txt: '⏳ Pendiente' },
+      'error':             { cls: 'badge-danger', txt: '❌ Error'     },
+    };
+
+    var pagos = await odooCall('account.payment', 'search_read', [[
+      ['state',        'in',  ['posted','paid','in_process']],
+      ['payment_type', '=',   'outbound'],
+      ['company_id',   '=',   1],
+      ['create_uid',   'in',  [97,102,115]],
+      ['date',         '>=',  fmtDate(desde)],
+      ['date',         '<=',  fmtDate(hoy)],
+      ['x_estado_comprobante', 'not in', ['enviado','sin_destinatario']]
+    ], ['id','name','partner_id','amount','currency_id','date','x_estado_comprobante']],
+    { limit: 100, order: 'date desc, id desc' });
+
+    var card  = document.getElementById('dash-alertas-card');
+    var tbody = document.getElementById('dash-alertas-tbody');
+    var fecha = document.getElementById('dash-alertas-fecha');
+
+    if (!card || !tbody) return;
+
+    if (!pagos || pagos.length === 0) {
+      card.style.display = 'none';
+      return;
+    }
+
+    // Actualizar badge de métrica si existe
+    var metricEl = document.getElementById('dash-alertas-count');
+    if (metricEl) metricEl.textContent = pagos.length;
+    if (fecha) fecha.textContent = 'últimos 7 días · actualizado ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+
+    var fmt = function(n,cur){ 
+      var s = '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0});
+      if (cur && Array.isArray(cur) && cur[1] && cur[1] !== 'ARS') s = cur[1]+' '+s;
+      return s;
+    };
+
+    tbody.innerHTML = pagos.map(function(p){
+      var fechaStr = (p.date||'').split('-').reverse().join('/');
+      var partner  = p.partner_id ? (Array.isArray(p.partner_id) ? p.partner_id[1] : p.partner_id) : '—';
+      var est      = estadoMap[p.x_estado_comprobante] || { cls:'badge-muted', txt: p.x_estado_comprobante||'—' };
+      return '<tr style="cursor:pointer;" onclick="dashIrAComprobante('+p.id+')">' +
+        '<td style="white-space:nowrap;color:var(--muted);">'+fechaStr+'</td>' +
+        '<td style="font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+partner+'">'+partner+'</td>' +
+        '<td class="mono" style="text-align:right;font-weight:600;">'+fmt(p.amount,p.currency_id)+'</td>' +
+        '<td style="text-align:center;"><span class="badge '+est.cls+'">'+est.txt+'</span></td>' +
+      '</tr>';
+    }).join('');
+
+    // Cambiar color del card border según si hay errores
+    var hayError = pagos.some(function(p){ return p.x_estado_comprobante === 'error'; });
+    card.style.borderLeftColor = hayError ? 'var(--danger)' : 'var(--warn)';
+    var title = card.querySelector('.card-title');
+    if (title) title.style.color = hayError ? 'var(--danger)' : 'var(--warn)';
+
+    card.style.display = 'block';
+    var pendCard = document.getElementById('dash-pendientes-card');
+    if (pendCard) { pendCard.style.display = 'block'; }
+    var countEl = document.getElementById('dash-alertas-count');
+    if (countEl) { countEl.textContent = pagos.length; }
+
+  } catch(e) {
+    console.warn('dashInit error:', e);
+  }
+}
+
+function dashIrAComprobante(pagoId) {
+  // Navegar a comprobantes y forzar búsqueda del pago
+  var navEl = document.querySelector('.nav-item[onclick*="comprobantes"]');
+  showPage('comprobantes', navEl);
+  // Esperar a que cargue y luego filtrar por ese pago
+  setTimeout(function(){
+    var input = document.getElementById('envio-f-buscar');
+    if (input) {
+      // Usar el ID para identificarlo en la tabla ya cargada
+      var fila = document.querySelector('#envio-tbody tr[data-id="'+pagoId+'"]');
+      if (fila) {
+        fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        fila.style.background = 'rgba(var(--warn-rgb,183,96,10),.08)';
+        setTimeout(function(){ fila.style.background = ''; }, 2500);
+      }
+    }
+  }, 800);
 }
 
 </script>
