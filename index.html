@@ -3077,9 +3077,8 @@ async function c29Cargar() {
   var desde     = mes + '-01';
   var hasta     = mes + '-' + ultimoDia;
 
-  // 5 meses atrás para historial
-  var d5    = new Date(anio, mesNum - 6, 1);
-  var desde5= d5.getFullYear() + '-' + String(d5.getMonth()+1).padStart(2,'0') + '-01';
+  // Fecha inicio para historial completo (toda la historia del convenio)
+  var desde5 = '2020-01-01';
 
   var loading = document.getElementById('c29-loading');
   var tablaW  = document.getElementById('c29-tabla-wrap');
@@ -3196,7 +3195,8 @@ async function c29Cargar() {
     var cheqFacturas = {};
     if (cheqMoveIds.length > 0) {
       var cheqList = await odooCall('account.move','search_read',
-        [[['id','in',cheqMoveIds],['state','in',['draft','posted']]]],
+        [[['id','in',cheqMoveIds],['state','=','posted'],
+          ['payment_state','in',['in_payment','paid','partial']]]],
         {fields:['id','name','amount_total','invoice_date','date','payment_state','partner_id'],limit:3000});
       cheqList.forEach(function(f){ cheqFacturas[f.id] = f; });
     }
@@ -3278,6 +3278,14 @@ async function c29Cargar() {
       var promHon    = mesesConHon.length ? mesesConHon.reduce(function(s,p){return s+p.honores.reduce(function(a,f){return a+f.amount_total;},0);},0)/mesesConHon.length : 0;
       var promCantHon= mesesConHon.length ? mesesConHon.reduce(function(s,p){return s+p.honores.length;},0)/mesesConHon.length : 0;
 
+      // Historia completa ordenada desc
+      var todosLosCheques = (cheqPorCarta[cid]||[]).slice().sort(function(a,b){
+        return (b.invoice_date||b.date||'').localeCompare(a.invoice_date||a.date||'');
+      });
+      var todoElCogayt = (cogaytPorCarta[cid]||[]).slice().sort(function(a,b){
+        return (b.invoice_date||b.date||'').localeCompare(a.invoice_date||a.date||'');
+      });
+
       return {
         id:ca.id, nombre:ca.nombre||ca.name, estadoKey:estadoKey,
         tieneChecque:chequesMes.length>0, tieneCogayt:cogaytMes.length>0,
@@ -3288,6 +3296,8 @@ async function c29Cargar() {
         mesesConCheque:mesesConCheque.length, mesesConHon:mesesConHon.length,
         saldo:saldosPorCarta[ca.id],
         patron:patron,
+        todosLosCheques:todosLosCheques,
+        todoElCogayt:todoElCogayt,
         actual:{ cheques:chequesMes, cogayt:cogaytMes, honores:honMes }
       };
     });
@@ -3472,26 +3482,99 @@ function c29AbrirDetalle(idx) {
     '<div class="c29-pkpi"><div class="c29-pkpi-val" style="color:'+cogaytColor+';">'+(d.tieneCogayt?fmt(d.totalCogayt):'FALTA')+'</div><div class="c29-pkpi-lbl">COGAYT (esp. '+fmt(d.cogaytEsp)+')</div></div>' +
     '<div class="c29-pkpi"><div class="c29-pkpi-val">'+(d.cantHon>0?d.cantHon+' · '+fmt(d.totalHon):'—')+'</div><div class="c29-pkpi-lbl">Hon.'+(honPct!==null?' ('+honPct+'% vs prom.)':'')+'</div></div>';
 
-  // ── TAB INGRESOS ──────────────────────────────────────────────────
-  var cheqRows = d.actual.cheques.map(fRow).join('');
-  var cogRows  = d.actual.cogayt.map(fRow).join('');
-  var debRows  = ((d.actual.debito||[]).map(fRow)).join('');
+  // ── TAB INGRESOS — HISTORIAL COMPLETO ────────────────────────────
+  var todosChRows = (d.todosLosCheques||[]).map(function(f) {
+    var fecha = (f.invoice_date||f.date||'').split('-').reverse().join('/');
+    var partner = f.partner_id ? (Array.isArray(f.partner_id) ? f.partner_id[1] : f.partner_id) : '—';
+    var estadoPill = f.payment_state==='paid'
+      ? '<span class="badge badge-ok">Pagado</span>'
+      : f.payment_state==='in_payment'
+        ? '<span class="badge badge-info">En proceso</span>'
+        : f.payment_state==='partial'
+          ? '<span class="badge badge-warn">Parcial</span>'
+          : '<span class="badge badge-muted">—</span>';
+    return '<tr>' +
+      '<td style="white-space:nowrap;font-size:11px;">'+fecha+'</td>' +
+      '<td style="font-size:11px;font-family:'JetBrains Mono',monospace;">'+(f.name||'—')+'</td>' +
+      '<td class="mono" style="text-align:right;font-size:11px;font-weight:600;color:var(--success);">'+fmt(f.amount_total||0)+'</td>' +
+      '<td>'+estadoPill+'</td>' +
+      '<td style="font-size:11px;color:var(--muted);">'+partner+'</td>' +
+    '</tr>';
+  }).join('');
+  var totalTodosChq = (d.todosLosCheques||[]).reduce(function(s,f){return s+f.amount_total;},0);
+  var chqSubtotalHistorico = d.todosLosCheques&&d.todosLosCheques.length>0
+    ? '<tr style="border-top:2px solid var(--border);background:var(--surface-alt,#f8faf9);">' +
+        '<td colspan="2" style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">TOTAL — '+d.todosLosCheques.length+' ingreso'+(d.todosLosCheques.length>1?'s':'')+' registrados</td>' +
+        '<td class="mono" style="text-align:right;font-size:13px;font-weight:700;color:var(--success);padding-right:8px;">'+fmt(totalTodosChq)+'</td>' +
+        '<td colspan="2"></td>' +
+      '</tr>'
+    : '';
 
+  // COGAYT — historial completo
+  var todosCogRows = (d.todoElCogayt||[]).map(function(f) {
+    var fecha = (f.invoice_date||f.date||'').split('-').reverse().join('/');
+    var estadoPill = f.payment_state==='paid'
+      ? '<span class="badge badge-ok">Pagado</span>'
+      : f.payment_state==='in_payment'
+        ? '<span class="badge badge-info">En proceso</span>'
+        : '<span class="badge badge-muted">—</span>';
+    return '<tr>' +
+      '<td style="white-space:nowrap;font-size:11px;">'+fecha+'</td>' +
+      '<td style="font-size:11px;font-family:'JetBrains Mono',monospace;">'+(f.name||'—')+'</td>' +
+      '<td class="mono" style="text-align:right;font-size:11px;font-weight:600;">'+fmt(f.amount_total||0)+'</td>' +
+      '<td>'+estadoPill+'</td>' +
+      '<td style="font-size:11px;color:var(--muted);">Fundación ArgenINTA</td>' +
+    '</tr>';
+  }).join('');
+  var totalTodosCog = (d.todoElCogayt||[]).reduce(function(s,f){return s+f.amount_total;},0);
+  var cogSubtotalHistorico = d.todoElCogayt&&d.todoElCogayt.length>0
+    ? '<tr style="border-top:2px solid var(--border);background:var(--surface-alt,#f8faf9);">' +
+        '<td colspan="2" style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">TOTAL COGAYT cobrado — '+d.todoElCogayt.length+' comprobante'+(d.todoElCogayt.length>1?'s':'')+' </td>' +
+        '<td class="mono" style="text-align:right;font-size:13px;font-weight:700;padding-right:8px;">'+fmt(totalTodosCog)+'</td>' +
+        '<td colspan="2"></td>' +
+      '</tr>'
+    : '';
+
+  // Alerta COGAYT del mes actual
   var cogResumen = '';
   if (d.tieneChecque) {
     var diff = d.totalCogayt - d.cogaytEsp;
     var dc   = Math.abs(diff)<d.cogaytEsp*0.05?'var(--success)':diff<0?'var(--danger)':'var(--warn)';
-    cogResumen = '<div style="margin-top:6px;padding:7px 12px;background:var(--surface-alt,#f8faf9);border-radius:6px;font-size:11px;display:flex;gap:16px;">' +
-      '<span>Esperado: <strong>'+fmt(d.cogaytEsp)+'</strong></span>' +
-      '<span>Registrado: <strong style="color:'+dc+';">'+fmt(d.totalCogayt)+'</strong></span>' +
-      (Math.abs(diff)>100?'<span>Diferencia: <strong style="color:'+dc+';">'+fmt(Math.abs(diff))+'</strong></span>':'<span style="color:var(--success);">✓ Correcto</span>') +
-    '</div>';
+    cogResumen =
+      '<div style="margin-bottom:10px;padding:8px 14px;background:var(--surface-alt,#f8faf9);border:1px solid var(--border);border-left:3px solid '+dc+';border-radius:6px;font-size:11px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">' +
+        '<span style="font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:10px;">MES ACTUAL</span>' +
+        '<span>Esperado (6%): <strong>'+fmt(d.cogaytEsp)+'</strong></span>' +
+        '<span>Registrado: <strong style="color:'+dc+';">'+fmt(d.totalCogayt)+'</strong></span>' +
+        (Math.abs(diff)>100
+          ? '<span>Diferencia: <strong style="color:'+dc+';">'+fmt(Math.abs(diff))+'</strong></span>'
+          : '<span style="color:var(--success);font-weight:600;">✓ Correcto</span>') +
+      '</div>';
+  } else if (!d.tieneChecque) {
+    cogResumen = '<div style="margin-bottom:10px;padding:8px 14px;background:var(--warn-bg);border:1px solid rgba(183,96,10,.3);border-left:3px solid var(--warn);border-radius:6px;font-size:11px;color:var(--warn);font-weight:600;">Sin cheque en el mes seleccionado — no aplica COGAYT</div>';
   }
 
   var tabIngresos =
-    sec('Cheque depositado') + tbl(cheqRows,'Sin cheque registrado') +
-    sec('COGAYT 6% — Fundación ArgenINTA') + tbl(cogRows,'Sin COGAYT registrado') + cogResumen +
-    '';
+    sec('Todos los ingresos — historial completo ('+( (d.todosLosCheques||[]).length )+' cheques)') +
+    '<div class="table-wrap" style="margin-top:8px;margin-bottom:0;">' +
+      '<table style="font-size:11px;"><thead><tr>' +
+        '<th>Fecha</th><th>Comprobante</th><th style="text-align:right;">Monto</th><th>Estado</th><th>Partner</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+        (todosChRows || '<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--muted);">Sin ingresos registrados</td></tr>') +
+        chqSubtotalHistorico +
+      '</tbody></table>' +
+    '</div>' +
+    sec('COGAYT 6% — historial completo') +
+    cogResumen +
+    '<div class="table-wrap" style="margin-top:8px;margin-bottom:0;">' +
+      '<table style="font-size:11px;"><thead><tr>' +
+        '<th>Fecha</th><th>Comprobante</th><th style="text-align:right;">Monto</th><th>Estado</th><th>Partner</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+        (todosCogRows || '<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--muted);">Sin COGAYT registrado</td></tr>') +
+        cogSubtotalHistorico +
+      '</tbody></table>' +
+    '</div>';
 
   // ── TAB HONORARIOS ────────────────────────────────────────────────
   var honRows = d.actual.honores.map(fRow).join('');
@@ -3525,25 +3608,72 @@ function c29AbrirDetalle(idx) {
       '<tr style="border-top:2px solid var(--border);font-weight:700;"><td>Neto del período</td><td class="mono" style="text-align:right;color:'+(neto>=0?'var(--success)':'var(--danger)')+';">'+fmt(neto)+'</td><td></td></tr>' +
     '</tbody></table></div>';
 
-  // ── TAB HISTORIAL ─────────────────────────────────────────────────
+  // ── TAB HISTORIAL — todos los meses con datos ────────────────────
+  // Construir mapa mes->datos desde TODA la historia (cheques + cogayt + honores)
+  var histMeses = {};
+  function _addToMes(lista, tipo) {
+    (lista||[]).forEach(function(f){
+      var fd = f.invoice_date||f.date||'';
+      var km = fd.substring(0,7);
+      if (!km) return;
+      if (!histMeses[km]) histMeses[km] = {cheques:[],cogayt:[],honores:[]};
+      histMeses[km][tipo].push(f);
+    });
+  }
+  _addToMes(d.todosLosCheques, 'cheques');
+  _addToMes(d.todoElCogayt,    'cogayt');
+  _addToMes(d.actual.honores,  'honores'); // honores solo del mes actual (lo que hay cargado)
+
   var histRows = '';
-  Object.keys(d.patron).sort().reverse().forEach(function(km){
-    var p  = d.patron[km];
-    var tc = p.cheques.reduce(function(s,f){return s+f.amount_total;},0);
-    var tco= p.cogayt.reduce(function(s,f){return s+f.amount_total;},0);
-    var th = p.honores.reduce(function(s,f){return s+f.amount_total;},0);
-    var nt = tc - tco - th;
+  var mesesOrdenados = Object.keys(histMeses).sort().reverse();
+  mesesOrdenados.forEach(function(km){
+    var p   = histMeses[km];
+    var tc  = p.cheques.reduce(function(s,f){return s+f.amount_total;},0);
+    var tco = p.cogayt.reduce(function(s,f){return s+f.amount_total;},0);
+    var th  = p.honores.reduce(function(s,f){return s+f.amount_total;},0);
+    var nt  = tc - tco - th;
     var label = new Date(km+'-15').toLocaleString('es-AR',{month:'short',year:'2-digit'});
-    var has = tc>0||tco>0||th>0;
-    histRows += '<tr style="'+(has?'':'opacity:.35;')+'">' +
-      '<td style="font-weight:500;white-space:nowrap;">'+label+'</td>' +
-      '<td class="mono" style="text-align:right;">'+(tc>0?fmt(tc):'—')+'</td>' +
-      '<td class="mono" style="text-align:right;color:'+(tco>0&&tc>0&&Math.abs(tco-tc*.06)<tc*.003?'var(--success)':'var(--danger)')+';">'+(tco>0?fmt(tco):'—')+'</td>' +
-      '<td class="mono" style="text-align:right;">'+(p.honores.length||'—')+'</td>' +
+
+    // Estado COGAYT del mes
+    var cogaytEspMes = tc * 0.06;
+    var cogOk  = tco > 0 && Math.abs(tco - cogaytEspMes) < cogaytEspMes * 0.05;
+    var cogCell = tc === 0
+      ? '<span style="color:var(--muted);">n/a</span>'
+      : tco === 0
+        ? '<span style="color:var(--danger);font-weight:700;">⚠ FALTA</span>'
+        : '<span style="color:'+(cogOk?'var(--success)':'var(--warn)')+';">'+(cogOk?'✓ ':'')+fmt(tco)+'</span>';
+
+    histRows += '<tr>' +
+      '<td style="font-weight:600;white-space:nowrap;">'+label+'</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">'+(tc>0?fmt(tc):'—')+'</td>' +
+      '<td class="mono" style="text-align:right;">'+cogCell+'</td>' +
+      '<td class="mono" style="text-align:right;">'+(p.honores.length>0?p.honores.length:'—')+'</td>' +
       '<td class="mono" style="text-align:right;">'+(th>0?fmt(th):'—')+'</td>' +
-      '<td class="mono" style="text-align:right;color:'+(nt>=0?'var(--success)':'var(--danger)')+';">'+(has?fmt(nt):'—')+'</td>' +
+      '<td class="mono" style="text-align:right;font-weight:600;color:'+(nt>=0?'var(--success)':'var(--danger)')+';">'+(tc>0?fmt(nt):'—')+'</td>' +
     '</tr>';
   });
+
+  if (!histRows) histRows = '<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--muted);">Sin historial disponible</td></tr>';
+
+  // Alertas de meses con COGAYT faltante
+  var mesesSinCog = mesesOrdenados.filter(function(km){
+    var p = histMeses[km];
+    var tc = p.cheques.reduce(function(s,f){return s+f.amount_total;},0);
+    var tco= p.cogayt.reduce(function(s,f){return s+f.amount_total;},0);
+    return tc > 0 && tco === 0;
+  });
+  var alertaCogayt = '';
+  if (mesesSinCog.length > 0) {
+    var labels = mesesSinCog.map(function(km){
+      return new Date(km+'-15').toLocaleString('es-AR',{month:'short',year:'2-digit'});
+    });
+    alertaCogayt =
+      '<div style="margin-bottom:10px;padding:8px 14px;background:var(--danger-bg);border:1px solid rgba(192,57,43,.3);border-left:3px solid var(--danger);border-radius:6px;font-size:11px;">' +
+        '<strong style="color:var(--danger);">⚠ COGAYT faltante en '+mesesSinCog.length+' mes'+(mesesSinCog.length>1?'es':'')+':</strong> ' +
+        '<span style="color:var(--danger);">'+labels.join(', ')+'</span>' +
+      '</div>';
+  }
+
   var promHtml = '';
   if (d.promCheque>0||d.promHon>0) {
     promHtml = '<div style="margin-top:8px;padding:6px 12px;background:var(--surface-alt,#f8faf9);border-radius:6px;font-size:10px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap;">' +
@@ -3552,11 +3682,17 @@ function c29AbrirDetalle(idx) {
     '</div>';
   }
   var tabHistorial =
-    sec('Últimos 5 meses') +
+    sec('Historial completo — '+mesesOrdenados.length+' meses con movimientos') +
+    alertaCogayt +
     '<div class="table-wrap"><table style="font-size:11px;"><thead><tr>' +
-      '<th>Mes</th><th style="text-align:right;">Cheque</th><th style="text-align:right;">COGAYT</th>' +
-      '<th style="text-align:right;">Hon. cant.</th><th style="text-align:right;">Hon. monto</th><th style="text-align:right;">Neto</th>' +
-    '</tr></thead><tbody>'+histRows+'</tbody></table></div>' + promHtml;
+      '<th>Mes</th>' +
+      '<th style="text-align:right;">Ingresos</th>' +
+      '<th style="text-align:right;">COGAYT</th>' +
+      '<th style="text-align:right;">Hon. cant.</th>' +
+      '<th style="text-align:right;">Hon. monto</th>' +
+      '<th style="text-align:right;">Neto</th>' +
+    '</tr></thead><tbody>'+histRows+'</tbody></table></div>' +
+    promHtml;
 
   // ── BUILD PANEL ───────────────────────────────────────────────────
   body.innerHTML =
