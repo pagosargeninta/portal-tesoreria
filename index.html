@@ -8818,11 +8818,57 @@ async function busCargarDatos(pid) {
 
     allPagos.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
 
-    // Clasificar
+    // Traer journals de facturas conciliadas para distinguir rendiciones de pagos normales
+    var allBillIds = [];
+    allPagos.forEach(function(p){
+      (p.reconciled_bill_ids||[]).forEach(function(id){
+        if (allBillIds.indexOf(id) < 0) allBillIds.push(id);
+      });
+    });
+    var billJournalMap = {}; // billId -> journalId
+    if (allBillIds.length > 0) {
+      var bills = await odooCall('account.move', 'read',
+        [allBillIds, ['id','journal_id']]
+      );
+      bills.forEach(function(b){
+        billJournalMap[b.id] = b.journal_id ? (Array.isArray(b.journal_id) ? b.journal_id[0] : 0) : 0;
+      });
+    }
+
+    // Clasificar — para rendiciones verificar que la factura sea de journal Reintegros
+    // Journals de reintegros conocidos: buscar por nombre 'reintegro' en el journal de la factura
+    var billJournalNames = {}; // journalId -> name (cache)
+    if (allBillIds.length > 0) {
+      var uniqueJIds = [...new Set(Object.values(billJournalMap))].filter(Boolean);
+      if (uniqueJIds.length > 0) {
+        var journals = await odooCall('account.journal', 'read',
+          [uniqueJIds, ['id','name']]
+        );
+        journals.forEach(function(j){ billJournalNames[j.id] = (j.name||'').toLowerCase(); });
+      }
+    }
+
+    function billEsReintegro(p) {
+      var ids = p.reconciled_bill_ids||[];
+      if (ids.length === 0) return false;
+      return ids.some(function(bid){
+        var jid = billJournalMap[bid];
+        var jname = jid ? (billJournalNames[jid]||'') : '';
+        return jname.includes('reintegro');
+      });
+    }
+
     var anticipos   = allPagos.filter(function(p){ return busClasificar(p)==='anticipo'; });
-    var rendiciones = allPagos.filter(function(p){ return busClasificar(p)==='rendicion'; });
-    var pagos       = allPagos.filter(function(p){ return busClasificar(p)==='pago'; });
-    var sinclasif   = allPagos.filter(function(p){ return busClasificar(p)==='sinclasif'; });
+    var rendiciones = allPagos.filter(function(p){
+      return busClasificar(p)==='rendicion' && billEsReintegro(p);
+    });
+    var pagos = allPagos.filter(function(p){
+      var clase = busClasificar(p);
+      if (clase === 'anticipo') return false;
+      if (clase === 'rendicion' && billEsReintegro(p)) return false;
+      return true;
+    });
+    var sinclasif = allPagos.filter(function(p){ return busClasificar(p)==='sinclasif' && !billEsReintegro(p); });
 
     var totalAnt  = anticipos.reduce(function(s,p){ return s+p.amount; },0);
     var totalRend = rendiciones.reduce(function(s,p){ return s+p.amount; },0);
