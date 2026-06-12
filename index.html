@@ -8132,6 +8132,16 @@ async function dashInit() {
 
   try {
     // ── 1. Interbanking sin enviar (días anteriores, sin batch, sin sin_destinatario/enviado) ──
+    // Traer moneda ARS y partner Fundación para excluirlos
+    var monedaARS = null;
+    try {
+      var ars = await odooCall('res.currency', 'search_read',
+        [[['name','=','ARS']]],
+        { fields: ['id'], limit: 1 }
+      );
+      if (ars && ars.length > 0) monedaARS = ars[0].id;
+    } catch(e) {}
+
     var pagosIB = await odooCall('account.payment', 'search_read', [[
       ['state',            'in',  ['posted','paid','in_process']],
       ['payment_type',     '=',   'outbound'],
@@ -8142,9 +8152,20 @@ async function dashInit() {
       ['batch_payment_id', '=',   false],
       ['x_estado_comprobante', 'not in', ['enviado','sin_destinatario']]
     ], ['id','name','partner_id','amount','currency_id','date','x_estado_comprobante']],
-    { limit: 100, order: 'date desc, id desc' });
+    { limit: 200, order: 'date desc, id desc' });
 
-    var errores  = (pagosIB||[]).filter(function(p){ return p.x_estado_comprobante === 'error'; });
+    // Excluir moneda extranjera y pagos a Fundación ArgenINTA (partner propio)
+    pagosIB = (pagosIB||[]).filter(function(p){
+      // Excluir si moneda != ARS
+      var moneda = p.currency_id ? (Array.isArray(p.currency_id) ? p.currency_id[1] : p.currency_id) : 'ARS';
+      if (moneda && moneda !== 'ARS') return false;
+      // Excluir si partner es Fundación ArgenINTA (ilike match en nombre)
+      var partner = p.partner_id ? (Array.isArray(p.partner_id) ? p.partner_id[1] : '') : '';
+      if (partner.toLowerCase().includes('argeninta') || partner.toLowerCase().includes('fundacion')) return false;
+      return true;
+    });
+
+    var errores    = (pagosIB||[]).filter(function(p){ return p.x_estado_comprobante === 'error'; });
     var pendientes = (pagosIB||[]).filter(function(p){ return p.x_estado_comprobante !== 'error'; });
 
     // KPI Interbanking
