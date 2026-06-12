@@ -9367,7 +9367,7 @@ async function antGenerar() {
 
     if (estado) estado.textContent = 'Buscando rendiciones...';
 
-    // 2. Traer rendiciones: pagos desde CSH5/CSH6 sin ser transferencia interna con facturas
+    // 2. Rendiciones: pagos desde CSH5/CSH6 sin transferencia interna (con o sin factura)
     var CAJAS_ANT_IDS = [56, 187];
     var rendPagos = await odooCall('account.payment', 'search_read', [[
       ['journal_id','in', CAJAS_ANT_IDS],
@@ -9381,40 +9381,8 @@ async function antGenerar() {
     ], ['id','name','amount','date','memo','x_studio_colaborador','journal_id',
         'is_internal_transfer','payment_type','reconciled_bill_ids']],
     { limit: 5000, order: 'date desc' });
-    // Filtrar en JS los que tienen facturas conciliadas
-    rendPagos = rendPagos.filter(function(p){ return p.reconciled_bill_ids && p.reconciled_bill_ids.length > 0; });
 
-    // 3. Rendiciones desde BNA con factura en journal Rendiciones (236,243)
-    var rendFactIds = [];
-    var rendBna = await odooCall('account.payment', 'search_read', [[
-      ['is_internal_transfer','=',false],
-      ['payment_type','=','outbound'],
-      ['state','in',['posted','paid','in_process']],
-      ['company_id','=',1],
-      ['date','>=',desde],
-      ['date','<=',hasta],
-      ['x_studio_colaborador','!=',false]
-    ], ['id','name','amount','date','memo','x_studio_colaborador','journal_id',
-        'reconciled_bill_ids']],
-    { limit: 5000 });
-    // Filtrar en JS los que tienen facturas y no son de caja de anticipos (ya cubiertos por rendPagos)
-    rendBna = rendBna.filter(function(p){
-      return p.reconciled_bill_ids && p.reconciled_bill_ids.length > 0 &&
-             CAJAS_ANT_IDS.indexOf(p.journal_id ? (Array.isArray(p.journal_id)?p.journal_id[0]:0) : 0) < 0;
-    });
-
-    // Verificar journals de facturas para rendBna
-    var allBillIds2 = [];
-    rendBna.forEach(function(p){ (p.reconciled_bill_ids||[]).forEach(function(id){ if(allBillIds2.indexOf(id)<0) allBillIds2.push(id); }); });
-    var billJMap2 = {};
-    if (allBillIds2.length > 0) {
-      var bills2 = await odooCall('account.move', 'read', [allBillIds2, ['id','journal_id']]);
-      bills2.forEach(function(b){ billJMap2[b.id] = b.journal_id ? (Array.isArray(b.journal_id)?b.journal_id[0]:0) : 0; });
-    }
-    var REND_J = [243, 236];
-    var rendBnaFiltrado = rendBna.filter(function(p){
-      return (p.reconciled_bill_ids||[]).some(function(bid){ return REND_J.indexOf(billJMap2[bid]) >= 0; });
-    });
+    var rendBnaFiltrado = []; // Solo se carga en el Buscador individual (demasiado pesado para masivo)
 
     if (estado) estado.textContent = 'Procesando...';
 
