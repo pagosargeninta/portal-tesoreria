@@ -8848,13 +8848,15 @@ async function busCargarDatos(pid) {
       }
     }
 
+    // Journals de rendición de anticipo: 243=RdFP, 236=RdFdT
+    var RENDICION_JOURNAL_IDS = [243, 236];
+
     function billEsReintegro(p) {
       var ids = p.reconciled_bill_ids||[];
       if (ids.length === 0) return false;
       return ids.some(function(bid){
         var jid = billJournalMap[bid];
-        var jname = jid ? (billJournalNames[jid]||'') : '';
-        return jname.includes('reintegro');
+        return RENDICION_JOURNAL_IDS.indexOf(jid) >= 0;
       });
     }
 
