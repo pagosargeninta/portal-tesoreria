@@ -8841,7 +8841,7 @@ async function busCargarDatos(pid) {
     }
 
     // Journals de rendición de anticipo: 243=RdFP, 236=RdFdT
-    var RENDICION_JOURNAL_IDS = [243, 236];
+    var RENDICION_JOURNAL_IDS = [243, 236, 226, 244]; // RdFP, RdFdT, RgFdT, RgFP
 
     function billEsReintegro(p) {
       var ids = p.reconciled_bill_ids||[];
