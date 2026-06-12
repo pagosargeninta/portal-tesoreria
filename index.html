@@ -2454,6 +2454,31 @@ tbody tr:hover td { background: #f8faf9; }
         </div>
       </div>
 
+      <!-- Panel de errores de carga -->
+      <div id="ant-errores-card" class="card" style="display:none;border-left:3px solid var(--danger);margin-bottom:16px;">
+        <div class="card-header">
+          <div class="card-title" style="color:var(--danger);">
+            <i class="ti ti-alert-triangle"></i> Rendiciones mal cargadas
+            <span id="ant-errores-count" class="badge badge-danger" style="margin-left:8px;"></span>
+          </div>
+          <div style="font-size:11px;color:var(--muted);">Facturas RdFdT/RdFP pagadas desde cuenta bancaria en vez de Caja Operacional</div>
+        </div>
+        <div class="table-wrap" style="border:none;border-radius:0;">
+          <table style="font-size:12px;">
+            <thead><tr>
+              <th>Factura rendición</th>
+              <th>Pago</th>
+              <th>Colaborador</th>
+              <th>Fecha</th>
+              <th style="text-align:right;">Monto</th>
+              <th>Journal (incorrecto)</th>
+              <th>Debería ser</th>
+            </tr></thead>
+            <tbody id="ant-errores-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Tabla de colaboradores -->
       <div id="ant-tabla-card" class="card" style="display:none;">
         <div class="card-header">
@@ -9469,6 +9494,87 @@ async function antGenerar() {
     antRenderTabla(_antFiltrado);
 
     document.getElementById('ant-tabla-card').style.display = 'block';
+
+    // ── Detectar rendiciones mal cargadas ──────────────────────────
+    if (estado) estado.textContent = 'Verificando errores de carga...';
+    try {
+      // Pagos outbound con colaborador desde journal NO caja
+      var CAJAS_TODOS = [56, 187, 189, 190];
+      var sospechosos = await odooCall('account.payment', 'search_read', [[
+        ['is_internal_transfer','=',false],
+        ['payment_type','=','outbound'],
+        ['x_studio_colaborador','!=',false],
+        ['company_id','=',1],
+        ['journal_id','not in', CAJAS_TODOS],
+        ['state','in',['posted','paid','in_process']],
+        ['date','>=',desde],
+        ['date','<=',hasta]
+      ]], { fields: ['id','name','amount','date','journal_id',
+                     'x_studio_colaborador','reconciled_bill_ids'], limit: 500 });
+
+      var conFact = sospechosos.filter(function(p){ return p.reconciled_bill_ids && p.reconciled_bill_ids.length > 0; });
+
+      if (conFact.length > 0) {
+        var allBillIdsErr = [];
+        conFact.forEach(function(p){ p.reconciled_bill_ids.forEach(function(id){ if(allBillIdsErr.indexOf(id)<0) allBillIdsErr.push(id); }); });
+
+        // Traer en chunks de 200
+        var factsErr = [];
+        for (var ci = 0; ci < allBillIdsErr.length; ci += 200) {
+          var chunk = allBillIdsErr.slice(ci, ci+200);
+          var res = await odooCall('account.move', 'read', [chunk, ['id','name','journal_id']]);
+          factsErr = factsErr.concat(res);
+        }
+
+        var factMapErr = {};
+        factsErr.forEach(function(f){ factMapErr[f.id] = f; });
+
+        // Filtrar los que tienen factura RdFdT/ o RdFP/
+        var errores = [];
+        conFact.forEach(function(p){
+          p.reconciled_bill_ids.forEach(function(bid){
+            var f = factMapErr[bid];
+            if (!f) return;
+            var nombre = f.name || '';
+            if (nombre.includes('RdFdT/') || nombre.includes('RdFP/')) {
+              errores.push({
+                factura: nombre,
+                pago: p.name,
+                pagoId: p.id,
+                colaborador: Array.isArray(p.x_studio_colaborador) ? p.x_studio_colaborador[1] : '—',
+                fecha: p.date,
+                monto: p.amount,
+                journal: Array.isArray(p.journal_id) ? p.journal_id[1] : '—'
+              });
+            }
+          });
+        });
+
+        if (errores.length > 0) {
+          var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+          var errCard  = document.getElementById('ant-errores-card');
+          var errTbody = document.getElementById('ant-errores-tbody');
+          var errCount = document.getElementById('ant-errores-count');
+          if (errCount) errCount.textContent = errores.length;
+          if (errTbody) errTbody.innerHTML = errores.map(function(e){
+            var fecha = (e.fecha||'').split('-').reverse().join('/');
+            var journal = e.journal.replace('BANCO $ NACIÓN - ','BNA ').replace('BANCO $ ','').substring(0,22);
+            return '<tr style="background:rgba(192,57,43,.03);">'+
+              '<td style="font-size:11px;font-family:monospace;color:var(--danger);">'+e.factura+'</td>'+
+              '<td style="font-size:11px;font-family:monospace;">'+e.pago+'</td>'+
+              '<td style="font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+e.colaborador+'</td>'+
+              '<td style="white-space:nowrap;color:var(--muted);">'+fecha+'</td>'+
+              '<td class="mono" style="text-align:right;font-weight:600;">'+fmt(e.monto)+'</td>'+
+              '<td style="font-size:11px;color:var(--danger);">'+journal+'</td>'+
+              '<td style="font-size:11px;color:var(--success);">Caja Operacional FdT</td>'+
+            '</tr>';
+          }).join('');
+          if (errCard) errCard.style.display = 'block';
+        }
+      }
+    } catch(eErr) { console.warn('Error check fail:', eErr); }
+    // ──────────────────────────────────────────────────────────────
+
     if (estado) estado.textContent = _antData.length + ' colaboradores procesados';
 
   } catch(e) {
