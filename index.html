@@ -8616,24 +8616,31 @@ var _busTabActual = 'saldo';
 
 // ── Clasificación de pagos — 100% mecánica ──
 function busClasificar(pago) {
-  // ANTICIPO: transferencia interna hacia banco (sale de caja al colaborador)
+  var bills = pago.reconciled_bill_ids;
+  var cantBills = Array.isArray(bills) ? bills.length : 0;
+
   if (pago.is_internal_transfer && pago.destination_journal_id) {
+    // Determinar si es anticipo o reintegro interno
+    // Reintegro interno = transferencia entre dos cajas (ambos journals son CSH)
+    var srcJournal  = pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[1] : '') : '';
+    var destJournal = Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[1] : '';
+    var srcIsCaja  = srcJournal.toLowerCase().includes('caja');
+    var destIsCaja = destJournal.toLowerCase().includes('caja');
+
+    // Caja → Caja = reintegro/movimiento interno, no anticipo
+    if (srcIsCaja && destIsCaja) return 'pago';
+
+    // Cualquier otra transferencia interna = anticipo al colaborador
     return 'anticipo';
   }
 
   // RENDICIÓN: pago conciliado con factura
-  var bills = pago.reconciled_bill_ids;
-  var cantBills = Array.isArray(bills) ? bills.length : 0;
   if (!pago.is_internal_transfer && cantBills > 0) {
     return 'rendicion';
   }
 
-  // SIN CLASIFICAR: no es transferencia interna y sin factura
-  if (!pago.is_internal_transfer && cantBills === 0) {
-    return 'sinclasif';
-  }
-
-  return 'pago';
+  // SIN CLASIFICAR
+  return 'sinclasif';
 }
 
 function busBuscar(q) {
@@ -8764,7 +8771,7 @@ async function busCargarDatos(pid) {
       { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
     );
     var pagos2 = await odooCall('account.payment', 'search_read',
-      [[['x_studio_colaborador','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['partner_id','!=',pid],['company_id','=',1]]],
+      [[['x_studio_colaborador','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['partner_id','not in',[pid]],['company_id','=',1]]],
       { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
     );
 
