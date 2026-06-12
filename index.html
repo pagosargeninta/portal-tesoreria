@@ -8635,8 +8635,14 @@ function busClasificar(pago) {
     var origenLower  = journalOrigen.toLowerCase();
     var destinoLower = journalDestino.toLowerCase();
 
-    // Si el journal ORIGEN es de Reintegros → es reintegro, no anticipo
-    if (origenLower.includes('reintegro')) return 'pago';
+    // Journals de reintegros: CSH7=189, CSH8=190
+    // Para inbound: journal_id es donde LLEGA (la caja de reintegros)
+    // Para outbound: journal_id es de donde SALE
+    var journalIdOrigen = pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[0] : 0) : 0;
+    var journalIdDest   = pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[0] : 0) : 0;
+
+    // Si cualquiera de los dos journals involucrados es de reintegros → es reintegro
+    if ([189, 190].indexOf(journalIdOrigen) >= 0 || [189, 190].indexOf(journalIdDest) >= 0) return 'pago';
 
     // Origen Caja → Destino Caja = movimiento interno
     if (origenLower.includes('caja') && destinoLower.includes('caja')) return 'pago';
@@ -8774,6 +8780,9 @@ async function busCargarDatos(pid) {
   var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
 
   try {
+    // 0. Cargar códigos de journals de reintegros (CSH7, CSH8)
+    var _reintegroJournalIds = [189, 190]; // CSH7=Reintegros FP, CSH8=Reintegros FdT
+
     // 1. Todos los pagos outbound del partner (por partner_id O x_studio_colaborador)
     var pagos1 = await odooCall('account.payment', 'search_read',
       [[['partner_id','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['company_id','=',1]]],
@@ -8797,21 +8806,12 @@ async function busCargarDatos(pid) {
     pagos2.forEach(function(p){ if (!allPagos.find(function(x){ return x.id===p.id; })) allPagos.push(p); });
     pagos3.forEach(function(p){ if (!allPagos.find(function(x){ return x.id===p.id; })) allPagos.push(p); });
 
-    // Para transferencias internas, Odoo genera outbound + inbound
-    // Quedarse solo con el inbound (tiene x_studio_colaborador asignado)
-    // Eliminar outbound que tenga mismo monto y fecha que un inbound
-    var inboundKeys = {};
-    allPagos.forEach(function(p){
-      if (p.is_internal_transfer && p.payment_type === 'inbound') {
-        var key = p.date + '_' + p.amount;
-        inboundKeys[key] = true;
-      }
-    });
+    // Para transferencias internas Odoo genera outbound + inbound
+    // Regla: descartar TODOS los outbound con destination_journal_id (son la contraparte)
+    // Conservar: outbound sin destino (pagos normales) + todos los inbound internos
     allPagos = allPagos.filter(function(p){
-      if (p.is_internal_transfer && p.payment_type === 'outbound') {
-        var key = p.date + '_' + p.amount;
-        // Si hay un inbound del mismo monto y fecha, descartar el outbound
-        if (inboundKeys[key]) return false;
+      if (p.is_internal_transfer && p.payment_type === 'outbound' && p.destination_journal_id) {
+        return false; // descartar — su contraparte inbound ya está en pagos3
       }
       return true;
     });
