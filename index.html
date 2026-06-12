@@ -8786,11 +8786,11 @@ async function busCargarDatos(pid) {
     // 1. Todos los pagos outbound del partner (por partner_id O x_studio_colaborador)
     var pagos1 = await odooCall('account.payment', 'search_read',
       [[['partner_id','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['company_id','=',1]]],
-      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
+      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id','payment_type'], limit: 500, order: 'date desc' }
     );
     var pagos2 = await odooCall('account.payment', 'search_read',
       [[['x_studio_colaborador','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['partner_id','not in',[pid]],['company_id','=',1]]],
-      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
+      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id','payment_type'], limit: 500, order: 'date desc' }
     );
 
     // 3. Transferencias internas inbound (anticipos registrados como recepción en caja)
@@ -8798,7 +8798,7 @@ async function busCargarDatos(pid) {
       [[['x_studio_colaborador','=',pid],['payment_type','=','inbound'],
         ['is_internal_transfer','=',true],
         ['state','in',['posted','paid','in_process']],['company_id','=',1]]],
-      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
+      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id','payment_type'], limit: 500, order: 'date desc' }
     );
 
     // Unificar y deduplicar por ID
