@@ -2461,7 +2461,12 @@ tbody tr:hover td { background: #f8faf9; }
             <i class="ti ti-alert-triangle"></i> Rendiciones mal cargadas
             <span id="ant-errores-count" class="badge badge-danger" style="margin-left:8px;"></span>
           </div>
-          <div style="font-size:11px;color:var(--muted);">Facturas RdFdT/RdFP pagadas desde cuenta bancaria en vez de Caja Operacional</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="font-size:11px;color:var(--muted);">Facturas RdFdT/RdFP pagadas desde cuenta bancaria en vez de Caja Operacional</div>
+            <button class="btn" onclick="antExportarErrores()" style="padding:5px 12px;font-size:11px;">
+              <i class="ti ti-file-spreadsheet"></i> Exportar Excel
+            </button>
+          </div>
         </div>
         <div class="table-wrap" style="border:none;border-radius:0;">
           <table style="font-size:12px;">
@@ -9551,6 +9556,7 @@ async function antGenerar() {
         });
 
         if (errores.length > 0) {
+          window._antErrores = errores; // guardar para export
           var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
           var errCard  = document.getElementById('ant-errores-card');
           var errTbody = document.getElementById('ant-errores-tbody');
@@ -9692,6 +9698,140 @@ async function antVerEnBuscador(partnerId) {
     var p = await odooCall('res.partner', 'read', [[partnerId], ['id','name','vat']]);
     if (p && p[0]) busSeleccionar(p[0]);
   }, 200);
+}
+
+
+// ── Exportar errores de rendición a Excel ──────────────────────
+async function antExportarErrores() {
+  if (!window._antErrores || window._antErrores.length === 0) {
+    alert('No hay errores para exportar.');
+    return;
+  }
+
+  // Cargar SheetJS si no está cargado
+  if (typeof XLSX === 'undefined') {
+    await new Promise(function(resolve, reject){
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  var fecha = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
+  var wb = XLSX.utils.book_new();
+
+  // ── Hoja 1: Lista de errores ──
+  var errData = [
+    ['ID Pago Odoo', 'Nro. Pago', 'Factura Rendición', 'Colaborador', 'Fecha', 'Monto', 'Journal Incorrecto', 'Journal Correcto', 'Acción a realizar']
+  ];
+  window._antErrores.forEach(function(e){
+    errData.push([
+      e.pagoId,
+      e.pago,
+      e.factura,
+      e.colaborador,
+      e.fecha,
+      e.monto,
+      e.journal,
+      'Caja Operacional Colaboradores FdT (CSH6)',
+      'Restablecer a borrador → cambiar Journal → confirmar → reconciliar'
+    ]);
+  });
+
+  var wsErr = XLSX.utils.aoa_to_sheet(errData);
+
+  // Ancho de columnas
+  wsErr['!cols'] = [
+    {wch:12}, {wch:28}, {wch:22}, {wch:32}, {wch:12},
+    {wch:14}, {wch:28}, {wch:32}, {wch:52}
+  ];
+
+  // Estilo encabezado (fondo rojo claro)
+  var headerRange = XLSX.utils.decode_range(wsErr['!ref']);
+  for (var c = headerRange.s.c; c <= headerRange.e.c; c++) {
+    var cellAddr = XLSX.utils.encode_cell({r:0, c:c});
+    if (!wsErr[cellAddr]) continue;
+    wsErr[cellAddr].s = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: 'C0392B' } },
+      alignment: { horizontal: 'center', wrapText: true }
+    };
+  }
+
+  // Formato moneda en columna Monto (col F = index 5)
+  for (var r = 1; r < errData.length; r++) {
+    var montoCell = XLSX.utils.encode_cell({r:r, c:5});
+    if (wsErr[montoCell]) {
+      wsErr[montoCell].z = '#,##0';
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, wsErr, 'Rendiciones Mal Cargadas');
+
+  // ── Hoja 2: Resumen por colaborador ──
+  var resumenMap = {};
+  window._antErrores.forEach(function(e){
+    if (!resumenMap[e.colaborador]) resumenMap[e.colaborador] = { cant:0, total:0 };
+    resumenMap[e.colaborador].cant++;
+    resumenMap[e.colaborador].total += e.monto;
+  });
+  var resData = [['Colaborador', 'Cantidad de errores', 'Monto total afectado']];
+  Object.entries(resumenMap)
+    .sort(function(a,b){ return b[1].total - a[1].total; })
+    .forEach(function(entry){
+      resData.push([entry[0], entry[1].cant, entry[1].total]);
+    });
+  // Total
+  resData.push(['TOTAL', window._antErrores.length, window._antErrores.reduce(function(s,e){ return s+e.monto; },0)]);
+
+  var wsRes = XLSX.utils.aoa_to_sheet(resData);
+  wsRes['!cols'] = [{wch:34}, {wch:20}, {wch:22}];
+
+  // Header
+  for (var c2 = 0; c2 < 3; c2++) {
+    var ca = XLSX.utils.encode_cell({r:0, c:c2});
+    if (wsRes[ca]) wsRes[ca].s = { font:{bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'922B21'}} };
+  }
+  // Fila total
+  var totalRow = resData.length - 1;
+  for (var c3 = 0; c3 < 3; c3++) {
+    var ct = XLSX.utils.encode_cell({r:totalRow, c:c3});
+    if (wsRes[ct]) wsRes[ct].s = { font:{bold:true}, fill:{fgColor:{rgb:'F5CBA7'}} };
+  }
+
+  XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen por Colaborador');
+
+  // ── Hoja 3: Instrucciones ──
+  var instrData = [
+    ['INSTRUCCIONES PARA CORREGIR EN ODOO'],
+    [''],
+    ['Cada fila en la hoja "Rendiciones Mal Cargadas" representa un pago que debe corregirse.'],
+    [''],
+    ['PASOS PARA CADA PAGO:'],
+    ['1. Abrir el pago en Odoo usando el ID (columna A) o el número de pago (columna B)'],
+    ['2. Verificar que el Journal actual es incorrecto (columna G)'],
+    ['3. Hacer clic en "Restablecer a borrador"'],
+    ['4. Cambiar el campo "Diario" a: Caja Operacional Colaboradores FdT (CSH6)'],
+    ['5. Confirmar el pago (botón "Confirmar")'],
+    ['6. Verificar que la factura sigue conciliada (pestaña "Pagado")'],
+    ['   Si se desoncilió, volver a conciliar manualmente'],
+    [''],
+    ['IMPORTANTE:'],
+    ['- Hacer de a uno o en grupos pequeños para evitar errores'],
+    ['- Verificar después de cada corrección que el estado sea correcto'],
+    ['- Este reporte fue generado el: ' + fecha],
+    ['- Período analizado: ' + (document.getElementById('ant-desde')?.value||'') + ' al ' + (document.getElementById('ant-hasta')?.value||'')]
+  ];
+  var wsInstr = XLSX.utils.aoa_to_sheet(instrData);
+  wsInstr['!cols'] = [{wch:80}];
+  // Título
+  if (wsInstr['A1']) wsInstr['A1'].s = { font:{bold:true, sz:14, color:{rgb:'922B21'}} };
+
+  XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones');
+
+  // Guardar
+  XLSX.writeFile(wb, 'rendiciones_mal_cargadas_' + fecha + '.xlsx');
 }
 
 </script>
