@@ -671,8 +671,12 @@ tbody tr:hover td { background: #f8faf9; }
     <i class="ti ti-coin"></i> Fondos Propios
   </div>
 
+  <div class="sidebar-section">Contabilidad</div>
   <div class="nav-item" onclick="showPage('buscador',this)">
     <i class="ti ti-search"></i> Buscador
+  </div>
+  <div class="nav-item" onclick="showPage('anticipos',this)">
+    <i class="ti ti-report-money"></i> Control Anticipos
   </div>
 
   <div class="sidebar-section">Config</div>
@@ -2396,6 +2400,87 @@ tbody tr:hover td { background: #f8faf9; }
       </div><!-- /bus-panel -->
     </div>
     <!-- ══════════ FIN BUSCADOR ══════════ -->
+
+    <!-- ══════════ CONTROL DE ANTICIPOS ══════════ -->
+    <div id="page-anticipos" class="page">
+
+      <!-- Filtros y botón generar -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="padding:14px 20px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="font-size:12px;color:var(--muted);white-space:nowrap;">Desde</label>
+              <input type="date" id="ant-desde" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);">
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="font-size:12px;color:var(--muted);white-space:nowrap;">Hasta</label>
+              <input type="date" id="ant-hasta" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);">
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="font-size:12px;color:var(--muted);white-space:nowrap;">Solo con saldo</label>
+              <input type="checkbox" id="ant-solo-saldo" checked style="cursor:pointer;">
+            </div>
+            <button class="btn btn-primary" onclick="antGenerar()" id="ant-btn-generar" style="padding:7px 18px;">
+              <i class="ti ti-player-play"></i> Generar reporte
+            </button>
+            <div id="ant-estado" style="font-size:12px;color:var(--muted);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPIs globales -->
+      <div id="ant-kpis" style="display:none;margin-bottom:16px;">
+        <div class="metrics-grid">
+          <div class="metric-card warn">
+            <div class="metric-label">Total anticipos</div>
+            <div class="metric-value" id="ant-k-total-ant">—</div>
+            <div class="metric-sub" id="ant-k-total-ant-sub"></div>
+          </div>
+          <div class="metric-card success">
+            <div class="metric-label">Total rendido</div>
+            <div class="metric-value" id="ant-k-total-rend">—</div>
+            <div class="metric-sub" id="ant-k-total-rend-sub"></div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-label">Saldo pendiente global</div>
+            <div class="metric-value" id="ant-k-saldo">—</div>
+            <div class="metric-sub" id="ant-k-saldo-sub"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Con saldo pendiente</div>
+            <div class="metric-value" id="ant-k-pendientes">—</div>
+            <div class="metric-sub">colaboradores</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla de colaboradores -->
+      <div id="ant-tabla-card" class="card" style="display:none;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-report-money"></i> Control de anticipos y rendiciones</div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="ant-filtro" placeholder="Filtrar por nombre..."
+              style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);"
+              oninput="antFiltrar(this.value)">
+          </div>
+        </div>
+        <div class="table-wrap" style="border:none;border-radius:0;">
+          <table style="font-size:12px;">
+            <thead><tr>
+              <th style="width:24px;"></th>
+              <th>Colaborador</th>
+              <th style="text-align:right;">Anticipos</th>
+              <th style="text-align:right;">Rendido</th>
+              <th style="text-align:right;">Saldo</th>
+              <th style="text-align:center;">Estado</th>
+            </tr></thead>
+            <tbody id="ant-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <!-- ══════════ FIN CONTROL DE ANTICIPOS ══════════ -->
 
     <!-- ══════════ CONFIG ══════════ -->
     <div id="page-config" class="page">
@@ -9217,6 +9302,317 @@ function busLimpiar() {
   if (panel)  panel.style.display  = 'none';
   if (estado) estado.textContent   = 'Escribí para buscar';
   if (input)  input.focus();
+}
+
+
+// ═══════════════════════════════════════════════════════
+// CONTROL DE ANTICIPOS Y RENDICIONES
+// ═══════════════════════════════════════════════════════
+
+var _antData    = [];   // datos de todos los colaboradores
+var _antFiltrado = [];  // datos filtrados para mostrar
+
+// Inicializar fechas al cargar la página
+(function(){
+  var hoy   = new Date();
+  var desde = new Date(hoy.getFullYear(), 0, 1); // 1 enero año actual
+  var fmtD  = function(d){ return d.toISOString().split('T')[0]; };
+  var dEl = document.getElementById('ant-desde');
+  var hEl = document.getElementById('ant-hasta');
+  if (dEl) dEl.value = fmtD(desde);
+  if (hEl) hEl.value = fmtD(hoy);
+})();
+
+async function antGenerar() {
+  var desde  = document.getElementById('ant-desde')?.value;
+  var hasta  = document.getElementById('ant-hasta')?.value;
+  var soloSaldo = document.getElementById('ant-solo-saldo')?.checked;
+  var estado = document.getElementById('ant-estado');
+  var btn    = document.getElementById('ant-btn-generar');
+
+  if (!desde || !hasta) { if (estado) estado.textContent = 'Seleccioná el período'; return; }
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Cargando...'; }
+  if (estado) estado.textContent = 'Buscando anticipos...';
+  document.getElementById('ant-kpis').style.display = 'none';
+  document.getElementById('ant-tabla-card').style.display = 'none';
+
+  try {
+    // 1. Traer todos los pagos de cajas de anticipos en el período
+    var CAJAS_ANTICIPO = [56, 187]; // CSH5, CSH6
+    var pagos = await odooCall('account.payment', 'search_read', [[
+      ['journal_id','in', CAJAS_ANTICIPO],
+      ['payment_type','=','outbound'],
+      ['is_internal_transfer','=',true],
+      ['state','in',['posted','paid','in_process']],
+      ['company_id','=',1],
+      ['date','>=',desde],
+      ['date','<=',hasta]
+    ], ['id','name','amount','date','x_studio_colaborador','partner_id',
+        'destination_journal_id','journal_id','is_internal_transfer','payment_type']],
+    { limit: 5000, order: 'date desc' });
+
+    // También traer inbound del mismo período (anticipos registrados como recepción)
+    var pagosIn = await odooCall('account.payment', 'search_read', [[
+      ['is_internal_transfer','=',true],
+      ['payment_type','=','inbound'],
+      ['state','in',['posted','paid','in_process']],
+      ['company_id','=',1],
+      ['date','>=',desde],
+      ['date','<=',hasta],
+      ['x_studio_colaborador','!=',false]
+    ], ['id','name','amount','date','x_studio_colaborador','partner_id',
+        'destination_journal_id','journal_id','is_internal_transfer','payment_type']],
+    { limit: 5000, order: 'date desc' });
+
+    if (estado) estado.textContent = 'Buscando rendiciones...';
+
+    // 2. Traer rendiciones: pagos desde CSH5/CSH6 sin ser transferencia interna con facturas
+    var CAJAS_ANT_IDS = [56, 187];
+    var rendPagos = await odooCall('account.payment', 'search_read', [[
+      ['journal_id','in', CAJAS_ANT_IDS],
+      ['payment_type','=','outbound'],
+      ['is_internal_transfer','=',false],
+      ['state','in',['posted','paid','in_process']],
+      ['company_id','=',1],
+      ['date','>=',desde],
+      ['date','<=',hasta],
+      ['x_studio_colaborador','!=',false],
+      ['reconciled_bill_ids','!=',false]
+    ], ['id','name','amount','date','x_studio_colaborador','journal_id',
+        'is_internal_transfer','payment_type','reconciled_bill_ids']],
+    { limit: 5000, order: 'date desc' });
+
+    // 3. Rendiciones desde BNA con factura en journal Rendiciones (236,243)
+    var rendFactIds = [];
+    var rendBna = await odooCall('account.payment', 'search_read', [[
+      ['is_internal_transfer','=',false],
+      ['payment_type','=','outbound'],
+      ['state','in',['posted','paid','in_process']],
+      ['company_id','=',1],
+      ['date','>=',desde],
+      ['date','<=',hasta],
+      ['x_studio_colaborador','!=',false],
+      ['reconciled_bill_ids','!=',false]
+    ], ['id','name','amount','date','x_studio_colaborador','journal_id',
+        'reconciled_bill_ids']],
+    { limit: 5000 });
+
+    // Verificar journals de facturas para rendBna
+    var allBillIds2 = [];
+    rendBna.forEach(function(p){ (p.reconciled_bill_ids||[]).forEach(function(id){ if(allBillIds2.indexOf(id)<0) allBillIds2.push(id); }); });
+    var billJMap2 = {};
+    if (allBillIds2.length > 0) {
+      var bills2 = await odooCall('account.move', 'read', [allBillIds2, ['id','journal_id']]);
+      bills2.forEach(function(b){ billJMap2[b.id] = b.journal_id ? (Array.isArray(b.journal_id)?b.journal_id[0]:0) : 0; });
+    }
+    var REND_J = [243, 236];
+    var rendBnaFiltrado = rendBna.filter(function(p){
+      return (p.reconciled_bill_ids||[]).some(function(bid){ return REND_J.indexOf(billJMap2[bid]) >= 0; });
+    });
+
+    if (estado) estado.textContent = 'Procesando...';
+
+    // 4. Agrupar por colaborador
+    var colaboradores = {}; // pid -> { nombre, anticipos: [], rendiciones: [] }
+
+    function getColab(p) {
+      var c = p.x_studio_colaborador;
+      if (!c || !Array.isArray(c)) return null;
+      return { id: c[0], nombre: c[1] };
+    }
+
+    // Anticipos outbound (excluyendo reintegros)
+    var REINTEGRO_J = [189, 190];
+    pagos.forEach(function(p){
+      var c = getColab(p);
+      if (!c) return;
+      var jId = p.journal_id ? (Array.isArray(p.journal_id)?p.journal_id[0]:0) : 0;
+      var dId = p.destination_journal_id ? (Array.isArray(p.destination_journal_id)?p.destination_journal_id[0]:0) : 0;
+      if (REINTEGRO_J.indexOf(jId)>=0 || REINTEGRO_J.indexOf(dId)>=0) return;
+      if (!colaboradores[c.id]) colaboradores[c.id] = { id:c.id, nombre:c.nombre, anticipos:[], rendiciones:[] };
+      colaboradores[c.id].anticipos.push(p);
+    });
+
+    // Anticipos inbound
+    pagosIn.forEach(function(p){
+      var c = getColab(p);
+      if (!c) return;
+      var jId = p.journal_id ? (Array.isArray(p.journal_id)?p.journal_id[0]:0) : 0;
+      var dId = p.destination_journal_id ? (Array.isArray(p.destination_journal_id)?p.destination_journal_id[0]:0) : 0;
+      if (REINTEGRO_J.indexOf(jId)>=0 || REINTEGRO_J.indexOf(dId)>=0) return;
+      if (!colaboradores[c.id]) colaboradores[c.id] = { id:c.id, nombre:c.nombre, anticipos:[], rendiciones:[] };
+      // Solo agregar si no está ya el outbound del mismo monto/fecha
+      var key = p.date + '_' + p.amount;
+      var yaEsta = colaboradores[c.id].anticipos.some(function(x){ return (x.date+'_'+x.amount)===key; });
+      if (!yaEsta) colaboradores[c.id].anticipos.push(p);
+    });
+
+    // Rendiciones CSH6
+    rendPagos.forEach(function(p){
+      var c = getColab(p);
+      if (!c) return;
+      if (!colaboradores[c.id]) colaboradores[c.id] = { id:c.id, nombre:c.nombre, anticipos:[], rendiciones:[] };
+      colaboradores[c.id].rendiciones.push(p);
+    });
+
+    // Rendiciones BNA con factura de rendición
+    rendBnaFiltrado.forEach(function(p){
+      var c = getColab(p);
+      if (!c) return;
+      if (!colaboradores[c.id]) colaboradores[c.id] = { id:c.id, nombre:c.nombre, anticipos:[], rendiciones:[] };
+      colaboradores[c.id].rendiciones.push(p);
+    });
+
+    // 5. Calcular saldos
+    _antData = Object.values(colaboradores).map(function(c){
+      var totalAnt  = c.anticipos.reduce(function(s,p){ return s+p.amount; },0);
+      var totalRend = c.rendiciones.reduce(function(s,p){ return s+p.amount; },0);
+      var saldo     = totalAnt - totalRend;
+      return { id:c.id, nombre:c.nombre, totalAnt:totalAnt, totalRend:totalRend, saldo:saldo,
+               anticipos:c.anticipos, rendiciones:c.rendiciones };
+    }).sort(function(a,b){ return Math.abs(b.saldo)-Math.abs(a.saldo); });
+
+    // 6. KPIs globales
+    var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+    var totalAntG  = _antData.reduce(function(s,c){ return s+c.totalAnt; },0);
+    var totalRendG = _antData.reduce(function(s,c){ return s+c.totalRend; },0);
+    var saldoG     = totalAntG - totalRendG;
+    var conSaldo   = _antData.filter(function(c){ return c.saldo > 100; }).length;
+
+    var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+    set('ant-k-total-ant',     fmt(totalAntG));
+    set('ant-k-total-ant-sub', _antData.length + ' colaboradores');
+    set('ant-k-total-rend',    fmt(totalRendG));
+    set('ant-k-total-rend-sub', _antData.filter(function(c){ return c.totalRend>0; }).length + ' con rendiciones');
+    set('ant-k-saldo',         fmt(saldoG));
+    set('ant-k-saldo-sub',     saldoG > 0 ? 'pendiente de rendir' : 'rendido correctamente');
+    set('ant-k-pendientes',    conSaldo);
+
+    document.getElementById('ant-kpis').style.display = 'block';
+
+    // 7. Filtrar y renderizar tabla
+    _antFiltrado = soloSaldo ? _antData.filter(function(c){ return c.saldo > 100; }) : _antData;
+    antRenderTabla(_antFiltrado);
+
+    document.getElementById('ant-tabla-card').style.display = 'block';
+    if (estado) estado.textContent = _antData.length + ' colaboradores procesados';
+
+  } catch(e) {
+    if (estado) estado.textContent = 'Error: ' + e.message;
+    console.error('antGenerar error:', e);
+  } finally {
+    if (btn) { btn.disabled=false; btn.innerHTML='<i class="ti ti-player-play"></i> Generar reporte'; }
+  }
+}
+
+function antRenderTabla(data) {
+  var tbody = document.getElementById('ant-tbody');
+  if (!tbody) return;
+  var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+
+  tbody.innerHTML = data.map(function(c, idx){
+    var saldoColor = c.saldo > 100 ? 'var(--danger)' : c.saldo < -100 ? 'var(--warn)' : 'var(--success)';
+    var badge = c.saldo > 100
+      ? '<span class="badge badge-danger">⚠ Pendiente</span>'
+      : c.saldo < -100
+        ? '<span class="badge badge-warn">↑ Rindió de más</span>'
+        : '<span class="badge badge-ok">✅ OK</span>';
+    return '<tr id="ant-row-'+idx+'">' +
+      '<td style="text-align:center;cursor:pointer;" onclick="antToggle('+idx+')">' +
+        '<i class="ti ti-chevron-right" id="ant-icon-'+idx+'" style="font-size:13px;color:var(--muted);transition:transform .2s;"></i>' +
+      '</td>' +
+      '<td style="font-weight:500;cursor:pointer;" onclick="antToggle('+idx+')">'+c.nombre+'</td>' +
+      '<td class="mono" style="text-align:right;color:var(--warn);">'+fmt(c.totalAnt)+'</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">'+fmt(c.totalRend)+'</td>' +
+      '<td class="mono" style="text-align:right;font-weight:700;color:'+saldoColor+';">'+fmt(c.saldo)+'</td>' +
+      '<td style="text-align:center;">'+badge+'</td>' +
+    '</tr>' +
+    '<tr id="ant-detail-'+idx+'" style="display:none;background:var(--surface-alt,#f8faf9);">' +
+      '<td colspan="6" style="padding:0;">' +
+        '<div id="ant-detail-content-'+idx+'" style="padding:12px 20px 12px 32px;"></div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function antToggle(idx) {
+  var detailRow = document.getElementById('ant-detail-'+idx);
+  var icon      = document.getElementById('ant-icon-'+idx);
+  var content   = document.getElementById('ant-detail-content-'+idx);
+
+  if (!detailRow) return;
+  var isOpen = detailRow.style.display !== 'none';
+
+  if (isOpen) {
+    detailRow.style.display = 'none';
+    if (icon) icon.style.transform = '';
+    return;
+  }
+
+  detailRow.style.display = 'table-row';
+  if (icon) icon.style.transform = 'rotate(90deg)';
+
+  // Renderizar detalle si no está cargado
+  if (content && !content.dataset.loaded) {
+    content.dataset.loaded = '1';
+    var c   = _antFiltrado[idx];
+    var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+
+    var antRows = c.anticipos.map(function(p){
+      var f = (p.date||'').split('-').reverse().join('/');
+      var dest = p.destination_journal_id ? (Array.isArray(p.destination_journal_id)?p.destination_journal_id[1]:'') : '';
+      dest = dest.replace('BANCO $ NACIÓN - ','BNA ').replace('BANCO $ ','').substring(0,20);
+      return '<tr><td style="color:var(--muted);white-space:nowrap;">'+f+'</td>' +
+        '<td style="font-size:11px;font-family:monospace;">'+p.name+'</td>' +
+        '<td style="font-size:11px;color:var(--muted);">→ '+dest+'</td>' +
+        '<td class="mono" style="text-align:right;font-weight:600;color:var(--warn);">'+fmt(p.amount)+'</td></tr>';
+    }).join('') || '<tr><td colspan="4" style="color:var(--muted);padding:8px;">Sin anticipos</td></tr>';
+
+    var rendRows = c.rendiciones.map(function(p){
+      var f = (p.date||'').split('-').reverse().join('/');
+      var memo = (p.memo||'—').substring(0,35);
+      return '<tr><td style="color:var(--muted);white-space:nowrap;">'+f+'</td>' +
+        '<td style="font-size:11px;font-family:monospace;">'+p.name+'</td>' +
+        '<td style="font-size:11px;color:var(--muted);">'+memo+'</td>' +
+        '<td class="mono" style="text-align:right;font-weight:600;color:var(--success);">'+fmt(p.amount)+'</td></tr>';
+    }).join('') || '<tr><td colspan="4" style="color:var(--muted);padding:8px;">Sin rendiciones</td></tr>';
+
+    var saldoColor = c.saldo > 100 ? 'var(--danger)' : c.saldo < -100 ? 'var(--warn)' : 'var(--success)';
+    var thead = '<thead><tr><th>Fecha</th><th>Referencia</th><th>Detalle</th><th style="text-align:right;">Monto</th></tr></thead>';
+
+    content.innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+        '<div>' +
+          '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--warn);margin-bottom:6px;">Anticipos ('+c.anticipos.length+')</div>' +
+          '<table style="font-size:11px;width:100%;">'+thead+'<tbody>'+antRows+'</tbody></table>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--success);margin-bottom:6px;">Rendiciones ('+c.rendiciones.length+')</div>' +
+          '<table style="font-size:11px;width:100%;">'+thead+'<tbody>'+rendRows+'</tbody></table>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:10px;padding:8px 12px;border-radius:6px;border-left:3px solid '+saldoColor+';background:var(--surface);font-size:12px;font-weight:600;color:'+saldoColor+';">' +
+        'Saldo: '+fmt(c.saldo)+(c.saldo>100?' pendiente de rendir':c.saldo<-100?' rindió de más':' — OK')+
+        ' <button class="btn" style="margin-left:12px;padding:3px 10px;font-size:11px;" onclick="antVerEnBuscador('+c.id+')">Ver detalle completo →</button>' +
+      '</div>';
+  }
+}
+
+function antFiltrar(q) {
+  if (!q) { _antFiltrado = _antData.filter(function(c){ return !document.getElementById('ant-solo-saldo')?.checked || c.saldo > 100; }); }
+  else { _antFiltrado = _antData.filter(function(c){ return c.nombre.toLowerCase().includes(q.toLowerCase()); }); }
+  antRenderTabla(_antFiltrado);
+}
+
+async function antVerEnBuscador(partnerId) {
+  // Navegar al buscador y cargar este partner
+  var navEl = document.querySelector('.nav-item[onclick*="buscador"]');
+  showPage('buscador', navEl);
+  setTimeout(async function(){
+    var p = await odooCall('res.partner', 'read', [[partnerId], ['id','name','vat']]);
+    if (p && p[0]) busSeleccionar(p[0]);
+  }, 200);
 }
 
 </script>
