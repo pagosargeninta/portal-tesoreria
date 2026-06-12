@@ -671,6 +671,10 @@ tbody tr:hover td { background: #f8faf9; }
     <i class="ti ti-coin"></i> Fondos Propios
   </div>
 
+  <div class="nav-item" onclick="showPage('buscador',this)">
+    <i class="ti ti-search"></i> Buscador
+  </div>
+
   <div class="sidebar-section">Config</div>
   <div class="nav-item" onclick="showPage('config',this)">
     <i class="ti ti-settings"></i> Configuración
@@ -2301,6 +2305,97 @@ tbody tr:hover td { background: #f8faf9; }
       </div><!-- end fp-tab-desembolsos -->
 
     </div>
+
+    <!-- ══════════ BUSCADOR ══════════ -->
+    <div id="page-buscador" class="page">
+
+      <!-- Buscador -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+        <div style="position:relative;flex:1;min-width:280px;max-width:560px;">
+          <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;pointer-events:none;"></i>
+          <input type="text" id="bus-input" placeholder="Buscar por nombre o CUIT..."
+            style="width:100%;padding:10px 12px 10px 36px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+            oninput="busBuscar(this.value)" autocomplete="off">
+        </div>
+        <div id="bus-estado" style="font-size:12px;color:var(--muted);white-space:nowrap;">Escribí para buscar</div>
+      </div>
+
+      <!-- Lista de resultados de búsqueda (cuando hay varios matches) -->
+      <div id="bus-lista" style="display:none;margin-bottom:16px;">
+        <div class="card">
+          <div class="card-header"><div class="card-title"><i class="ti ti-users"></i> Resultados</div></div>
+          <div class="table-wrap" style="border:none;border-radius:0;">
+            <table style="font-size:12px;">
+              <thead><tr><th>Nombre</th><th>CUIT</th><th></th></tr></thead>
+              <tbody id="bus-lista-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel del tercero seleccionado -->
+      <div id="bus-panel" style="display:none;">
+
+        <!-- Header del tercero -->
+        <div class="card" style="margin-bottom:12px;">
+          <div class="card-body" style="padding:14px 20px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+              <div>
+                <div id="bus-nombre" style="font-size:16px;font-weight:700;color:var(--text);"></div>
+                <div id="bus-cuit" style="font-size:11px;color:var(--muted);margin-top:2px;"></div>
+              </div>
+              <button class="btn" onclick="busLimpiar()" style="padding:5px 12px;font-size:11px;">
+                <i class="ti ti-x"></i> Nueva búsqueda
+              </button>
+            </div>
+            <!-- KPIs resumen -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--border);margin-top:14px;border-radius:6px;overflow:hidden;">
+              <div style="background:var(--surface);padding:10px 14px;">
+                <div style="font-size:18px;font-weight:700;color:var(--warn);" id="bus-k-ant">—</div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Anticipos</div>
+              </div>
+              <div style="background:var(--surface);padding:10px 14px;">
+                <div style="font-size:18px;font-weight:700;color:var(--success);" id="bus-k-rend">—</div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Rendiciones</div>
+              </div>
+              <div style="background:var(--surface);padding:10px 14px;">
+                <div style="font-size:18px;font-weight:700;" id="bus-k-saldo" style="color:var(--text);">—</div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Saldo a rendir</div>
+              </div>
+              <div style="background:var(--surface);padding:10px 14px;">
+                <div style="font-size:18px;font-weight:700;color:var(--info);" id="bus-k-pagos">—</div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Otros pagos</div>
+              </div>
+              <div style="background:var(--surface);padding:10px 14px;">
+                <div style="font-size:18px;font-weight:700;color:var(--danger);" id="bus-k-fact">—</div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Facturas pend.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tab-row" id="bus-tabs" style="margin-bottom:0;">
+          <button class="tab-btn active" onclick="busTab(this,'saldo')">📊 Saldo a rendir</button>
+          <button class="tab-btn" onclick="busTab(this,'anticipos')">💰 Anticipos</button>
+          <button class="tab-btn" onclick="busTab(this,'rendiciones')">📋 Rendiciones</button>
+          <button class="tab-btn" onclick="busTab(this,'pagos')">💳 Pagos</button>
+          <button class="tab-btn" onclick="busTab(this,'facturas')">🧾 Facturas</button>
+          <button class="tab-btn" onclick="busTab(this,'sinclasif')">❓ Sin clasificar</button>
+        </div>
+
+        <!-- Contenido del tab -->
+        <div id="bus-tab-body" class="card" style="border-top-left-radius:0;border-top-right-radius:0;border-top:none;min-height:200px;">
+          <div id="bus-tab-loading" style="text-align:center;padding:32px;color:var(--muted);">
+            <i class="ti ti-loader" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+            Cargando...
+          </div>
+          <div id="bus-tab-content" style="display:none;"></div>
+        </div>
+
+      </div><!-- /bus-panel -->
+    </div>
+    <!-- ══════════ FIN BUSCADOR ══════════ -->
 
     <!-- ══════════ CONFIG ══════════ -->
     <div id="page-config" class="page">
@@ -8508,6 +8603,467 @@ async function bnaSubirPDF(input) {
     }
   };
 })();
+
+
+// ═══════════════════════════════════════════════════════
+// BUSCADOR GLOBAL — legajo completo de un tercero
+// ═══════════════════════════════════════════════════════
+
+var _busTimer   = null;
+var _busPartner = null;  // partner seleccionado
+var _busData    = null;  // datos cargados del tercero
+var _busTabActual = 'saldo';
+
+// ── Clasificación de pagos por memo ──
+function busClasificar(memo) {
+  if (!memo) return 'sinclasif';
+  var m = memo.toLowerCase();
+  if (m.includes('anticipo') || m.includes('a rendir') || m.includes('a cuenta')) return 'anticipo';
+  if (m.includes('rendic') || /^r\.\s*\d/.test(m) || m.includes('rendición')) return 'rendicion';
+  return 'pago';
+}
+
+function busBuscar(q) {
+  q = (q||'').trim();
+  var estado = document.getElementById('bus-estado');
+  var lista   = document.getElementById('bus-lista');
+  var panel   = document.getElementById('bus-panel');
+
+  if (q.length < 3) {
+    if (estado) estado.textContent = 'Escribí para buscar';
+    if (lista)  lista.style.display = 'none';
+    if (panel)  panel.style.display = 'none';
+    clearTimeout(_busTimer);
+    return;
+  }
+
+  if (estado) estado.textContent = 'Buscando...';
+  clearTimeout(_busTimer);
+  _busTimer = setTimeout(function(){ _busEjecutar(q); }, 350);
+}
+
+async function _busEjecutar(q) {
+  var estado = document.getElementById('bus-estado');
+  var lista   = document.getElementById('bus-lista');
+  var panel   = document.getElementById('bus-panel');
+  var tbody   = document.getElementById('bus-lista-tbody');
+
+  try {
+    // Buscar por nombre o CUIT
+    var domain = [];
+    if (/^[0-9-]+$/.test(q.replace(/ /g,''))) {
+      domain = [['vat','ilike',q.replace(/[^0-9]/g,'')]];
+    } else {
+      domain = [['name','ilike',q]];
+    }
+
+    var partners = await odooCall('res.partner', 'search_read',
+      [domain],
+      { fields: ['id','name','vat','email','phone'], limit: 20, order: 'name asc' }
+    );
+
+    if (!partners || partners.length === 0) {
+      if (estado) estado.textContent = 'Sin resultados';
+      if (lista)  lista.style.display = 'none';
+      if (panel)  panel.style.display = 'none';
+      return;
+    }
+
+    if (partners.length === 1) {
+      // Directo al panel
+      if (lista) lista.style.display = 'none';
+      if (estado) estado.textContent = '1 resultado';
+      busSeleccionar(partners[0]);
+      return;
+    }
+
+    // Mostrar lista para elegir
+    if (panel) panel.style.display = 'none';
+    if (estado) estado.textContent = partners.length + ' resultados';
+    if (tbody) tbody.innerHTML = partners.map(function(p){
+      var cuit = p.vat ? p.vat.replace(/(\d{2})(\d{8})(\d{1})/,'$1-$2-$3') : '—';
+      return '<tr style="cursor:pointer;" onclick="busSeleccionarId('+p.id+')">' +
+        '<td style="font-weight:500;">'+p.name+'</td>'+
+        '<td style="font-size:11px;color:var(--muted);">'+cuit+'</td>'+
+        '<td style="text-align:right;"><button class="btn" style="padding:3px 10px;font-size:11px;">Ver →</button></td>'+
+      '</tr>';
+    }).join('');
+    if (lista) lista.style.display = 'block';
+
+  } catch(e) {
+    if (estado) estado.textContent = 'Error: ' + e.message;
+    console.error('busBuscar error:', e);
+  }
+}
+
+async function busSeleccionarId(id) {
+  try {
+    var p = await odooCall('res.partner', 'read', [[id], ['id','name','vat']]);
+    if (p && p[0]) busSeleccionar(p[0]);
+  } catch(e) { console.error('busSeleccionarId:', e); }
+}
+
+async function busSeleccionar(partner) {
+  _busPartner = partner;
+  _busData    = null;
+
+  var lista = document.getElementById('bus-lista');
+  var panel = document.getElementById('bus-panel');
+  var estado = document.getElementById('bus-estado');
+
+  if (lista) lista.style.display = 'none';
+  if (panel) panel.style.display = 'block';
+
+  // Header
+  var cuitFmt = partner.vat ? partner.vat.replace(/(\d{2})(\d{8})(\d{1})/,'$1-$2-$3') : 'CUIT no registrado';
+  var el = document.getElementById('bus-nombre'); if (el) el.textContent = partner.name;
+  el = document.getElementById('bus-cuit'); if (el) el.textContent = 'CUIT: ' + cuitFmt + ' · ID Odoo: ' + partner.id;
+
+  // KPIs en loading
+  ['bus-k-ant','bus-k-rend','bus-k-saldo','bus-k-pagos','bus-k-fact'].forEach(function(id){
+    var e = document.getElementById(id); if (e) e.textContent = '…';
+  });
+
+  // Reset tabs
+  document.querySelectorAll('#bus-tabs .tab-btn').forEach(function(b,i){ b.classList.toggle('active', i===0); });
+  _busTabActual = 'saldo';
+
+  // Loading state
+  var loading = document.getElementById('bus-tab-loading');
+  var tabContent = document.getElementById('bus-tab-content');
+  if (loading) loading.style.display = 'block';
+  if (tabContent) tabContent.style.display = 'none';
+
+  if (estado) estado.textContent = 'Cargando datos de ' + partner.name + '...';
+
+  await busCargarDatos(partner.id);
+  busRenderTab('saldo');
+  if (estado) estado.textContent = 'Mostrando: ' + partner.name;
+}
+
+async function busCargarDatos(pid) {
+  var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+
+  try {
+    // 1. Todos los pagos outbound del partner (por partner_id O x_studio_colaborador)
+    var pagos1 = await odooCall('account.payment', 'search_read',
+      [[['partner_id','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']]]],
+      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id'], limit: 500, order: 'date desc' }
+    );
+    var pagos2 = await odooCall('account.payment', 'search_read',
+      [[['x_studio_colaborador','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['partner_id','!=',pid]]],
+      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id'], limit: 500, order: 'date desc' }
+    );
+
+    // Unificar y deduplicar
+    var allPagos = pagos1.slice();
+    pagos2.forEach(function(p){ if (!allPagos.find(function(x){ return x.id===p.id; })) allPagos.push(p); });
+    allPagos.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+    // Clasificar
+    var anticipos   = allPagos.filter(function(p){ return busClasificar(p.memo)==='anticipo'; });
+    var rendiciones = allPagos.filter(function(p){ return busClasificar(p.memo)==='rendicion'; });
+    var pagos       = allPagos.filter(function(p){ return busClasificar(p.memo)==='pago'; });
+    var sinclasif   = allPagos.filter(function(p){ return busClasificar(p.memo)==='sinclasif'; });
+
+    var totalAnt  = anticipos.reduce(function(s,p){ return s+p.amount; },0);
+    var totalRend = rendiciones.reduce(function(s,p){ return s+p.amount; },0);
+    var totalPag  = pagos.reduce(function(s,p){ return s+p.amount; },0);
+    var saldo     = totalAnt - totalRend;
+
+    // 2. Facturas de proveedor
+    var facturas = await odooCall('account.move', 'search_read',
+      [[['partner_id','=',pid],['move_type','=','in_invoice'],['state','=','posted']]],
+      { fields: ['id','name','amount_total','invoice_date','payment_state','narration'], limit: 200, order: 'invoice_date desc' }
+    );
+    var factPend = facturas.filter(function(f){ return f.payment_state !== 'paid'; });
+    var totalFactPend = factPend.reduce(function(s,f){ return s+f.amount_total; },0);
+
+    // 3. Facturas de cliente (out_invoice)
+    var factCliente = await odooCall('account.move', 'search_read',
+      [[['partner_id','=',pid],['move_type','=','out_invoice'],['state','=','posted']]],
+      { fields: ['id','name','amount_total','invoice_date','payment_state'], limit: 200, order: 'invoice_date desc' }
+    );
+
+    // 4. Convenios analíticos
+    var convenios = [];
+    try {
+      var analiticas = await odooCall('account.analytic.account', 'search_read',
+        [[['partner_id','=',pid],['active','=',true]]],
+        { fields: ['id','name'], limit: 50 }
+      );
+      convenios = analiticas;
+    } catch(e) {}
+
+    _busData = {
+      anticipos: anticipos,   totalAnt: totalAnt,
+      rendiciones: rendiciones, totalRend: totalRend,
+      pagos: pagos,           totalPag: totalPag,
+      sinclasif: sinclasif,
+      saldo: saldo,
+      facturas: facturas,     factPend: factPend, totalFactPend: totalFactPend,
+      factCliente: factCliente,
+      convenios: convenios,
+      fmt: fmt
+    };
+
+    // KPIs
+    var set = function(id,v,c){ var e=document.getElementById(id); if(e){ e.textContent=v; if(c) e.style.color=c; } };
+    set('bus-k-ant',   fmt(totalAnt),  'var(--warn)');
+    set('bus-k-rend',  fmt(totalRend), 'var(--success)');
+    set('bus-k-saldo', fmt(saldo),     saldo>0?'var(--danger)':saldo<0?'var(--warn)':'var(--success)');
+    set('bus-k-pagos', fmt(totalPag),  'var(--info)');
+    set('bus-k-fact',  fmt(totalFactPend), totalFactPend>0?'var(--danger)':'var(--success)');
+
+    // Badge sin clasificar
+    var tabSC = document.querySelector('#bus-tabs .tab-btn:last-child');
+    if (tabSC) tabSC.textContent = '❓ Sin clasificar' + (sinclasif.length>0?' ('+sinclasif.length+')':'');
+
+  } catch(e) {
+    console.error('busCargarDatos error:', e);
+    _busData = { error: e.message };
+  }
+}
+
+function busTab(btn, tab) {
+  document.querySelectorAll('#bus-tabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  _busTabActual = tab;
+  busRenderTab(tab);
+}
+
+function busRenderTab(tab) {
+  var loading    = document.getElementById('bus-tab-loading');
+  var tabContent = document.getElementById('bus-tab-content');
+
+  if (!_busData) {
+    if (loading) loading.style.display = 'block';
+    if (tabContent) tabContent.style.display = 'none';
+    return;
+  }
+
+  if (loading) loading.style.display = 'none';
+  if (tabContent) tabContent.style.display = 'block';
+
+  if (_busData.error) {
+    tabContent.innerHTML = '<div style="padding:24px;color:var(--danger);">Error: '+_busData.error+'</div>';
+    return;
+  }
+
+  var fmt = _busData.fmt;
+  var html = '';
+
+  if (tab === 'saldo') {
+    html = busRenderSaldo(fmt);
+  } else if (tab === 'anticipos') {
+    html = busRenderPagosLista(_busData.anticipos, 'anticipos', fmt);
+  } else if (tab === 'rendiciones') {
+    html = busRenderPagosLista(_busData.rendiciones, 'rendiciones', fmt);
+  } else if (tab === 'pagos') {
+    html = busRenderPagosLista(_busData.pagos, 'pagos', fmt);
+  } else if (tab === 'facturas') {
+    html = busRenderFacturas(fmt);
+  } else if (tab === 'sinclasif') {
+    html = busRenderSinClasif(fmt);
+  }
+
+  tabContent.innerHTML = html;
+}
+
+function busRenderSaldo(fmt) {
+  var d = _busData;
+  var saldoColor = d.saldo > 0 ? 'var(--danger)' : d.saldo < 0 ? 'var(--warn)' : 'var(--success)';
+  var saldoMsg   = d.saldo > 0
+    ? '⚠ Tiene '+fmt(d.saldo)+' pendiente de rendir'
+    : d.saldo < 0
+      ? '⚠ Rindió '+fmt(Math.abs(d.saldo))+' de más'
+      : '✅ Sin saldo pendiente';
+
+  // Construir tabla mes a mes
+  var mesMapa = {};
+  function addToMes(lista, tipo) {
+    lista.forEach(function(p){
+      var km = (p.date||'').substring(0,7);
+      if (!km) return;
+      if (!mesMapa[km]) mesMapa[km] = { ant:0, rend:0, pagos:0 };
+      mesMapa[km][tipo] += p.amount;
+    });
+  }
+  addToMes(d.anticipos,   'ant');
+  addToMes(d.rendiciones, 'rend');
+  addToMes(d.pagos,       'pagos');
+
+  var meses = Object.keys(mesMapa).sort().reverse();
+  var saldoAcum = 0;
+  var rows = meses.map(function(km){
+    var p = mesMapa[km];
+    var label = new Date(km+'-15').toLocaleString('es-AR',{month:'short',year:'2-digit'});
+    saldoAcum += (p.ant - p.rend);
+    var diff = p.ant - p.rend;
+    var dc = diff > 0 ? 'color:var(--danger);' : diff < 0 ? 'color:var(--warn);' : 'color:var(--success);';
+    return '<tr>'+
+      '<td style="font-weight:600;white-space:nowrap;">'+label+'</td>'+
+      '<td class="mono" style="text-align:right;color:var(--warn);">'+(p.ant>0?fmt(p.ant):'—')+'</td>'+
+      '<td class="mono" style="text-align:right;color:var(--success);">'+(p.rend>0?fmt(p.rend):'—')+'</td>'+
+      '<td class="mono" style="text-align:right;'+dc+'">'+(p.ant>0||p.rend>0?fmt(diff):'—')+'</td>'+
+      '<td class="mono" style="text-align:right;color:var(--muted);">'+(p.pagos>0?fmt(p.pagos):'—')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  if (!rows) rows = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted);">Sin movimientos registrados</td></tr>';
+
+  return '<div style="padding:16px 20px;">'+
+    '<div style="padding:12px 18px;border-radius:8px;border-left:4px solid '+saldoColor+';background:var(--surface-alt,#f8faf9);margin-bottom:16px;font-size:13px;font-weight:600;color:'+saldoColor+';">'+saldoMsg+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">'+
+      '<div style="text-align:center;padding:12px;border:1px solid var(--border);border-radius:8px;">'+
+        '<div style="font-size:18px;font-weight:700;color:var(--warn);">'+fmt(d.totalAnt)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">Total anticipos</div>'+
+      '</div>'+
+      '<div style="text-align:center;padding:12px;border:1px solid var(--border);border-radius:8px;">'+
+        '<div style="font-size:18px;font-weight:700;color:var(--success);">'+fmt(d.totalRend)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">Total rendiciones</div>'+
+      '</div>'+
+      '<div style="text-align:center;padding:12px;border:1px solid var(--border);border-radius:8px;border-color:'+saldoColor+';">'+
+        '<div style="font-size:18px;font-weight:700;color:'+saldoColor+';">'+fmt(d.saldo)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">Saldo a rendir</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="table-wrap"><table style="font-size:12px;">'+
+      '<thead><tr>'+
+        '<th>Mes</th>'+
+        '<th style="text-align:right;">Anticipos</th>'+
+        '<th style="text-align:right;">Rendiciones</th>'+
+        '<th style="text-align:right;">Diferencia</th>'+
+        '<th style="text-align:right;">Otros pagos</th>'+
+      '</tr></thead>'+
+      '<tbody>'+rows+'</tbody>'+
+    '</table></div>'+
+  '</div>';
+}
+
+function busRenderPagosLista(lista, tipo, fmt) {
+  if (!lista || lista.length === 0) {
+    return '<div style="text-align:center;padding:32px;color:var(--muted);">Sin '+tipo+' registrados</div>';
+  }
+
+  var colorMonto = tipo==='anticipos'?'var(--warn)':tipo==='rendiciones'?'var(--success)':'var(--info)';
+  var total = lista.reduce(function(s,p){ return s+p.amount; },0);
+
+  var rows = lista.map(function(p){
+    var fecha = (p.date||'').split('-').reverse().join('/');
+    var compBadge = p.x_estado_comprobante === 'enviado'
+      ? '<span class="badge badge-ok">✅ Enviado</span>'
+      : p.x_estado_comprobante === 'listo_para_enviar'
+        ? '<span class="badge badge-warn">📬 En cola</span>'
+        : p.x_estado_comprobante === 'sin_destinatario'
+          ? '<span class="badge badge-muted">Sin dest.</span>'
+          : p.x_estado_comprobante === 'error'
+            ? '<span class="badge badge-danger">❌ Error</span>'
+            : '<span class="badge badge-muted">—</span>';
+    var journal = p.journal_id ? (Array.isArray(p.journal_id)?p.journal_id[1]:p.journal_id) : '—';
+    journal = journal.replace('BANCO $ NACIÓN - ','BNA ').replace('BANCO $ ','').substring(0,20);
+    var memo = (p.memo||'—').substring(0,45);
+    return '<tr>'+
+      '<td style="white-space:nowrap;color:var(--muted);">'+fecha+'</td>'+
+      '<td style="font-size:11px;font-family:monospace;">'+p.name+'</td>'+
+      '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+(p.memo||'')+'">'+memo+'</td>'+
+      '<td class="mono" style="text-align:right;font-weight:600;color:'+colorMonto+';">'+fmt(p.amount)+'</td>'+
+      '<td>'+compBadge+'</td>'+
+      '<td style="font-size:10px;color:var(--muted);">'+journal+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var subtotal = '<tr style="border-top:2px solid var(--border);background:var(--surface-alt,#f8faf9);">'+
+    '<td colspan="3" style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;">Total — '+lista.length+' registro'+(lista.length!==1?'s':'')+'</td>'+
+    '<td class="mono" style="text-align:right;font-size:13px;font-weight:700;color:'+colorMonto+';">'+fmt(total)+'</td>'+
+    '<td colspan="2"></td>'+
+  '</tr>';
+
+  return '<div class="table-wrap" style="border:none;"><table style="font-size:12px;">'+
+    '<thead><tr>'+
+      '<th>Fecha</th><th>Referencia</th><th>Concepto</th>'+
+      '<th style="text-align:right;">Monto</th><th>Comprobante</th><th>Banco</th>'+
+    '</tr></thead>'+
+    '<tbody>'+rows+subtotal+'</tbody>'+
+  '</table></div>';
+}
+
+function busRenderFacturas(fmt) {
+  var d = _busData;
+  var todas = (d.facturas||[]).concat(d.factCliente||[]);
+  todas.sort(function(a,b){ return (b.invoice_date||'').localeCompare(a.invoice_date||''); });
+
+  if (todas.length === 0) {
+    return '<div style="text-align:center;padding:32px;color:var(--muted);">Sin facturas registradas</div>';
+  }
+
+  var rows = todas.map(function(f){
+    var fecha = (f.invoice_date||'').split('-').reverse().join('/');
+    var tipo  = f.move_type === 'out_invoice' ? '<span class="badge badge-info">Cliente</span>' : '<span class="badge badge-muted">Proveedor</span>';
+    var estado = f.payment_state === 'paid'
+      ? '<span class="badge badge-ok">✅ Pagada</span>'
+      : f.payment_state === 'partial'
+        ? '<span class="badge badge-warn">⚠ Parcial</span>'
+        : '<span class="badge badge-danger">⏳ Pendiente</span>';
+    var montoColor = f.payment_state !== 'paid' && f.move_type === 'in_invoice' ? 'color:var(--danger);' : '';
+    return '<tr>'+
+      '<td style="white-space:nowrap;color:var(--muted);">'+fecha+'</td>'+
+      '<td style="font-size:11px;font-family:monospace;">'+f.name+'</td>'+
+      '<td>'+tipo+'</td>'+
+      '<td class="mono" style="text-align:right;font-weight:600;'+montoColor+'">'+fmt(f.amount_total)+'</td>'+
+      '<td>'+estado+'</td>'+
+    '</tr>';
+  }).join('');
+
+  return '<div class="table-wrap" style="border:none;"><table style="font-size:12px;">'+
+    '<thead><tr>'+
+      '<th>Fecha</th><th>Comprobante</th><th>Tipo</th>'+
+      '<th style="text-align:right;">Monto</th><th>Estado</th>'+
+    '</tr></thead>'+
+    '<tbody>'+rows+'</tbody>'+
+  '</table></div>';
+}
+
+function busRenderSinClasif(fmt) {
+  var d = _busData;
+  if (!d.sinclasif || d.sinclasif.length === 0) {
+    return '<div style="text-align:center;padding:32px;color:var(--success);"><i class="ti ti-circle-check" style="font-size:32px;display:block;margin-bottom:8px;"></i>Todos los pagos están clasificados</div>';
+  }
+
+  var rows = d.sinclasif.map(function(p){
+    var fecha = (p.date||'').split('-').reverse().join('/');
+    var memo  = p.memo||'<span style="color:var(--muted);font-style:italic;">Sin concepto</span>';
+    return '<tr>'+
+      '<td style="white-space:nowrap;color:var(--muted);">'+fecha+'</td>'+
+      '<td style="font-size:11px;font-family:monospace;">'+p.name+'</td>'+
+      '<td style="font-size:11px;max-width:240px;">'+memo+'</td>'+
+      '<td class="mono" style="text-align:right;font-weight:600;">'+fmt(p.amount)+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var aviso = '<div style="padding:10px 16px;background:rgba(183,96,10,.06);border-left:3px solid var(--warn);margin:12px;border-radius:0 6px 6px 0;font-size:12px;color:var(--warn);">'+
+    '<strong>'+d.sinclasif.length+' pagos sin clasificar</strong> — el concepto (memo) no contiene "anticipo", "rendic" ni palabras clave reconocidas. '+
+    'Para que aparezcan clasificados correctamente, editá el campo Memo en Odoo con el concepto correspondiente.'+
+  '</div>';
+
+  return aviso + '<div class="table-wrap" style="border:none;"><table style="font-size:12px;">'+
+    '<thead><tr><th>Fecha</th><th>Referencia</th><th>Concepto actual</th><th style="text-align:right;">Monto</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody>'+
+  '</table></div>';
+}
+
+function busLimpiar() {
+  _busPartner = null; _busData = null;
+  var input = document.getElementById('bus-input');
+  if (input) { input.value = ''; }
+  var lista = document.getElementById('bus-lista');
+  var panel = document.getElementById('bus-panel');
+  var estado = document.getElementById('bus-estado');
+  if (lista)  lista.style.display  = 'none';
+  if (panel)  panel.style.display  = 'none';
+  if (estado) estado.textContent   = 'Escribí para buscar';
+  if (input)  input.focus();
+}
 
 </script>
 </body>
