@@ -8619,25 +8619,28 @@ function busClasificar(pago) {
   var bills = pago.reconciled_bill_ids;
   var cantBills = Array.isArray(bills) ? bills.length : 0;
 
-  if (pago.is_internal_transfer && pago.destination_journal_id) {
-    // Determinar si es anticipo o reintegro interno
-    // Reintegro interno = transferencia entre dos cajas (ambos journals son CSH)
+  // ANTICIPO: transferencia interna (outbound con dest, o inbound de otra empresa)
+  if (pago.is_internal_transfer) {
     var srcJournal  = pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[1] : '') : '';
-    var destJournal = Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[1] : '';
-    var srcIsCaja  = srcJournal.toLowerCase().includes('caja');
-    var destIsCaja = destJournal.toLowerCase().includes('caja');
+    var destJournal = pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[1] : '') : '';
+    var srcIsCaja   = srcJournal.toLowerCase().includes('caja');
+    var destIsCaja  = destJournal.toLowerCase().includes('caja');
 
-    // Caja → Caja = reintegro/movimiento interno, no anticipo
+    // Si el journal origen es de Reintegros → siempre es reintegro
+    if (srcJournal.toLowerCase().includes('reintegro')) return 'pago';
+
+    // Inbound de transferencia interna = anticipo recibido en caja del colaborador
+    if (pago.payment_type === 'inbound') return 'anticipo';
+
+    // Outbound Caja → Caja = reintegro/movimiento interno
     if (srcIsCaja && destIsCaja) return 'pago';
 
-    // Cualquier otra transferencia interna = anticipo al colaborador
+    // Outbound con destino banco = anticipo
     return 'anticipo';
   }
 
   // RENDICIÓN: pago conciliado con factura
-  if (!pago.is_internal_transfer && cantBills > 0) {
-    return 'rendicion';
-  }
+  if (cantBills > 0) return 'rendicion';
 
   // SIN CLASIFICAR
   return 'sinclasif';
@@ -8775,9 +8778,18 @@ async function busCargarDatos(pid) {
       { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
     );
 
+    // 3. Transferencias internas inbound (anticipos registrados como recepción en caja)
+    var pagos3 = await odooCall('account.payment', 'search_read',
+      [[['x_studio_colaborador','=',pid],['payment_type','=','inbound'],
+        ['is_internal_transfer','=',true],
+        ['state','in',['posted','paid','in_process']],['company_id','=',1]]],
+      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
+    );
+
     // Unificar y deduplicar
     var allPagos = pagos1.slice();
     pagos2.forEach(function(p){ if (!allPagos.find(function(x){ return x.id===p.id; })) allPagos.push(p); });
+    pagos3.forEach(function(p){ if (!allPagos.find(function(x){ return x.id===p.id; })) allPagos.push(p); });
     allPagos.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
 
     // Clasificar
