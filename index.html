@@ -8615,46 +8615,38 @@ var _busData    = null;  // datos cargados del tercero
 var _busTabActual = 'saldo';
 
 // ── Clasificación de pagos — 100% mecánica ──
+// CSH5=56, CSH6=187: Cajas de colaboradores/anticipos → pagos desde aquí son rendiciones
+// CSH7=189, CSH8=190: Cajas de reintegros → pagos desde aquí son reintegros (no anticipo/rendición)
+var BUS_JOURNALS_CAJA_ANTICIPO  = [56, 187];
+var BUS_JOURNALS_CAJA_REINTEGRO = [189, 190];
+
 function busClasificar(pago) {
-  var bills = pago.reconciled_bill_ids;
+  var bills     = pago.reconciled_bill_ids;
   var cantBills = Array.isArray(bills) ? bills.length : 0;
+  var jId       = pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[0] : 0) : 0;
+  var jDestId   = pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[0] : 0) : 0;
+  var jName     = pago.journal_id ? (Array.isArray(pago.journal_id) ? (pago.journal_id[1]||'').toLowerCase() : '') : '';
+  var jDestName = pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? (pago.destination_journal_id[1]||'').toLowerCase() : '') : '';
 
-  // ANTICIPO: transferencia interna (outbound con dest, o inbound de otra empresa)
+  // ── TRANSFERENCIAS INTERNAS ──
   if (pago.is_internal_transfer) {
-    // Para inbound, Odoo invierte los journals:
-    //   journal_id = donde LLEGA el dinero
-    //   destination_journal_id = de donde SALE
-    var journalOrigen = pago.payment_type === 'inbound'
-      ? (pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[1] : '') : '')
-      : (pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[1] : '') : '');
-
-    var journalDestino = pago.payment_type === 'inbound'
-      ? (pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[1] : '') : '')
-      : (pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[1] : '') : '');
-
-    var origenLower  = journalOrigen.toLowerCase();
-    var destinoLower = journalDestino.toLowerCase();
-
-    // Journals de reintegros: CSH7=189, CSH8=190
-    // Para inbound: journal_id es donde LLEGA (la caja de reintegros)
-    // Para outbound: journal_id es de donde SALE
-    var journalIdOrigen = pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[0] : 0) : 0;
-    var journalIdDest   = pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[0] : 0) : 0;
-
-    // Si cualquiera de los dos journals involucrados es de reintegros → es reintegro
-    if ([189, 190].indexOf(journalIdOrigen) >= 0 || [189, 190].indexOf(journalIdDest) >= 0) return 'pago';
-
-    // Origen Caja → Destino Caja = movimiento interno
-    if (origenLower.includes('caja') && destinoLower.includes('caja')) return 'pago';
-
-    // Origen Caja Anticipos/Colaboradores → Destino BNA = anticipo
+    // Si algún journal es de reintegros → reintegro, no anticipo
+    if (BUS_JOURNALS_CAJA_REINTEGRO.indexOf(jId) >= 0 || BUS_JOURNALS_CAJA_REINTEGRO.indexOf(jDestId) >= 0) return 'pago';
+    // Caja → Caja (sin ser reintegro) = movimiento interno
+    if (jName.includes('caja') && jDestName.includes('caja')) return 'pago';
+    // Todo lo demás = anticipo
     return 'anticipo';
   }
 
-  // RENDICIÓN: pago conciliado con factura
-  if (cantBills > 0) return 'rendicion';
+  // ── PAGOS NO INTERNOS ──
+  if (cantBills > 0) {
+    // Pago desde caja de anticipos (CSH5/CSH6) con factura = rendición de anticipo
+    if (BUS_JOURNALS_CAJA_ANTICIPO.indexOf(jId) >= 0) return 'rendicion';
+    // Pago desde banco con factura de journal Rendiciones = rendición
+    // (se verifica en billEsReintegro con IDs 236/243)
+    return 'rendicion_check';
+  }
 
-  // SIN CLASIFICAR
   return 'sinclasif';
 }
 
@@ -8862,15 +8854,17 @@ async function busCargarDatos(pid) {
 
     var anticipos   = allPagos.filter(function(p){ return busClasificar(p)==='anticipo'; });
     var rendiciones = allPagos.filter(function(p){
-      return busClasificar(p)==='rendicion' && billEsReintegro(p);
+      var c = busClasificar(p);
+      return c === 'rendicion' || (c === 'rendicion_check' && billEsReintegro(p));
     });
     var pagos = allPagos.filter(function(p){
-      var clase = busClasificar(p);
-      if (clase === 'anticipo') return false;
-      if (clase === 'rendicion' && billEsReintegro(p)) return false;
+      var c = busClasificar(p);
+      if (c === 'anticipo') return false;
+      if (c === 'rendicion') return false;
+      if (c === 'rendicion_check' && billEsReintegro(p)) return false;
       return true;
     });
-    var sinclasif = allPagos.filter(function(p){ return busClasificar(p)==='sinclasif' && !billEsReintegro(p); });
+    var sinclasif = allPagos.filter(function(p){ return busClasificar(p)==='sinclasif'; });
 
     var totalAnt  = anticipos.reduce(function(s,p){ return s+p.amount; },0);
     var totalRend = rendiciones.reduce(function(s,p){ return s+p.amount; },0);
