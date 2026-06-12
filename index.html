@@ -9377,11 +9377,12 @@ async function antGenerar() {
       ['company_id','=',1],
       ['date','>=',desde],
       ['date','<=',hasta],
-      ['x_studio_colaborador','!=',false],
-      ['reconciled_bill_ids','!=',false]
-    ], ['id','name','amount','date','x_studio_colaborador','journal_id',
+      ['x_studio_colaborador','!=',false]
+    ], ['id','name','amount','date','memo','x_studio_colaborador','journal_id',
         'is_internal_transfer','payment_type','reconciled_bill_ids']],
     { limit: 5000, order: 'date desc' });
+    // Filtrar en JS los que tienen facturas conciliadas
+    rendPagos = rendPagos.filter(function(p){ return p.reconciled_bill_ids && p.reconciled_bill_ids.length > 0; });
 
     // 3. Rendiciones desde BNA con factura en journal Rendiciones (236,243)
     var rendFactIds = [];
@@ -9392,11 +9393,15 @@ async function antGenerar() {
       ['company_id','=',1],
       ['date','>=',desde],
       ['date','<=',hasta],
-      ['x_studio_colaborador','!=',false],
-      ['reconciled_bill_ids','!=',false]
-    ], ['id','name','amount','date','x_studio_colaborador','journal_id',
+      ['x_studio_colaborador','!=',false]
+    ], ['id','name','amount','date','memo','x_studio_colaborador','journal_id',
         'reconciled_bill_ids']],
     { limit: 5000 });
+    // Filtrar en JS los que tienen facturas y no son de caja de anticipos (ya cubiertos por rendPagos)
+    rendBna = rendBna.filter(function(p){
+      return p.reconciled_bill_ids && p.reconciled_bill_ids.length > 0 &&
+             CAJAS_ANT_IDS.indexOf(p.journal_id ? (Array.isArray(p.journal_id)?p.journal_id[0]:0) : 0) < 0;
+    });
 
     // Verificar journals de facturas para rendBna
     var allBillIds2 = [];
