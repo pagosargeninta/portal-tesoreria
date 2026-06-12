@@ -8614,12 +8614,25 @@ var _busPartner = null;  // partner seleccionado
 var _busData    = null;  // datos cargados del tercero
 var _busTabActual = 'saldo';
 
-// ── Clasificación de pagos por memo ──
-function busClasificar(memo) {
-  if (!memo) return 'sinclasif';
-  var m = memo.toLowerCase();
-  if (m.includes('anticipo') || m.includes('a rendir') || m.includes('a cuenta')) return 'anticipo';
-  if (m.includes('rendic') || /^r\.\s*\d/.test(m) || m.includes('rendición')) return 'rendicion';
+// ── Clasificación de pagos — 100% mecánica ──
+function busClasificar(pago) {
+  // ANTICIPO: transferencia interna hacia banco (sale de caja al colaborador)
+  if (pago.is_internal_transfer && pago.destination_journal_id) {
+    return 'anticipo';
+  }
+
+  // RENDICIÓN: pago conciliado con factura
+  var bills = pago.reconciled_bill_ids;
+  var cantBills = Array.isArray(bills) ? bills.length : 0;
+  if (!pago.is_internal_transfer && cantBills > 0) {
+    return 'rendicion';
+  }
+
+  // SIN CLASIFICAR: no es transferencia interna y sin factura
+  if (!pago.is_internal_transfer && cantBills === 0) {
+    return 'sinclasif';
+  }
+
   return 'pago';
 }
 
@@ -8748,11 +8761,11 @@ async function busCargarDatos(pid) {
     // 1. Todos los pagos outbound del partner (por partner_id O x_studio_colaborador)
     var pagos1 = await odooCall('account.payment', 'search_read',
       [[['partner_id','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']]]],
-      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id'], limit: 500, order: 'date desc' }
+      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
     );
     var pagos2 = await odooCall('account.payment', 'search_read',
       [[['x_studio_colaborador','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['partner_id','!=',pid]]],
-      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id'], limit: 500, order: 'date desc' }
+      { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
     );
 
     // Unificar y deduplicar
@@ -8761,10 +8774,10 @@ async function busCargarDatos(pid) {
     allPagos.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
 
     // Clasificar
-    var anticipos   = allPagos.filter(function(p){ return busClasificar(p.memo)==='anticipo'; });
-    var rendiciones = allPagos.filter(function(p){ return busClasificar(p.memo)==='rendicion'; });
-    var pagos       = allPagos.filter(function(p){ return busClasificar(p.memo)==='pago'; });
-    var sinclasif   = allPagos.filter(function(p){ return busClasificar(p.memo)==='sinclasif'; });
+    var anticipos   = allPagos.filter(function(p){ return busClasificar(p)==='anticipo'; });
+    var rendiciones = allPagos.filter(function(p){ return busClasificar(p)==='rendicion'; });
+    var pagos       = allPagos.filter(function(p){ return busClasificar(p)==='pago'; });
+    var sinclasif   = allPagos.filter(function(p){ return busClasificar(p)==='sinclasif'; });
 
     var totalAnt  = anticipos.reduce(function(s,p){ return s+p.amount; },0);
     var totalRend = rendiciones.reduce(function(s,p){ return s+p.amount; },0);
