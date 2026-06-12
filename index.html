@@ -8621,21 +8621,27 @@ function busClasificar(pago) {
 
   // ANTICIPO: transferencia interna (outbound con dest, o inbound de otra empresa)
   if (pago.is_internal_transfer) {
-    var srcJournal  = pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[1] : '') : '';
-    var destJournal = pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[1] : '') : '';
-    var srcIsCaja   = srcJournal.toLowerCase().includes('caja');
-    var destIsCaja  = destJournal.toLowerCase().includes('caja');
+    // Para inbound, Odoo invierte los journals:
+    //   journal_id = donde LLEGA el dinero
+    //   destination_journal_id = de donde SALE
+    var journalOrigen = pago.payment_type === 'inbound'
+      ? (pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[1] : '') : '')
+      : (pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[1] : '') : '');
 
-    // Si el journal origen es de Reintegros → siempre es reintegro
-    if (srcJournal.toLowerCase().includes('reintegro')) return 'pago';
+    var journalDestino = pago.payment_type === 'inbound'
+      ? (pago.journal_id ? (Array.isArray(pago.journal_id) ? pago.journal_id[1] : '') : '')
+      : (pago.destination_journal_id ? (Array.isArray(pago.destination_journal_id) ? pago.destination_journal_id[1] : '') : '');
 
-    // Inbound de transferencia interna = anticipo recibido en caja del colaborador
-    if (pago.payment_type === 'inbound') return 'anticipo';
+    var origenLower  = journalOrigen.toLowerCase();
+    var destinoLower = journalDestino.toLowerCase();
 
-    // Outbound Caja → Caja = reintegro/movimiento interno
-    if (srcIsCaja && destIsCaja) return 'pago';
+    // Si el journal ORIGEN es de Reintegros → es reintegro, no anticipo
+    if (origenLower.includes('reintegro')) return 'pago';
 
-    // Outbound con destino banco = anticipo
+    // Origen Caja → Destino Caja = movimiento interno
+    if (origenLower.includes('caja') && destinoLower.includes('caja')) return 'pago';
+
+    // Origen Caja Anticipos/Colaboradores → Destino BNA = anticipo
     return 'anticipo';
   }
 
@@ -8786,10 +8792,30 @@ async function busCargarDatos(pid) {
       { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
     );
 
-    // Unificar y deduplicar
+    // Unificar y deduplicar por ID
     var allPagos = pagos1.slice();
     pagos2.forEach(function(p){ if (!allPagos.find(function(x){ return x.id===p.id; })) allPagos.push(p); });
     pagos3.forEach(function(p){ if (!allPagos.find(function(x){ return x.id===p.id; })) allPagos.push(p); });
+
+    // Para transferencias internas, Odoo genera outbound + inbound
+    // Quedarse solo con el inbound (tiene x_studio_colaborador asignado)
+    // Eliminar outbound que tenga mismo monto y fecha que un inbound
+    var inboundKeys = {};
+    allPagos.forEach(function(p){
+      if (p.is_internal_transfer && p.payment_type === 'inbound') {
+        var key = p.date + '_' + p.amount;
+        inboundKeys[key] = true;
+      }
+    });
+    allPagos = allPagos.filter(function(p){
+      if (p.is_internal_transfer && p.payment_type === 'outbound') {
+        var key = p.date + '_' + p.amount;
+        // Si hay un inbound del mismo monto y fecha, descartar el outbound
+        if (inboundKeys[key]) return false;
+      }
+      return true;
+    });
+
     allPagos.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
 
     // Clasificar
