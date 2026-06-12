@@ -8760,11 +8760,11 @@ async function busCargarDatos(pid) {
   try {
     // 1. Todos los pagos outbound del partner (por partner_id O x_studio_colaborador)
     var pagos1 = await odooCall('account.payment', 'search_read',
-      [[['partner_id','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']]]],
+      [[['partner_id','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['company_id','=',1]]],
       { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
     );
     var pagos2 = await odooCall('account.payment', 'search_read',
-      [[['x_studio_colaborador','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['partner_id','!=',pid]]],
+      [[['x_studio_colaborador','=',pid],['payment_type','=','outbound'],['state','in',['posted','paid','in_process']],['partner_id','!=',pid],['company_id','=',1]]],
       { fields: ['id','name','amount','date','memo','x_estado_comprobante','x_studio_colaborador','partner_id','journal_id','batch_payment_id','reconciled_bill_ids','is_internal_transfer','destination_journal_id'], limit: 500, order: 'date desc' }
     );
 
@@ -8925,23 +8925,67 @@ function busRenderSaldo(fmt) {
 
   if (!rows) rows = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted);">Sin movimientos registrados</td></tr>';
 
+  // Desglose individual de anticipos
+  var rowsAnt = d.anticipos.map(function(p){
+    var fecha = (p.date||'').split('-').reverse().join('/');
+    var dest  = p.destination_journal_id ? (Array.isArray(p.destination_journal_id)?p.destination_journal_id[1]:p.destination_journal_id) : '—';
+    dest = dest.replace('BANCO $ NACIÓN - ','BNA ').replace('BANCO $ ','').substring(0,22);
+    var memo  = p.memo || '—';
+    return '<tr>'+
+      '<td style="white-space:nowrap;color:var(--muted);">'+fecha+'</td>'+
+      '<td style="font-size:11px;font-family:monospace;">'+p.name+'</td>'+
+      '<td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+memo+'">'+memo.substring(0,40)+'</td>'+
+      '<td style="font-size:11px;color:var(--muted);">→ '+dest+'</td>'+
+      '<td class="mono" style="text-align:right;font-weight:600;color:var(--warn);">'+fmt(p.amount)+'</td>'+
+    '</tr>';
+  }).join('') || '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted);">Sin anticipos</td></tr>';
+
+  // Desglose individual de rendiciones
+  var rowsRend = d.rendiciones.map(function(p){
+    var fecha = (p.date||'').split('-').reverse().join('/');
+    var memo  = p.memo || '—';
+    var nBills = Array.isArray(p.reconciled_bill_ids) ? p.reconciled_bill_ids.length : 0;
+    return '<tr>'+
+      '<td style="white-space:nowrap;color:var(--muted);">'+fecha+'</td>'+
+      '<td style="font-size:11px;font-family:monospace;">'+p.name+'</td>'+
+      '<td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+memo+'">'+memo.substring(0,40)+'</td>'+
+      '<td style="font-size:11px;color:var(--muted);">'+(nBills>0?nBills+' factura'+(nBills>1?'s':''):'—')+'</td>'+
+      '<td class="mono" style="text-align:right;font-weight:600;color:var(--success);">'+fmt(p.amount)+'</td>'+
+    '</tr>';
+  }).join('') || '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted);">Sin rendiciones</td></tr>';
+
+  var subtotalAnt  = '<tr style="border-top:2px solid var(--border);background:var(--surface-alt,#f8faf9);">'+
+    '<td colspan="4" style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;">Total anticipos — '+d.anticipos.length+' registro'+(d.anticipos.length!==1?'s':'')+'</td>'+
+    '<td class="mono" style="text-align:right;font-size:13px;font-weight:700;color:var(--warn);padding-right:8px;">'+fmt(d.totalAnt)+'</td>'+
+  '</tr>';
+  var subtotalRend = '<tr style="border-top:2px solid var(--border);background:var(--surface-alt,#f8faf9);">'+
+    '<td colspan="4" style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;">Total rendiciones — '+d.rendiciones.length+' registro'+(d.rendiciones.length!==1?'s':'')+'</td>'+
+    '<td class="mono" style="text-align:right;font-size:13px;font-weight:700;color:var(--success);padding-right:8px;">'+fmt(d.totalRend)+'</td>'+
+  '</tr>';
+
+  var thead5 = '<thead><tr><th>Fecha</th><th>Referencia</th><th>Concepto</th><th>Detalle</th><th style="text-align:right;">Monto</th></tr></thead>';
+
   return '<div style="padding:16px 20px;">'+
+    // Banner estado
     '<div style="padding:12px 18px;border-radius:8px;border-left:4px solid '+saldoColor+';background:var(--surface-alt,#f8faf9);margin-bottom:16px;font-size:13px;font-weight:600;color:'+saldoColor+';">'+saldoMsg+'</div>'+
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">'+
+    // KPIs
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">'+
       '<div style="text-align:center;padding:12px;border:1px solid var(--border);border-radius:8px;">'+
-        '<div style="font-size:18px;font-weight:700;color:var(--warn);">'+fmt(d.totalAnt)+'</div>'+
-        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">Total anticipos</div>'+
+        '<div style="font-size:20px;font-weight:700;color:var(--warn);">'+fmt(d.totalAnt)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+d.anticipos.length+' anticipos</div>'+
       '</div>'+
       '<div style="text-align:center;padding:12px;border:1px solid var(--border);border-radius:8px;">'+
-        '<div style="font-size:18px;font-weight:700;color:var(--success);">'+fmt(d.totalRend)+'</div>'+
-        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">Total rendiciones</div>'+
+        '<div style="font-size:20px;font-weight:700;color:var(--success);">'+fmt(d.totalRend)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+d.rendiciones.length+' rendiciones</div>'+
       '</div>'+
       '<div style="text-align:center;padding:12px;border:1px solid var(--border);border-radius:8px;border-color:'+saldoColor+';">'+
-        '<div style="font-size:18px;font-weight:700;color:'+saldoColor+';">'+fmt(d.saldo)+'</div>'+
+        '<div style="font-size:20px;font-weight:700;color:'+saldoColor+';">'+fmt(d.saldo)+'</div>'+
         '<div style="font-size:11px;color:var(--muted);margin-top:2px;">Saldo a rendir</div>'+
       '</div>'+
     '</div>'+
-    '<div class="table-wrap"><table style="font-size:12px;">'+
+    // Resumen por mes
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;">Resumen por mes</div>'+
+    '<div class="table-wrap" style="margin-bottom:20px;"><table style="font-size:12px;">'+
       '<thead><tr>'+
         '<th>Mes</th>'+
         '<th style="text-align:right;">Anticipos</th>'+
@@ -8950,6 +8994,16 @@ function busRenderSaldo(fmt) {
         '<th style="text-align:right;">Otros pagos</th>'+
       '</tr></thead>'+
       '<tbody>'+rows+'</tbody>'+
+    '</table></div>'+
+    // Desglose anticipos
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;">Detalle anticipos</div>'+
+    '<div class="table-wrap" style="margin-bottom:20px;"><table style="font-size:12px;">'+thead5+
+      '<tbody>'+rowsAnt+subtotalAnt+'</tbody>'+
+    '</table></div>'+
+    // Desglose rendiciones
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;">Detalle rendiciones</div>'+
+    '<div class="table-wrap"><table style="font-size:12px;">'+thead5+
+      '<tbody>'+rowsRend+subtotalRend+'</tbody>'+
     '</table></div>'+
   '</div>';
 }
