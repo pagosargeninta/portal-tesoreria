@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
 <style>
 :root {
   --verde: #1a5c38;
@@ -654,6 +655,9 @@ tbody tr:hover td { background: #f8faf9; }
   </div>
   <div class="nav-item" onclick="showPage('interbanking',this)">
     <i class="ti ti-building-bank"></i> Interbanking
+  </div>
+  <div class="nav-item" onclick="showPage('notasmiami',this)">
+    <i class="ti ti-world"></i> Notas Miami
   </div>
   <div class="nav-item" onclick="showPage('carta29',this)">
     <i class="ti ti-cash"></i> Carta 29
@@ -1761,6 +1765,139 @@ tbody tr:hover td { background: #f8faf9; }
 
     </div>
 
+    <!-- ══════════ NOTAS MIAMI ══════════ -->
+    <div id="page-notasmiami" class="page">
+
+      <div class="grid2" style="margin-bottom:16px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-file-upload"></i> 1. Archivos</div>
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <label>Invoice / factura (PDF o imagen) *</label>
+              <input type="file" id="nm-fileInvoice" accept=".pdf,.png,.jpg,.jpeg">
+            </div>
+            <div class="field">
+              <label>Datos bancarios del proveedor (opcional, si vienen aparte)</label>
+              <input type="file" id="nm-fileProveedor" accept=".pdf,.png,.jpg,.jpeg">
+            </div>
+            <button class="btn btn-primary" id="nm-btn-extraer" onclick="nmExtraer()" style="width:100%;justify-content:center;">
+              <i class="ti ti-bolt"></i> Leer con IA
+            </button>
+            <div id="nm-extraer-msg" style="margin-top:8px;font-size:12px;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-calculator"></i> Clave calculada</div>
+          </div>
+          <div class="card-body">
+            <div class="metrics-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:10px;">
+              <div class="metric-card">
+                <div class="metric-label">Número fijo</div>
+                <div class="metric-value" style="font-size:18px;">455</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Sección II / III / IV</div>
+                <div class="metric-value" style="font-size:14px;" id="nm-s234">— / — / —</div>
+              </div>
+            </div>
+            <div style="text-align:center;padding:14px;background:var(--verde-claro);border-radius:var(--radius);">
+              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Clave</div>
+              <div style="font-size:28px;font-weight:700;color:var(--verde);font-family:'JetBrains Mono',monospace;" id="nm-clave">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-clipboard-text"></i> 2. Datos de la nota</div>
+        </div>
+        <div class="card-body">
+          <div class="grid3" style="margin-bottom:4px;">
+            <div class="field">
+              <label>Fecha de la nota</label>
+              <input type="date" id="nm-fecha">
+            </div>
+            <div class="field">
+              <label>Cuenta débito (Miami)</label>
+              <select id="nm-cuentaDebito">
+                <option value="004350106005">004350106005</option>
+                <option value="004350110001">004350110001</option>
+                <option value="004350120002">004350120002</option>
+                <option value="004350130003">004350130003</option>
+                <option value="004350180008">004350180008</option>
+                <option value="004350200002">004350200002</option>
+                <option value="004350210001">004350210001</option>
+                <option value="004350260006">004350260006</option>
+                <option value="004350280008">004350280008</option>
+                <option value="004350290009">004350290009</option>
+                <option value="004350300000">004350300000</option>
+                <option value="004350310001">004350310001</option>
+                <option value="004350320002">004350320002</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Moneda</label>
+              <input type="text" id="nm-moneda" value="USD">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label>Monto</label>
+              <input type="number" id="nm-monto" step="0.01">
+            </div>
+            <div class="field">
+              <label>Concepto / referencia</label>
+              <input type="text" id="nm-concepto">
+            </div>
+          </div>
+
+          <div class="section-title">Beneficiario</div>
+          <div class="field">
+            <label>Nombre de la cuenta</label>
+            <input type="text" id="nm-benNombre">
+          </div>
+          <div class="field">
+            <label>Dirección del beneficiario</label>
+            <textarea id="nm-benDireccion" rows="2"></textarea>
+          </div>
+          <div class="field">
+            <label>Número de cuenta del beneficiario</label>
+            <input type="text" id="nm-benCuenta">
+          </div>
+
+          <div class="section-title">Banco beneficiario</div>
+          <div class="grid2">
+            <div class="field">
+              <label>Nombre del banco</label>
+              <input type="text" id="nm-bancoNombre">
+            </div>
+            <div class="field">
+              <label>SWIFT</label>
+              <input type="text" id="nm-swift">
+            </div>
+          </div>
+          <div class="field">
+            <label>Dirección de la sucursal</label>
+            <textarea id="nm-bancoDireccion" rows="2"></textarea>
+          </div>
+
+          <div id="nm-faltantes" style="font-size:11px;color:var(--danger);margin-top:6px;"></div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="nm-btn-generar" onclick="nmGenerarDocx()" style="padding:10px 24px;">
+        <i class="ti ti-file-download"></i> Generar NOTA (.docx)
+      </button>
+      <span id="nm-generar-msg" style="margin-left:10px;font-size:12px;"></span>
+
+    </div>
+    <!-- ══════════ FIN NOTAS MIAMI ══════════ -->
+
     <!-- ══════════ CARTA 29 ══════════ -->
     <div id="page-carta29" class="page">
 
@@ -2791,6 +2928,7 @@ const pageTitles = {
   reportes: ['Reportes de saldo', 'Historial por carta y organismo'],
   config: ['Configuración', 'Conexión Odoo, IA y notificaciones'],
   fondos: ['Fondos Propios FA', 'FUNCIONAMIENTO FA · Recursos Propios · 2026'],
+  notasmiami: ['Notas Miami', 'Transferencias al exterior — Banco Nación Agencia Miami'],
 };
 
 function showHonTab(id, el) {
@@ -9832,6 +9970,305 @@ async function antExportarErrores() {
 
   // Guardar
   XLSX.writeFile(wb, 'rendiciones_mal_cargadas_' + fecha + '.xlsx');
+}
+
+// ═══════════════════════════════════════════════════════
+// NOTAS MIAMI — Transferencias al exterior, Banco Nación Agencia Miami
+// ═══════════════════════════════════════════════════════
+const NM_NUMERO_FIJO = 455;
+const NM_TABLA = {
+  1:41,2:126,3:12,4:83,5:25,6:169,7:38,8:22,9:56,
+  10:111,20:75,30:99,40:37,50:14,60:73,70:65,80:48,90:21,
+  100:117,200:32,300:78,400:91,500:193,600:153,700:105,800:88,900:17,
+  1000:181,2000:96,3000:133,4000:156,5000:68,6000:108,7000:147,8000:190,9000:59,
+  10000:172,20000:95,30000:196,40000:121,50000:66,60000:198,70000:71,80000:53,90000:28,
+  100000:186,200000:159,300000:10,400000:101,500000:140,600000:23,700000:15,800000:199,900000:135,
+  1000000:29,2000000:184,3000000:107,4000000:18,5000000:131,6000000:87,7000000:163,8000000:143,9000000:94,
+  10000000:67,20000000:191,30000000:160,40000000:62,50000000:113,60000000:81,70000000:35,80000000:129,90000000:178,
+  100000000:76
+};
+const NM_SIN_IMPORTE = 391;
+const NM_MESES_CIFRA = [183,69,154,39,192,51,80,161,165,195,70,57];
+const NM_MESES_NOMBRE = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const NM_DIAS_CIFRA = {1:173,2:82,3:167,4:45,5:166,6:43,7:42,8:127,9:33,10:171,11:20,12:104,13:188,14:63,15:176,16:157,17:109,18:31,19:115,20:11,21:137,22:60,23:58,24:175,25:54,26:179,27:189,28:102,29:13,30:103,31:151};
+
+function nmDecompose(total) {
+  const parts = [];
+  const s = String(Math.floor(total));
+  const len = s.length;
+  for (let i = 0; i < len; i++) {
+    const digit = parseInt(s[i], 10);
+    if (digit === 0) continue;
+    const place = Math.pow(10, len - 1 - i);
+    parts.push(NM_TABLA[digit * place]);
+  }
+  return parts;
+}
+
+function nmCalcularClave() {
+  const fechaEl = document.getElementById('nm-fecha');
+  const montoEl = document.getElementById('nm-monto');
+  if (!fechaEl || !montoEl) return null;
+  const fechaVal = fechaEl.value;
+  const monto = parseFloat(montoEl.value || '0');
+  const totalSinCentavos = Math.floor(monto);
+
+  let s2 = totalSinCentavos === 0 ? NM_SIN_IMPORTE : nmDecompose(totalSinCentavos).reduce((a,b)=>a+b,0);
+  let s3 = 0, s4 = 0;
+  if (fechaVal) {
+    const d = new Date(fechaVal + 'T00:00:00');
+    s3 = NM_MESES_CIFRA[d.getMonth()];
+    s4 = NM_DIAS_CIFRA[d.getDate()] || 0;
+  }
+
+  const s234El = document.getElementById('nm-s234');
+  if (s234El) s234El.textContent = s2 + ' / ' + (s3||'—') + ' / ' + (s4||'—');
+
+  const clave = fechaVal ? NM_NUMERO_FIJO + s2 + s3 + s4 : null;
+  const claveEl = document.getElementById('nm-clave');
+  if (claveEl) claveEl.textContent = clave ?? '—';
+  return clave;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('nm-fecha')?.addEventListener('input', nmCalcularClave);
+  document.getElementById('nm-monto')?.addEventListener('input', nmCalcularClave);
+  const nmFecha = document.getElementById('nm-fecha');
+  if (nmFecha && !nmFecha.value) nmFecha.valueAsDate = new Date();
+  nmCalcularClave();
+});
+
+function nmSetMsg(id, text, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = type === 'error' ? 'var(--danger)' : type === 'ok' ? 'var(--success)' : 'var(--warn)';
+}
+
+function nmFileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Error leyendo archivo: ' + file.name));
+    reader.readAsDataURL(file);
+  });
+}
+
+const NM_EXTRACT_PROMPT = `Sos un asistente que extrae datos de facturas/invoices y documentos
+bancarios para completar una NOTA de transferencia internacional del Banco de la Nación
+Argentina (Agencia Miami).
+
+Te paso uno o dos archivos: el invoice/factura, y opcionalmente un documento adicional con
+datos bancarios del proveedor (puede venir en el mismo invoice).
+
+Extrae EXACTAMENTE estos campos y responde SOLO con un objeto JSON (sin texto adicional, sin
+markdown, sin backticks), con esta forma exacta:
+
+{
+  "moneda": "USD",
+  "monto": 0.00,
+  "concepto": "string breve, ej: Pago factura N 1234 - proveedor",
+  "beneficiario_nombre": "string",
+  "beneficiario_direccion": "string (calle, ciudad, estado, codigo postal)",
+  "beneficiario_cuenta": "string (numero de cuenta del beneficiario)",
+  "banco_beneficiario_nombre": "string",
+  "banco_beneficiario_direccion": "string (direccion de la sucursal)",
+  "swift": "string (codigo SWIFT/BIC)",
+  "confianza": "alta | media | baja",
+  "campos_faltantes": ["lista de campos que no pudiste encontrar con certeza"]
+}
+
+Reglas:
+- El monto va sin signo de moneda ni separadores de miles, como numero (ej: 380.00).
+- Si un dato no aparece en los documentos, dejalo como string vacio "" y agregalo a campos_faltantes.
+- No inventes numeros de cuenta, SWIFT, ni montos. Si no estas seguro, marca confianza "baja" o "media".
+- Si hay mas de un monto en la factura (subtotal, impuestos, total), usa el TOTAL a pagar.`;
+
+async function nmExtraer() {
+  const invoiceFile = document.getElementById('nm-fileInvoice').files[0];
+  const proveedorFile = document.getElementById('nm-fileProveedor').files[0];
+  if (!invoiceFile) { nmSetMsg('nm-extraer-msg', 'Subí al menos el invoice.', 'error'); return; }
+
+  const claudeKey = localStorage.getItem('claude_key');
+  if (!claudeKey) { nmSetMsg('nm-extraer-msg', 'Configurá la API key de Claude en Configuración.', 'error'); return; }
+
+  const btn = document.getElementById('nm-btn-extraer');
+  btn.disabled = true;
+  nmSetMsg('nm-extraer-msg', 'Leyendo documentos con IA...', 'warn');
+
+  try {
+    const content = [];
+    const invB64 = await nmFileToBase64(invoiceFile);
+    const invMedia = invoiceFile.type === 'application/pdf' ? 'document' : 'image';
+    content.push({ type: invMedia, source: { type: 'base64', media_type: invoiceFile.type, data: invB64 } });
+
+    if (proveedorFile) {
+      const provB64 = await nmFileToBase64(proveedorFile);
+      const provMedia = proveedorFile.type === 'application/pdf' ? 'document' : 'image';
+      content.push({ type: provMedia, source: { type: 'base64', media_type: proveedorFile.type, data: provB64 } });
+    }
+    content.push({ type: 'text', text: NM_EXTRACT_PROMPT });
+
+    const portalPass = sessionStorage.getItem('portal_pass_session') || '';
+    const payload = {
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content }]
+    };
+
+    const resp = await fetch(PROXY_URL.replace('/proxy', '/claude'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portal_password: portalPass, claude_key: claudeKey, payload: payload })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      const msg = data.error ? (typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error))) : ('HTTP ' + resp.status);
+      throw new Error(msg);
+    }
+
+    const textBlock = (data.content || []).find(b => b.type === 'text');
+    if (!textBlock) throw new Error('La IA no devolvió texto.');
+
+    const clean = textBlock.text.replace(/```json|```/g, '').trim();
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Sin JSON en la respuesta: ' + clean.substring(0, 80));
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    document.getElementById('nm-moneda').value = parsed.moneda || 'USD';
+    document.getElementById('nm-monto').value = parsed.monto || '';
+    document.getElementById('nm-concepto').value = parsed.concepto || '';
+    document.getElementById('nm-benNombre').value = parsed.beneficiario_nombre || '';
+    document.getElementById('nm-benDireccion').value = parsed.beneficiario_direccion || '';
+    document.getElementById('nm-benCuenta').value = parsed.beneficiario_cuenta || '';
+    document.getElementById('nm-bancoNombre').value = parsed.banco_beneficiario_nombre || '';
+    document.getElementById('nm-bancoDireccion').value = parsed.banco_beneficiario_direccion || '';
+    document.getElementById('nm-swift').value = parsed.swift || '';
+
+    const faltantes = parsed.campos_faltantes || [];
+    const faltEl = document.getElementById('nm-faltantes');
+    if (faltEl) faltEl.textContent = faltantes.length ? ('Revisar manualmente: ' + faltantes.join(', ')) : '';
+
+    const confTxt = parsed.confianza ? (' (confianza: ' + parsed.confianza + ')') : '';
+    nmSetMsg('nm-extraer-msg', 'Datos cargados' + confTxt + '. Revisá antes de generar.', faltantes.length ? 'warn' : 'ok');
+    nmCalcularClave();
+  } catch (e) {
+    nmSetMsg('nm-extraer-msg', 'Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function nmNumeroAPalabras(n) {
+  const UNIDADES = ["", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"];
+  const DIECIS = ["diez", "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve"];
+  const DECENAS = ["", "", "veinte", "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"];
+  const CENTENAS = ["", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos", "seiscientos", "setecientos", "ochocientos", "novecientos"];
+
+  function trescientos(num) {
+    if (num === 0) return "";
+    if (num === 100) return "cien";
+    let r = "";
+    const c = Math.floor(num / 100), d = Math.floor((num % 100) / 10), u = num % 10;
+    if (c) r += CENTENAS[c] + " ";
+    const resto = num % 100;
+    if (resto >= 10 && resto < 20) { r += DIECIS[resto - 10]; }
+    else { if (d) r += DECENAS[d] + (u ? " y " : ""); if (u) r += UNIDADES[u]; }
+    return r.trim();
+  }
+
+  if (n === 0) return "cero";
+  let partes = [];
+  const millones = Math.floor(n / 1000000);
+  const miles = Math.floor((n % 1000000) / 1000);
+  const resto = n % 1000;
+  if (millones) partes.push(millones === 1 ? "un millón" : trescientos(millones) + " millones");
+  if (miles) partes.push(miles === 1 ? "mil" : trescientos(miles) + " mil");
+  if (resto) partes.push(trescientos(resto));
+  return partes.join(" ").trim();
+}
+
+function nmMontoEnPalabras(monto, moneda) {
+  const entero = Math.floor(monto);
+  const centavos = Math.round((monto - entero) * 100);
+  const nombreMoneda = moneda === 'USD' ? 'dólares americanos' : moneda;
+  return `${nmNumeroAPalabras(entero)} ${nombreMoneda} con ${String(centavos).padStart(2, '0')}/100`;
+}
+
+async function nmGenerarDocx() {
+  const clave = nmCalcularClave();
+  if (!clave) { nmSetMsg('nm-generar-msg', 'Falta la fecha.', 'error'); return; }
+  const monto = parseFloat(document.getElementById('nm-monto').value || '0');
+  if (!monto) { nmSetMsg('nm-generar-msg', 'Falta el monto.', 'error'); return; }
+
+  const { Document, Packer, Paragraph, TextRun, AlignmentType } = docx;
+
+  const fechaVal = document.getElementById('nm-fecha').value;
+  const d = new Date(fechaVal + 'T00:00:00');
+  const mesNombre = NM_MESES_NOMBRE[d.getMonth()];
+  const fechaTexto = `${d.getDate()} de ${mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)} de ${d.getFullYear()}`;
+
+  const moneda = document.getElementById('nm-moneda').value || 'USD';
+  const montoTexto = `U$D ${monto.toLocaleString('es-AR', { minimumFractionDigits: 0 })} (${nmMontoEnPalabras(monto, moneda)})`;
+
+  const cuentaDebito = document.getElementById('nm-cuentaDebito').value;
+  const beneficiarioNombre = document.getElementById('nm-benNombre').value;
+  const beneficiarioDireccion = document.getElementById('nm-benDireccion').value;
+  const beneficiarioCuenta = document.getElementById('nm-benCuenta').value;
+  const bancoNombre = document.getElementById('nm-bancoNombre').value;
+  const bancoDireccion = document.getElementById('nm-bancoDireccion').value;
+  const swift = document.getElementById('nm-swift').value;
+
+  function par(text, opts) { return new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text, ...opts })] }); }
+  function parLabel(label, value) { return new Paragraph({ spacing: { after: 100 }, children: [new TextRun({ text: label, bold: true }), new TextRun({ text: value || '' })] }); }
+  function parHeader(text) { return new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text, bold: true })] }); }
+
+  const doc = new Document({
+    styles: { default: { document: { run: { font: 'Arial', size: 24 } } } },
+    sections: [{
+      properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+      children: [
+        par(`Buenos Aires, ${fechaTexto}`),
+        new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 200 }, children: [new TextRun({ text: `Clave: ${clave}` })] }),
+        parHeader('BANCO DE LA NACION ARGENTINA'),
+        parHeader('777 BRICKELL AVE. SUITE 802'),
+        parHeader('MIAMI, FL. 33131'),
+        new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: 'ATTN.: SR. DAVID HANDSCOMBE', bold: true })] }),
+        new Paragraph({ spacing: { after: 300 }, children: [new TextRun({ text: 'Ref: Solicitud de Transferencia', bold: true })] }),
+        par('De mi mayor consideración,'),
+        par('A través del presente, solicito realizar la siguiente transferencia:'),
+        new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Monto: ', bold: true }), new TextRun({ text: montoTexto, bold: true })] }),
+        parHeader('Ordenante'),
+        parLabel('Nombre de Cuenta: ', 'Fundación ArgenINTA'),
+        parLabel('Dirección: ', 'Moreno 437, Capital Federal'),
+        new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Número de Cuenta: ', bold: true }), new TextRun({ text: `Nº ${cuentaDebito}` })] }),
+        parHeader('Beneficiario'),
+        parLabel('Nombre de la cuenta: ', beneficiarioNombre),
+        parLabel('Dirección del beneficiario: ', beneficiarioDireccion),
+        new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Número de cuenta: ', bold: true }), new TextRun({ text: beneficiarioCuenta })] }),
+        parHeader('Banco Beneficiario'),
+        parLabel('Nombre de Banco: ', bancoNombre),
+        parLabel('Dirección de la sucursal: ', bancoDireccion),
+        new Paragraph({ spacing: { after: 300 }, children: [new TextRun({ text: 'SWIFT: ', bold: true }), new TextRun({ text: swift })] }),
+        par('Sin otro particular, lo saludo atentamente,'),
+      ],
+    }],
+  });
+
+  try {
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `NOTA_MIAMI_${fechaVal}_${clave}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    nmSetMsg('nm-generar-msg', 'Listo, .docx descargado.', 'ok');
+  } catch (e) {
+    nmSetMsg('nm-generar-msg', 'Error generando el documento: ' + e.message, 'error');
+  }
 }
 
 </script>
