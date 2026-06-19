@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+<script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
 <style>
 :root {
   --verde: #1a5c38;
@@ -10197,66 +10197,71 @@ function nmMontoEnPalabras(monto, moneda) {
 }
 
 async function nmGenerarDocx() {
-  const clave = nmCalcularClave();
-  if (!clave) { nmSetMsg('nm-generar-msg', 'Falta la fecha.', 'error'); return; }
-  const monto = parseFloat(document.getElementById('nm-monto').value || '0');
-  if (!monto) { nmSetMsg('nm-generar-msg', 'Falta el monto.', 'error'); return; }
-
-  const { Document, Packer, Paragraph, TextRun, AlignmentType } = docx;
-
-  const fechaVal = document.getElementById('nm-fecha').value;
-  const d = new Date(fechaVal + 'T00:00:00');
-  const mesNombre = NM_MESES_NOMBRE[d.getMonth()];
-  const fechaTexto = `${d.getDate()} de ${mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)} de ${d.getFullYear()}`;
-
-  const moneda = document.getElementById('nm-moneda').value || 'USD';
-  const montoTexto = `U$D ${monto.toLocaleString('es-AR', { minimumFractionDigits: 0 })} (${nmMontoEnPalabras(monto, moneda)})`;
-
-  const cuentaDebito = document.getElementById('nm-cuentaDebito').value;
-  const beneficiarioNombre = document.getElementById('nm-benNombre').value;
-  const beneficiarioDireccion = document.getElementById('nm-benDireccion').value;
-  const beneficiarioCuenta = document.getElementById('nm-benCuenta').value;
-  const bancoNombre = document.getElementById('nm-bancoNombre').value;
-  const bancoDireccion = document.getElementById('nm-bancoDireccion').value;
-  const swift = document.getElementById('nm-swift').value;
-
-  function par(text, opts) { return new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text, ...opts })] }); }
-  function parLabel(label, value) { return new Paragraph({ spacing: { after: 100 }, children: [new TextRun({ text: label, bold: true }), new TextRun({ text: value || '' })] }); }
-  function parHeader(text) { return new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text, bold: true })] }); }
-
-  const doc = new Document({
-    styles: { default: { document: { run: { font: 'Arial', size: 24 } } } },
-    sections: [{
-      properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
-      children: [
-        par(`Buenos Aires, ${fechaTexto}`),
-        new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 200 }, children: [new TextRun({ text: `Clave: ${clave}` })] }),
-        parHeader('BANCO DE LA NACION ARGENTINA'),
-        parHeader('777 BRICKELL AVE. SUITE 802'),
-        parHeader('MIAMI, FL. 33131'),
-        new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: 'ATTN.: SR. DAVID HANDSCOMBE', bold: true })] }),
-        new Paragraph({ spacing: { after: 300 }, children: [new TextRun({ text: 'Ref: Solicitud de Transferencia', bold: true })] }),
-        par('De mi mayor consideración,'),
-        par('A través del presente, solicito realizar la siguiente transferencia:'),
-        new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Monto: ', bold: true }), new TextRun({ text: montoTexto, bold: true })] }),
-        parHeader('Ordenante'),
-        parLabel('Nombre de Cuenta: ', 'Fundación ArgenINTA'),
-        parLabel('Dirección: ', 'Moreno 437, Capital Federal'),
-        new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Número de Cuenta: ', bold: true }), new TextRun({ text: `Nº ${cuentaDebito}` })] }),
-        parHeader('Beneficiario'),
-        parLabel('Nombre de la cuenta: ', beneficiarioNombre),
-        parLabel('Dirección del beneficiario: ', beneficiarioDireccion),
-        new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Número de cuenta: ', bold: true }), new TextRun({ text: beneficiarioCuenta })] }),
-        parHeader('Banco Beneficiario'),
-        parLabel('Nombre de Banco: ', bancoNombre),
-        parLabel('Dirección de la sucursal: ', bancoDireccion),
-        new Paragraph({ spacing: { after: 300 }, children: [new TextRun({ text: 'SWIFT: ', bold: true }), new TextRun({ text: swift })] }),
-        par('Sin otro particular, lo saludo atentamente,'),
-      ],
-    }],
-  });
-
   try {
+    if (typeof docx === 'undefined') {
+      nmSetMsg('nm-generar-msg', 'Error: la librería docx no cargó (revisá tu conexión o bloqueador de scripts). Abrí la consola del navegador (F12) para más detalle.', 'error');
+      return;
+    }
+
+    const clave = nmCalcularClave();
+    if (!clave) { nmSetMsg('nm-generar-msg', 'Falta la fecha.', 'error'); return; }
+    const monto = parseFloat(document.getElementById('nm-monto').value || '0');
+    if (!monto) { nmSetMsg('nm-generar-msg', 'Falta el monto.', 'error'); return; }
+
+    const { Document, Packer, Paragraph, TextRun, AlignmentType } = docx;
+
+    const fechaVal = document.getElementById('nm-fecha').value;
+    const d = new Date(fechaVal + 'T00:00:00');
+    const mesNombre = NM_MESES_NOMBRE[d.getMonth()];
+    const fechaTexto = `${d.getDate()} de ${mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)} de ${d.getFullYear()}`;
+
+    const moneda = document.getElementById('nm-moneda').value || 'USD';
+    const montoTexto = `U$D ${monto.toLocaleString('es-AR', { minimumFractionDigits: 0 })} (${nmMontoEnPalabras(monto, moneda)})`;
+
+    const cuentaDebito = document.getElementById('nm-cuentaDebito').value;
+    const beneficiarioNombre = document.getElementById('nm-benNombre').value;
+    const beneficiarioDireccion = document.getElementById('nm-benDireccion').value;
+    const beneficiarioCuenta = document.getElementById('nm-benCuenta').value;
+    const bancoNombre = document.getElementById('nm-bancoNombre').value;
+    const bancoDireccion = document.getElementById('nm-bancoDireccion').value;
+    const swift = document.getElementById('nm-swift').value;
+
+    function par(text, opts) { return new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text, ...opts })] }); }
+    function parLabel(label, value) { return new Paragraph({ spacing: { after: 100 }, children: [new TextRun({ text: label, bold: true }), new TextRun({ text: value || '' })] }); }
+    function parHeader(text) { return new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text, bold: true })] }); }
+
+    const doc = new Document({
+      styles: { default: { document: { run: { font: 'Arial', size: 24 } } } },
+      sections: [{
+        properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+        children: [
+          par(`Buenos Aires, ${fechaTexto}`),
+          new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 200 }, children: [new TextRun({ text: `Clave: ${clave}` })] }),
+          parHeader('BANCO DE LA NACION ARGENTINA'),
+          parHeader('777 BRICKELL AVE. SUITE 802'),
+          parHeader('MIAMI, FL. 33131'),
+          new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: 'ATTN.: SR. DAVID HANDSCOMBE', bold: true })] }),
+          new Paragraph({ spacing: { after: 300 }, children: [new TextRun({ text: 'Ref: Solicitud de Transferencia', bold: true })] }),
+          par('De mi mayor consideración,'),
+          par('A través del presente, solicito realizar la siguiente transferencia:'),
+          new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Monto: ', bold: true }), new TextRun({ text: montoTexto, bold: true })] }),
+          parHeader('Ordenante'),
+          parLabel('Nombre de Cuenta: ', 'Fundación ArgenINTA'),
+          parLabel('Dirección: ', 'Moreno 437, Capital Federal'),
+          new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Número de Cuenta: ', bold: true }), new TextRun({ text: `Nº ${cuentaDebito}` })] }),
+          parHeader('Beneficiario'),
+          parLabel('Nombre de la cuenta: ', beneficiarioNombre),
+          parLabel('Dirección del beneficiario: ', beneficiarioDireccion),
+          new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Número de cuenta: ', bold: true }), new TextRun({ text: beneficiarioCuenta })] }),
+          parHeader('Banco Beneficiario'),
+          parLabel('Nombre de Banco: ', bancoNombre),
+          parLabel('Dirección de la sucursal: ', bancoDireccion),
+          new Paragraph({ spacing: { after: 300 }, children: [new TextRun({ text: 'SWIFT: ', bold: true }), new TextRun({ text: swift })] }),
+          par('Sin otro particular, lo saludo atentamente,'),
+        ],
+      }],
+    });
+
     const blob = await Packer.toBlob(doc);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -10267,6 +10272,7 @@ async function nmGenerarDocx() {
     document.body.removeChild(a);
     nmSetMsg('nm-generar-msg', 'Listo, .docx descargado.', 'ok');
   } catch (e) {
+    console.error('nmGenerarDocx error:', e);
     nmSetMsg('nm-generar-msg', 'Error generando el documento: ' + e.message, 'error');
   }
 }
