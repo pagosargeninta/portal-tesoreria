@@ -7101,17 +7101,17 @@ function fpIngHandleFile(file) {
       // Hoja GRAFICO — datos mensuales de intereses
       d.evolucionMensual = [];
       try {
-        var wsG = wb.Sheets['GRAFICO'] || wb.Sheets['Grafico'] || wb.Sheets['grafico'];
+        var wsG = wb.Sheets['Evolución mensual'] || wb.Sheets['Evolución mensual'] || wb.Sheets['Evolución mensual'];
         if (!wsG) {
           // Try to find it case-insensitively
           wb.SheetNames.forEach(function(sn){
-            if (sn.toLowerCase() === 'grafico') wsG = wb.Sheets[sn];
+            if (sn.toLowerCase() === 'Evolución mensual') wsG = wb.Sheets[sn];
           });
         }
         console.log('Hojas disponibles:', wb.SheetNames.join(', '));
         if (wsG) {
           var rawG = XLSX.utils.sheet_to_json(wsG, {header:1, defval:null});
-          console.log('GRAFICO filas:', rawG.length, 'primera:', JSON.stringify(rawG[0]));
+          console.log('Evolución mensual filas:', rawG.length, 'primera:', JSON.stringify(rawG[0]));
           rawG.forEach(function(row) {
             if (!row || row[0]===null || row[0]===undefined) return;
             var mes   = String(row[0]).trim();
@@ -7124,9 +7124,9 @@ function fpIngHandleFile(file) {
           });
           console.log('evolucionMensual parseado:', JSON.stringify(d.evolucionMensual));
         } else {
-          console.warn('Hoja GRAFICO no encontrada en:', wb.SheetNames);
+          console.warn('Hoja Evolución mensual no encontrada en:', wb.SheetNames);
         }
-      } catch(eG){ console.error('Error leyendo GRAFICO:', eG.message); }
+      } catch(eG){ console.error('Error leyendo Evolución mensual:', eG.message); }
 
       _fpIngData = d;
       fpIngRender();
