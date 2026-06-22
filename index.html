@@ -7022,7 +7022,7 @@ function fpIngHandleFile(file) {
   var reader = new FileReader();
   reader.onload = function(e) {
     try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
 
       // ── Hoja: Detalle inversiones ──────────────────────────────
       var wsD  = wb.Sheets['Detalle inversiones'];
@@ -7115,19 +7115,27 @@ function fpIngHandleFile(file) {
         if (wsG) {
           var rawG = XLSX.utils.sheet_to_json(wsG, {header:1, defval:null});
 
-          // 1) Encontrar la fila de encabezado con fechas (varias celdas tipo Date)
+          // 1) Encontrar la fila de encabezado con fechas (Date object o serial numérico de Excel)
+          function aFecha(c){
+            if (c instanceof Date) return c;
+            if (typeof c === 'number' && c > 40000 && c < 60000) {
+              var p = XLSX.SSF.parse_date_code(c);
+              if (p) return new Date(p.y, p.m-1, p.d);
+            }
+            return null;
+          }
           var headerRow = null, headerIdx = -1;
           for (var hi=0; hi<rawG.length; hi++) {
-            var dateCount = (rawG[hi]||[]).filter(function(c){ return c instanceof Date; }).length;
+            var dateCount = (rawG[hi]||[]).filter(function(c){ return aFecha(c)!==null; }).length;
             if (dateCount >= 2) { headerRow = rawG[hi]; headerIdx = hi; break; }
           }
 
           if (headerRow) {
             // Columnas que tienen fecha válida
             var colIdxs = [];
-            headerRow.forEach(function(c, idx){ if (c instanceof Date) colIdxs.push(idx); });
+            headerRow.forEach(function(c, idx){ if (aFecha(c)!==null) colIdxs.push(idx); });
             // Vienen de más reciente a más antiguo en el Excel del gerente -> ordenar cronológico asc
-            colIdxs.sort(function(a,b){ return headerRow[a] - headerRow[b]; });
+            colIdxs.sort(function(a,b){ return aFecha(headerRow[a]) - aFecha(headerRow[b]); });
 
             // 2) Buscar filas de "Total Colocaciones" e "Intereses ganados" (o similar) por label en cualquier columna A/B
             var rowTotal = null, rowInt = null;
@@ -7140,7 +7148,7 @@ function fpIngHandleFile(file) {
 
             var MESES3 = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
             colIdxs.forEach(function(ci){
-              var fecha = headerRow[ci];
+              var fecha = aFecha(headerRow[ci]);
               var mesLbl = MESES3[fecha.getMonth()];
               var totalCol = rowTotal && typeof rowTotal[ci] === 'number' ? rowTotal[ci] : null;
               var interesAcum = rowInt && typeof rowInt[ci] === 'number' ? rowInt[ci] : null;
@@ -7156,6 +7164,7 @@ function fpIngHandleFile(file) {
           }
         }
       } catch(eG){ console.error('Error leyendo Evolución mensual:', eG.message); }
+      console.log('[EvolMensual] hojas:', wb.SheetNames.join(', '), '| filas parseadas:', d.evolucionMensual.length, JSON.stringify(d.evolucionMensual));
 
 
       _fpIngData = d;
