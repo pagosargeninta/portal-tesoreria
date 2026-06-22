@@ -2363,7 +2363,9 @@ tbody tr:hover td { background: #f8faf9; }
             <div class="card-header"><div class="card-title"><i class="ti ti-trending-up"></i> Evolución mensual — Colocaciones e Intereses ganados (Recursos Propios FA)</div></div>
             <div class="card-body" style="padding:14px;">
               <div id="fp-col-evol-kpis" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;"></div>
-              <canvas id="fp-col-chart-evol-mes" height="110"></canvas>
+              <div style="position:relative;height:340px;width:100%;">
+                <canvas id="fp-col-chart-evol-mes"></canvas>
+              </div>
             </div>
           </div>
         </div>
@@ -7477,10 +7479,10 @@ function fpIngRenderChart(d) {
 
   // ── Gradientes para barras y área ───────────────────────────────────────
   var chartArea = ctxEvM.getContext('2d');
-  var gradBar = chartArea.createLinearGradient(0,0,0,260);
+  var gradBar = chartArea.createLinearGradient(0,0,0,340);
   gradBar.addColorStop(0, 'rgba(26,82,118,.85)');
   gradBar.addColorStop(1, 'rgba(26,82,118,.45)');
-  var gradArea = chartArea.createLinearGradient(0,0,0,260);
+  var gradArea = chartArea.createLinearGradient(0,0,0,340);
   gradArea.addColorStop(0, 'rgba(39,174,96,.35)');
   gradArea.addColorStop(1, 'rgba(39,174,96,.02)');
 
