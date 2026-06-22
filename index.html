@@ -2357,11 +2357,14 @@ tbody tr:hover td { background: #f8faf9; }
           </div>
         </div>
 
-        <!-- Evolución mensual intereses (hoja GRAFICO del Excel) -->
+        <!-- Evolución mensual intereses (hoja Evolución mensual del Excel) -->
         <div id="fp-col-evol-card" style="display:none;margin-bottom:14px;">
           <div class="card" style="margin:0;">
-            <div class="card-header"><div class="card-title"><i class="ti ti-trending-up"></i> Evolución mensual de intereses — Recursos Propios FA</div></div>
-            <div class="card-body" style="padding:12px;"><canvas id="fp-col-chart-evol-mes" height="130"></canvas></div>
+            <div class="card-header"><div class="card-title"><i class="ti ti-trending-up"></i> Evolución mensual — Colocaciones e Intereses ganados (Recursos Propios FA)</div></div>
+            <div class="card-body" style="padding:14px;">
+              <div id="fp-col-evol-kpis" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;"></div>
+              <canvas id="fp-col-chart-evol-mes" height="110"></canvas>
+            </div>
           </div>
         </div>
 
@@ -6465,6 +6468,7 @@ function honDetalleExcel(){
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 
 <script>
 
@@ -7098,35 +7102,61 @@ function fpIngHandleFile(file) {
       d.varInt          = d.intTotal - d.intMesAnt;
       d.varPctFA        = d.totalFAMesAnt > 0 ? d.varTotalFA/d.totalFAMesAnt : null;
 
-      // Hoja GRAFICO — datos mensuales de intereses
+      // Hoja "Evolución mensual" — fechas en columnas (fila con encabezado),
+      // "Total Colocaciones" e "Intereses ganados" en filas con label en col A/B
       d.evolucionMensual = [];
       try {
-        var wsG = wb.Sheets['Evolución mensual'] || wb.Sheets['Evolución mensual'] || wb.Sheets['Evolución mensual'];
+        var wsG = wb.Sheets['Evolución mensual'];
         if (!wsG) {
-          // Try to find it case-insensitively
           wb.SheetNames.forEach(function(sn){
-            if (sn.toLowerCase() === 'Evolución mensual') wsG = wb.Sheets[sn];
+            if (sn.toLowerCase().indexOf('evoluci') > -1) wsG = wb.Sheets[sn];
           });
         }
-        console.log('Hojas disponibles:', wb.SheetNames.join(', '));
         if (wsG) {
           var rawG = XLSX.utils.sheet_to_json(wsG, {header:1, defval:null});
-          console.log('Evolución mensual filas:', rawG.length, 'primera:', JSON.stringify(rawG[0]));
-          rawG.forEach(function(row) {
-            if (!row || row[0]===null || row[0]===undefined) return;
-            var mes   = String(row[0]).trim();
-            var raw1  = row[1];
-            var monto = typeof raw1 === 'number' ? raw1 :
-              parseFloat(String(raw1||'').replace(/\$/g,'').replace(/\s/g,'').replace(/\./g,'').replace(',','.'));
-            if (mes && mes.length > 1 && !isNaN(monto) && monto > 0) {
-              d.evolucionMensual.push({mes:mes.substring(0,3).toUpperCase(), monto:monto});
-            }
-          });
-          console.log('evolucionMensual parseado:', JSON.stringify(d.evolucionMensual));
-        } else {
-          console.warn('Hoja Evolución mensual no encontrada en:', wb.SheetNames);
+
+          // 1) Encontrar la fila de encabezado con fechas (varias celdas tipo Date)
+          var headerRow = null, headerIdx = -1;
+          for (var hi=0; hi<rawG.length; hi++) {
+            var dateCount = (rawG[hi]||[]).filter(function(c){ return c instanceof Date; }).length;
+            if (dateCount >= 2) { headerRow = rawG[hi]; headerIdx = hi; break; }
+          }
+
+          if (headerRow) {
+            // Columnas que tienen fecha válida
+            var colIdxs = [];
+            headerRow.forEach(function(c, idx){ if (c instanceof Date) colIdxs.push(idx); });
+            // Vienen de más reciente a más antiguo en el Excel del gerente -> ordenar cronológico asc
+            colIdxs.sort(function(a,b){ return headerRow[a] - headerRow[b]; });
+
+            // 2) Buscar filas de "Total Colocaciones" e "Intereses ganados" (o similar) por label en cualquier columna A/B
+            var rowTotal = null, rowInt = null;
+            rawG.forEach(function(row){
+              if (!row) return;
+              var lbl = ((row[0]||'') + ' ' + (row[1]||'')).toLowerCase();
+              if (lbl.indexOf('total colocacion') > -1) rowTotal = row;
+              if (lbl.indexOf('interes') > -1 && lbl.indexOf('ganado') > -1) rowInt = row;
+            });
+
+            var MESES3 = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+            colIdxs.forEach(function(ci){
+              var fecha = headerRow[ci];
+              var mesLbl = MESES3[fecha.getMonth()];
+              var totalCol = rowTotal && typeof rowTotal[ci] === 'number' ? rowTotal[ci] : null;
+              var interesAcum = rowInt && typeof rowInt[ci] === 'number' ? rowInt[ci] : null;
+              if (totalCol !== null || interesAcum !== null) {
+                d.evolucionMensual.push({
+                  mes: mesLbl,
+                  monto: interesAcum || 0,       // compat versiones anteriores
+                  totalColocaciones: totalCol,
+                  interesesAcum: interesAcum
+                });
+              }
+            });
+          }
         }
       } catch(eG){ console.error('Error leyendo Evolución mensual:', eG.message); }
+
 
       _fpIngData = d;
       fpIngRender();
@@ -7392,45 +7422,135 @@ function fpColSubtotal(label, capital, intereses, varMes, color, fmtCap, fmtInt)
 }
 
 function fpIngRenderChart(d) {
-  // ── GRÁFICO EVOLUCIÓN MENSUAL (hoja GRAFICO del Excel) ─────────────────
+  // ── GRÁFICO EVOLUCIÓN MENSUAL (hoja "Evolución mensual" del Excel) ─────
   var evolCard = document.getElementById('fp-col-evol-card');
   var ctxEvM   = document.getElementById('fp-col-chart-evol-mes');
-  if (d && d.evolucionMensual && d.evolucionMensual.length > 0 && ctxEvM && typeof Chart !== 'undefined') {
-    if (evolCard) evolCard.style.display = 'block';
-    var presupuestoAnual = d.presupuesto || 2043863014;
-    var labels   = d.evolucionMensual.map(function(e){ return e.mes; });
-    var montos   = d.evolucionMensual.map(function(e){ return e.monto; });
-    var presData = labels.map(function(_, i){ return Math.round(presupuestoAnual*(i+1)/12); });
-    if (window._fpColChartEvolMes) window._fpColChartEvolMes.destroy();
-    window._fpColChartEvolMes = new Chart(ctxEvM, {
-      type: 'line',
-      data: { labels: labels, datasets: [
-        { label: 'Intereses FA acumulados',
-          data: montos, borderColor: '#27ae60', backgroundColor: 'rgba(39,174,96,.1)',
-          fill: true, tension: .3, pointRadius: 5, pointBackgroundColor: '#27ae60', borderWidth: 2 },
-        { label: 'Presupuesto proporcional',
-          data: presData, borderColor: '#e74c3c', borderDash: [6,3], borderWidth: 1.5,
-          pointRadius: 0, fill: false, tension: 0 }
-      ]},
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 10 } } },
-          tooltip: { callbacks: { label: function(ctx) {
-            return ctx.dataset.label + ': $' + ctx.raw.toLocaleString('es-AR', {maximumFractionDigits:0});
-          }}}
+  var kpiBox   = document.getElementById('fp-col-evol-kpis');
+  var datos = (d && d.evolucionMensual) || [];
+
+  if (!datos.length || !ctxEvM || typeof Chart === 'undefined') {
+    if (evolCard) evolCard.style.display = 'none';
+    return;
+  }
+  if (evolCard) evolCard.style.display = 'block';
+
+  var labels      = datos.map(function(e){ return e.mes; });
+  var totalCol    = datos.map(function(e){ return e.totalColocaciones; });
+  var interesAcum = datos.map(function(e){ return e.interesesAcum; });
+
+  var fmtB1 = function(n){ return '$'+(n/1000000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'B'; };
+  var fmtM0 = function(n){ return '$'+(n/1000000).toLocaleString('es-AR',{maximumFractionDigits:0})+'M'; };
+
+  // ── KPIs arriba del gráfico (lectura inmediata para el consejo) ─────────
+  if (kpiBox) {
+    var primero = datos[0], ultimo = datos[datos.length-1];
+    var varCol  = (ultimo.totalColocaciones!=null && primero.totalColocaciones!=null) ? (ultimo.totalColocaciones - primero.totalColocaciones) : null;
+    var varColPct = (varCol!=null && primero.totalColocaciones) ? (varCol/primero.totalColocaciones*100) : null;
+    var varInt  = (ultimo.interesesAcum!=null && primero.interesesAcum!=null) ? (ultimo.interesesAcum - primero.interesesAcum) : null;
+    var varIntPct = (varInt!=null && primero.interesesAcum) ? (varInt/primero.interesesAcum*100) : null;
+
+    function kpi(label, value, sub, color){
+      return '<div style="flex:1;min-width:160px;background:'+color+'0d;border:1px solid '+color+'30;border-radius:8px;padding:10px 14px;">'+
+        '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;">'+label+'</div>'+
+        '<div style="font-size:19px;font-weight:700;color:'+color+';line-height:1.1;">'+value+'</div>'+
+        (sub?'<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+sub+'</div>':'')+
+      '</div>';
+    }
+
+    kpiBox.innerHTML =
+      kpi('Colocaciones — '+ultimo.mes, fmtB1(ultimo.totalColocaciones),
+          (varCol!=null ? (varCol>=0?'▲ +':'▼ ')+fmtB1(Math.abs(varCol))+' ('+(varColPct>=0?'+':'')+varColPct.toFixed(1)+'%) vs '+primero.mes : ''),
+          '#1a5276') +
+      kpi('Intereses acumulados — '+ultimo.mes, fmtM0(ultimo.interesesAcum),
+          (varInt!=null ? '▲ +'+fmtM0(varInt)+' ('+(varIntPct>=0?'+':'')+varIntPct.toFixed(1)+'%) vs '+primero.mes : ''),
+          '#1a5c38');
+  }
+
+  // ── Gradientes para barras y área ───────────────────────────────────────
+  var chartArea = ctxEvM.getContext('2d');
+  var gradBar = chartArea.createLinearGradient(0,0,0,260);
+  gradBar.addColorStop(0, 'rgba(26,82,118,.85)');
+  gradBar.addColorStop(1, 'rgba(26,82,118,.45)');
+  var gradArea = chartArea.createLinearGradient(0,0,0,260);
+  gradArea.addColorStop(0, 'rgba(39,174,96,.35)');
+  gradArea.addColorStop(1, 'rgba(39,174,96,.02)');
+
+  if (window._fpColChartEvolMes) window._fpColChartEvolMes.destroy();
+  window._fpColChartEvolMes = new Chart(ctxEvM, {
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Colocaciones totales (FA)',
+          data: totalCol,
+          backgroundColor: gradBar,
+          borderRadius: 5,
+          maxBarThickness: 54,
+          yAxisID: 'yCol',
+          order: 2,
+          datalabels: {
+            display: true,
+            anchor: 'end', align: 'top',
+            color: '#1a5276', font: {size: 10, weight: '600'},
+            formatter: function(v){ return fmtB1(v); }
+          }
         },
-        scales: {
-          x: { grid: { display: false } },
-          y: { ticks: { callback: function(v){ return '$'+(v/1000000000).toFixed(1)+'B'; } } }
+        {
+          type: 'line',
+          label: 'Intereses ganados (acumulado)',
+          data: interesAcum,
+          borderColor: '#27ae60',
+          backgroundColor: gradArea,
+          fill: true, tension: .35, borderWidth: 3,
+          pointRadius: 5, pointHoverRadius: 7,
+          pointBackgroundColor: '#27ae60', pointBorderColor: '#fff', pointBorderWidth: 2,
+          yAxisID: 'yInt', order: 1,
+          datalabels: {
+            display: true,
+            anchor: 'end', align: 'bottom',
+            color: '#1a5c38', font: {size: 10, weight: '700'},
+            formatter: function(v){ return fmtM0(v); }
+          }
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 18, bottom: 4 } },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 14, padding: 16 } },
+        tooltip: {
+          backgroundColor: '#fff', titleColor: '#1a2e1f', bodyColor: '#1a2e1f',
+          borderColor: 'var(--border)', borderWidth: 1, padding: 10,
+          titleFont: {size: 12, weight: '600'}, bodyFont: {size: 11},
+          callbacks: { label: function(ctx){
+            return ctx.dataset.label + ': ' + (ctx.dataset.yAxisID==='yCol' ? fmtB1(ctx.raw) : fmtM0(ctx.raw));
+          }}
+        },
+        datalabels: { display: true }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 12, weight: '600' } } },
+        yCol: {
+          position: 'left',
+          title: { display: true, text: 'Colocaciones totales', font: { size: 10, weight: '600' }, color: '#1a5276' },
+          grid: { color: 'rgba(0,0,0,.04)' },
+          ticks: { callback: function(v){ return fmtB1(v); }, font: {size: 10} }
+        },
+        yInt: {
+          position: 'right',
+          title: { display: true, text: 'Intereses acumulados', font: { size: 10, weight: '600' }, color: '#1a5c38' },
+          grid: { drawOnChartArea: false },
+          ticks: { callback: function(v){ return fmtM0(v); }, font: {size: 10} }
         }
       }
-    });
-  } else if (evolCard) {
-    evolCard.style.display = 'none';
-  }
+    },
+    plugins: (typeof ChartDataLabels !== 'undefined') ? [ChartDataLabels] : []
+  });
 }
+
 
 function fpColRow(nombre, detalle, capital, intereses, estado, varMes, color) {
   var fmt  = function(n){ if(!n||n===0) return '—'; return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
