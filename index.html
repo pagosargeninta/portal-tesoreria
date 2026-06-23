@@ -10926,7 +10926,9 @@ async function icProcesar() {
       }]]
     }]);
     try {
-      await odooCall('account.move', 'write', [[liquidacionId], { l10n_latam_document_number: numeroFacCogayt }]);
+      // Extraer solo el número (sin el prefijo "FA-C "), formato 00001-00000810
+      const soloNumero = numeroFacCogayt.replace(/^[A-Z\-]+\s+/i, '').trim();
+      await odooCall('account.move', 'write', [[liquidacionId], { l10n_latam_document_number: soloNumero }]);
     } catch(eDoc) {
       console.warn('No se pudo setear l10n_latam_document_number, se omite:', eDoc.message);
     }
@@ -10985,9 +10987,19 @@ async function icProcesar() {
     resEl.style.background = 'rgba(192,57,43,.08)';
     resEl.style.border = '1px solid rgba(192,57,43,.3)';
     resEl.style.color = 'var(--danger)';
+
+    let mensaje = e.message || String(e);
+    let ayuda = 'Revisá en Odoo qué quedó creado hasta este punto antes de reintentar, para no duplicar documentos.';
+
+    if (mensaje.includes('Saldo Insuficiente') || mensaje.includes('Saldo insuficiente')) {
+      ayuda = 'El banco/caja elegido no tiene fondos suficientes para esta operación. Elegí otra cuenta bancaria o regularizá el saldo en Odoo antes de reintentar.';
+    } else if (mensaje.toLowerCase().includes('no es un valor válido')) {
+      ayuda = 'Hubo un problema con el formato del número de documento. Los demás pasos ya se completaron — revisá la liquidación en Odoo y completá ese campo manualmente si hace falta.';
+    }
+
     resEl.innerHTML = `<div style="font-weight:700;margin-bottom:6px;"><i class="ti ti-alert-triangle"></i> Se interrumpió el proceso</div>
-      <div>${e.message || e}</div>
-      <div style="margin-top:6px;font-size:11px;">Revisá en Odoo qué quedó creado hasta este punto antes de reintentar, para no duplicar documentos.</div>`;
+      <div>${mensaje}</div>
+      <div style="margin-top:8px;font-size:12px;">${ayuda}</div>`;
     resEl.style.display = 'block';
   } finally {
     btn.disabled = false;
@@ -10997,23 +11009,17 @@ async function icProcesar() {
 
 // ── Conciliar un pago contra una factura ──
 async function icConciliarPago(paymentId, moveId) {
+  // Odoo concilia automáticamente cuando el pago se crea con el mismo partner/monto
+  // que la factura abierta (mismo comportamiento que conciliar manual desde la UI).
+  // Solo verificamos que el estado haya quedado correcto; si no, no es un error bloqueante.
   try {
-    const payMove = await odooCall('account.payment', 'read', [[paymentId], ['move_id']]);
-    const payMoveId = payMove[0].move_id[0];
-
-    const linesPay = await odooCall('account.move.line', 'search_read',
-      [[['move_id','=',payMoveId],['account_id.reconcile','=',true]]],
-      { fields: ['id'] });
-    const linesInv = await odooCall('account.move.line', 'search_read',
-      [[['move_id','=',moveId],['account_id.reconcile','=',true]]],
-      { fields: ['id'] });
-
-    const allLineIds = linesPay.map(l => l.id).concat(linesInv.map(l => l.id));
-    if (allLineIds.length >= 2) {
-      await odooCallSafe('account.move.line', 'reconcile', [allLineIds]);
+    const factura = await odooCall('account.move', 'read', [[moveId], ['payment_state']]);
+    const estado = factura[0]?.payment_state;
+    if (estado !== 'paid' && estado !== 'in_payment' && estado !== 'partial') {
+      console.warn(`icConciliarPago: factura ${moveId} quedó en estado "${estado}" — revisar conciliación manual en Odoo.`);
     }
   } catch(e) {
-    console.warn('icConciliarPago: no se pudo conciliar automáticamente —', e.message);
+    console.warn('icConciliarPago: no se pudo verificar el estado —', e.message);
   }
 }
 
