@@ -1775,9 +1775,11 @@ tbody tr:hover td { background: #f8faf9; }
           </div>
           <div class="card-body">
             <div class="field">
-              <label>Invoice / factura (PDF o imagen) *</label>
-              <input type="file" id="nm-fileInvoice" accept=".pdf,.png,.jpg,.jpeg">
+              <label>Invoice / factura (PDF o imagen) — podés elegir hasta 3 *</label>
+              <input type="file" id="nm-fileInvoice" accept=".pdf,.png,.jpg,.jpeg" multiple>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px;">Si seleccionás varias, se leen todas y se suman los montos en una sola NOTA.</div>
             </div>
+            <div id="nm-detalle-facturas" style="display:none;margin-bottom:10px;"></div>
             <div class="field">
               <label>Datos bancarios del proveedor (opcional, si vienen aparte)</label>
               <input type="file" id="nm-fileProveedor" accept=".pdf,.png,.jpg,.jpeg">
@@ -10193,20 +10195,18 @@ function nmFileToBase64(file) {
   });
 }
 
-const NM_EXTRACT_PROMPT = `Sos un asistente que extrae datos de facturas/invoices y documentos
-bancarios para completar una NOTA de transferencia internacional del Banco de la Nación
-Argentina (Agencia Miami).
+const NM_EXTRACT_PROMPT_SINGLE = `Sos un asistente que extrae datos de una factura/invoice y, si viene
+incluido, de un documento adicional con datos bancarios del proveedor, para completar una NOTA
+de transferencia internacional del Banco de la Nación Argentina (Agencia Miami).
 
-Te paso uno o dos archivos: el invoice/factura, y opcionalmente un documento adicional con
-datos bancarios del proveedor (puede venir en el mismo invoice).
-
-Extrae EXACTAMENTE estos campos y responde SOLO con un objeto JSON (sin texto adicional, sin
-markdown, sin backticks), con esta forma exacta:
+Extrae EXACTAMENTE estos campos de ESTA factura y responde SOLO con un objeto JSON (sin texto
+adicional, sin markdown, sin backticks), con esta forma exacta:
 
 {
   "moneda": "USD",
   "monto": 0.00,
-  "concepto": "string breve, ej: Pago factura N 1234 - proveedor",
+  "nro_factura": "string, numero de la factura/invoice",
+  "concepto": "string breve, ej: Factura N 1234 - proveedor",
   "beneficiario_nombre": "string",
   "beneficiario_direccion": "string (calle, ciudad, estado, codigo postal)",
   "beneficiario_cuenta": "string (numero de cuenta del beneficiario)",
@@ -10223,74 +10223,140 @@ Reglas:
 - No inventes numeros de cuenta, SWIFT, ni montos. Si no estas seguro, marca confianza "baja" o "media".
 - Si hay mas de un monto en la factura (subtotal, impuestos, total), usa el TOTAL a pagar.`;
 
+async function nmExtraerUnaFactura(invoiceFile, proveedorFile, claudeKey, portalPass) {
+  const content = [];
+  const invB64 = await nmFileToBase64(invoiceFile);
+  const invMedia = invoiceFile.type === 'application/pdf' ? 'document' : 'image';
+  content.push({ type: invMedia, source: { type: 'base64', media_type: invoiceFile.type, data: invB64 } });
+
+  if (proveedorFile) {
+    const provB64 = await nmFileToBase64(proveedorFile);
+    const provMedia = proveedorFile.type === 'application/pdf' ? 'document' : 'image';
+    content.push({ type: provMedia, source: { type: 'base64', media_type: proveedorFile.type, data: provB64 } });
+  }
+  content.push({ type: 'text', text: NM_EXTRACT_PROMPT_SINGLE });
+
+  const payload = {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content }]
+  };
+
+  const resp = await fetch(PROXY_URL.replace('/proxy', '/claude'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ portal_password: portalPass, claude_key: claudeKey, payload: payload })
+  });
+
+  const data = await resp.json();
+  if (!resp.ok || data.error) {
+    const msg = data.error ? (typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error))) : ('HTTP ' + resp.status);
+    throw new Error(`${invoiceFile.name}: ${msg}`);
+  }
+
+  const textBlock = (data.content || []).find(b => b.type === 'text');
+  if (!textBlock) throw new Error(`${invoiceFile.name}: la IA no devolvió texto.`);
+
+  const clean = textBlock.text.replace(/```json|```/g, '').trim();
+  const jsonMatch = clean.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error(`${invoiceFile.name}: sin JSON en la respuesta.`);
+  const parsed = JSON.parse(jsonMatch[0]);
+  parsed._archivo = invoiceFile.name;
+  return parsed;
+}
+
+function nmRenderDetalleFacturas(resultados) {
+  const wrap = document.getElementById('nm-detalle-facturas');
+  if (!wrap) return;
+  if (!resultados.length) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+
+  const fmt = n => '$' + parseFloat(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  const total = resultados.reduce((s, r) => s + (parseFloat(r.monto) || 0), 0);
+
+  let rows = resultados.map(r => {
+    const confColor = r.confianza === 'alta' ? 'var(--success)' : r.confianza === 'media' ? 'var(--warn)' : 'var(--danger)';
+    return `<tr>
+      <td style="font-size:11px;">${r._archivo}</td>
+      <td style="font-size:11px;">${r.nro_factura || '—'}</td>
+      <td style="font-size:11px;text-align:right;">${fmt(r.monto)}</td>
+      <td style="font-size:11px;color:${confColor};">${r.confianza || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.style.display = 'block';
+  wrap.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="border-bottom:1px solid var(--border);">
+        <th style="text-align:left;padding:4px 6px;">Archivo</th>
+        <th style="text-align:left;padding:4px 6px;">Nº Factura</th>
+        <th style="text-align:right;padding:4px 6px;">Monto</th>
+        <th style="text-align:left;padding:4px 6px;">Confianza</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="border-top:1px solid var(--border);font-weight:700;">
+        <td colspan="2" style="padding:4px 6px;">Total (${resultados.length} factura${resultados.length !== 1 ? 's' : ''})</td>
+        <td style="text-align:right;padding:4px 6px;">${fmt(total)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>`;
+}
+
 async function nmExtraer() {
-  const invoiceFile = document.getElementById('nm-fileInvoice').files[0];
+  const invoiceFiles = Array.from(document.getElementById('nm-fileInvoice').files || []);
   const proveedorFile = document.getElementById('nm-fileProveedor').files[0];
-  if (!invoiceFile) { nmSetMsg('nm-extraer-msg', 'Subí al menos el invoice.', 'error'); return; }
+  if (!invoiceFiles.length) { nmSetMsg('nm-extraer-msg', 'Subí al menos un invoice.', 'error'); return; }
+  if (invoiceFiles.length > 3) { nmSetMsg('nm-extraer-msg', 'Máximo 3 facturas por nota.', 'error'); return; }
 
   const claudeKey = localStorage.getItem('claude_key');
   if (!claudeKey) { nmSetMsg('nm-extraer-msg', 'Configurá la API key de Claude en Configuración.', 'error'); return; }
 
   const btn = document.getElementById('nm-btn-extraer');
   btn.disabled = true;
-  nmSetMsg('nm-extraer-msg', 'Leyendo documentos con IA...', 'warn');
+  nmSetMsg('nm-extraer-msg', `Leyendo ${invoiceFiles.length} factura${invoiceFiles.length !== 1 ? 's' : ''} con IA...`, 'warn');
 
   try {
-    const content = [];
-    const invB64 = await nmFileToBase64(invoiceFile);
-    const invMedia = invoiceFile.type === 'application/pdf' ? 'document' : 'image';
-    content.push({ type: invMedia, source: { type: 'base64', media_type: invoiceFile.type, data: invB64 } });
-
-    if (proveedorFile) {
-      const provB64 = await nmFileToBase64(proveedorFile);
-      const provMedia = proveedorFile.type === 'application/pdf' ? 'document' : 'image';
-      content.push({ type: provMedia, source: { type: 'base64', media_type: proveedorFile.type, data: provB64 } });
-    }
-    content.push({ type: 'text', text: NM_EXTRACT_PROMPT });
-
     const portalPass = sessionStorage.getItem('portal_pass_session') || '';
-    const payload = {
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content }]
-    };
-
-    const resp = await fetch(PROXY_URL.replace('/proxy', '/claude'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ portal_password: portalPass, claude_key: claudeKey, payload: payload })
-    });
-
-    const data = await resp.json();
-    if (!resp.ok || data.error) {
-      const msg = data.error ? (typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error))) : ('HTTP ' + resp.status);
-      throw new Error(msg);
+    const resultados = [];
+    for (const f of invoiceFiles) {
+      nmSetMsg('nm-extraer-msg', `Leyendo ${f.name}...`, 'warn');
+      const r = await nmExtraerUnaFactura(f, proveedorFile, claudeKey, portalPass);
+      resultados.push(r);
     }
 
-    const textBlock = (data.content || []).find(b => b.type === 'text');
-    if (!textBlock) throw new Error('La IA no devolvió texto.');
+    nmRenderDetalleFacturas(resultados);
 
-    const clean = textBlock.text.replace(/```json|```/g, '').trim();
-    const jsonMatch = clean.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Sin JSON en la respuesta: ' + clean.substring(0, 80));
-    const parsed = JSON.parse(jsonMatch[0]);
+    const totalMonto = resultados.reduce((s, r) => s + (parseFloat(r.monto) || 0), 0);
+    const moneda = resultados.find(r => r.moneda)?.moneda || 'USD';
 
-    document.getElementById('nm-moneda').value = parsed.moneda || 'USD';
-    document.getElementById('nm-monto').value = parsed.monto || '';
-    document.getElementById('nm-concepto').value = parsed.concepto || '';
-    document.getElementById('nm-benNombre').value = parsed.beneficiario_nombre || '';
-    document.getElementById('nm-benDireccion').value = parsed.beneficiario_direccion || '';
-    document.getElementById('nm-benCuenta').value = parsed.beneficiario_cuenta || '';
-    document.getElementById('nm-bancoNombre').value = parsed.banco_beneficiario_nombre || '';
-    document.getElementById('nm-bancoDireccion').value = parsed.banco_beneficiario_direccion || '';
-    document.getElementById('nm-swift').value = parsed.swift || '';
+    const nombresFactura = resultados.map(r => r.nro_factura).filter(Boolean);
+    const beneficiarioRef = resultados.find(r => r.beneficiario_nombre) || resultados[0];
+    const concepto = nombresFactura.length
+      ? `Pago factura${nombresFactura.length !== 1 ? 's' : ''} Nº ${nombresFactura.join(', ')}${beneficiarioRef.beneficiario_nombre ? ' - ' + beneficiarioRef.beneficiario_nombre : ''}`
+      : (resultados[0].concepto || '');
 
-    const faltantes = parsed.campos_faltantes || [];
+    document.getElementById('nm-moneda').value = moneda;
+    document.getElementById('nm-monto').value = totalMonto || '';
+    document.getElementById('nm-concepto').value = concepto;
+    document.getElementById('nm-benNombre').value = beneficiarioRef.beneficiario_nombre || '';
+    document.getElementById('nm-benDireccion').value = beneficiarioRef.beneficiario_direccion || '';
+    document.getElementById('nm-benCuenta').value = beneficiarioRef.beneficiario_cuenta || '';
+    document.getElementById('nm-bancoNombre').value = beneficiarioRef.banco_beneficiario_nombre || '';
+    document.getElementById('nm-bancoDireccion').value = beneficiarioRef.banco_beneficiario_direccion || '';
+    document.getElementById('nm-swift').value = beneficiarioRef.swift || '';
+
+    const todosFaltantes = [...new Set(resultados.flatMap(r => r.campos_faltantes || []))];
+    const beneficiariosDistintos = new Set(resultados.map(r => (r.beneficiario_nombre || '').trim().toLowerCase()).filter(Boolean));
+    const avisos = [];
+    if (todosFaltantes.length) avisos.push('Campos a revisar: ' + todosFaltantes.join(', '));
+    if (beneficiariosDistintos.size > 1) avisos.push('⚠ Las facturas tienen beneficiarios distintos — revisá que corresponda pagarlas juntas.');
+
     const faltEl = document.getElementById('nm-faltantes');
-    if (faltEl) faltEl.textContent = faltantes.length ? ('Revisar manualmente: ' + faltantes.join(', ')) : '';
+    if (faltEl) faltEl.textContent = avisos.join(' · ');
 
-    const confTxt = parsed.confianza ? (' (confianza: ' + parsed.confianza + ')') : '';
-    nmSetMsg('nm-extraer-msg', 'Datos cargados' + confTxt + '. Revisá antes de generar.', faltantes.length ? 'warn' : 'ok');
+    const confs = resultados.map(r => r.confianza).filter(Boolean);
+    const peorConf = confs.includes('baja') ? 'baja' : confs.includes('media') ? 'media' : (confs[0] || '');
+    const confTxt = peorConf ? ` (confianza: ${peorConf})` : '';
+    nmSetMsg('nm-extraer-msg', `${resultados.length} factura${resultados.length !== 1 ? 's' : ''} leída${resultados.length !== 1 ? 's' : ''}${confTxt}. Revisá antes de generar.`, avisos.length ? 'warn' : 'ok');
     nmCalcularClave();
   } catch (e) {
     nmSetMsg('nm-extraer-msg', 'Error: ' + e.message, 'error');
