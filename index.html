@@ -4885,12 +4885,12 @@ async function honCrearFactura(datos, cartaId) {
     lineas.push([0, 0, l]);
   }
   const vals = {
-    move_type:        'in_invoice',
-    name:             datos.nro_factura || '/',
-    date:             hoy,
-    invoice_date:     datos.fecha || hoy,
-    ref:              ref,
-    invoice_line_ids: lineas,
+    move_type:                  'in_invoice',
+    l10n_latam_document_number: datos.nro_factura || false,
+    date:                       hoy,
+    invoice_date:               datos.fecha || hoy,
+    ref:                        ref,
+    invoice_line_ids:           lineas,
   };
   if (datos.cae) {
     vals.l10n_ar_afip_auth_mode = 'CAE';
