@@ -647,6 +647,9 @@ tbody tr:hover td { background: #f8faf9; }
   </div>
 
   <div class="sidebar-section">Herramientas</div>
+  <div class="nav-item" onclick="showPage('ingresocogayt',this)">
+    <i class="ti ti-bolt"></i> Ingreso + COGAYT
+  </div>
   <div class="nav-item" onclick="showPage('honorarios',this)">
     <i class="ti ti-file-invoice"></i> Honorarios
   </div>
@@ -2655,6 +2658,118 @@ tbody tr:hover td { background: #f8faf9; }
 
     </div>
     <!-- ══════════ FIN CONTROL DE ANTICIPOS ══════════ -->
+
+    <!-- ══════════ INGRESO + COGAYT ══════════ -->
+    <div id="page-ingresocogayt" class="page">
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-bolt"></i> Cargar ingreso y COGAYT de un convenio</div>
+        </div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5;">
+            Completá estos datos y el portal hace todo el trabajo en Odoo: la factura de ingreso, su cobro,
+            la factura de COGAYT, su cobro, la liquidación de salida del convenio y su pago — todo conectado y conciliado.
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿Quién depositó la plata? (organismo / frigorífico)</label>
+              <div style="position:relative;">
+                <input type="text" id="ic-cliente-input" placeholder="Buscar por nombre o CUIT..."
+                  style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+                  oninput="icBuscarCliente(this.value)" autocomplete="off">
+                <div id="ic-cliente-resultados" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
+              </div>
+              <div id="ic-cliente-elegido" style="display:none;margin-top:6px;padding:7px 12px;background:rgba(45,134,89,.08);border-radius:6px;font-size:12px;color:var(--success);font-weight:600;">
+                <i class="ti ti-check"></i> <span id="ic-cliente-elegido-nombre"></span>
+                <button onclick="icLimpiarCliente()" style="background:none;border:none;color:var(--muted);cursor:pointer;float:right;font-size:13px;"><i class="ti ti-x"></i></button>
+              </div>
+            </div>
+
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿Qué convenio / carta es?</label>
+              <div style="position:relative;">
+                <input type="text" id="ic-convenio-input" placeholder="Buscar convenio por nombre..."
+                  style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+                  oninput="icBuscarConvenio(this.value)" autocomplete="off">
+                <div id="ic-convenio-resultados" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
+              </div>
+              <div id="ic-convenio-elegido" style="display:none;margin-top:6px;padding:7px 12px;background:rgba(45,134,89,.08);border-radius:6px;font-size:12px;color:var(--success);font-weight:600;">
+                <i class="ti ti-check"></i> <span id="ic-convenio-elegido-nombre"></span>
+                <button onclick="icLimpiarConvenio()" style="background:none;border:none;color:var(--muted);cursor:pointer;float:right;font-size:13px;"><i class="ti ti-x"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Monto total que ingresó</label>
+              <input type="text" id="ic-monto" placeholder="Ej: 8393000"
+                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+                oninput="icCalcularCogayt()">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">% de COGAYT a aplicar</label>
+              <input type="text" id="ic-porcentaje" value="6" placeholder="Ej: 6"
+                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+                oninput="icCalcularCogayt()">
+            </div>
+          </div>
+
+          <div id="ic-cogayt-preview" style="display:none;margin-bottom:14px;padding:10px 16px;background:var(--surface-alt,#f8faf9);border-radius:8px;border:1px solid var(--border);font-size:13px;">
+            COGAYT a cobrar: <strong id="ic-cogayt-monto" style="color:var(--success);"></strong>
+            &nbsp;·&nbsp; Queda en el convenio: <strong id="ic-cogayt-neto"></strong>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿A qué cuenta bancaria entró el ingreso?</label>
+              <select id="ic-banco-ingreso" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+                <option value="">Cargando bancos...</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿A qué cuenta bancaria va el COGAYT?</label>
+              <select id="ic-banco-cogayt" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+                <option value="">Cargando bancos...</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Número de operación del ingreso</label>
+              <input type="text" id="ic-ref-ingreso" placeholder="Ej: 1690000"
+                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Número de operación del COGAYT</label>
+              <input type="text" id="ic-ref-cogayt" placeholder="Ej: 1680000"
+                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="ic-btn-procesar" onclick="icProcesar()" style="padding:10px 24px;font-size:13px;">
+            <i class="ti ti-player-play"></i> Cargar todo en Odoo
+          </button>
+          <span id="ic-estado-validacion" style="margin-left:12px;font-size:12px;color:var(--danger);"></span>
+        </div>
+      </div>
+
+      <!-- Progreso paso a paso -->
+      <div id="ic-progreso-card" class="card" style="display:none;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-list-check"></i> Progreso</div>
+        </div>
+        <div class="card-body">
+          <div id="ic-pasos" style="display:flex;flex-direction:column;gap:10px;"></div>
+          <div id="ic-resultado-final" style="display:none;margin-top:16px;padding:14px 18px;border-radius:8px;font-size:13px;"></div>
+        </div>
+      </div>
+
+    </div>
+    <!-- ══════════ FIN INGRESO + COGAYT ══════════ -->
 
     <!-- ══════════ CONFIG ══════════ -->
     <div id="page-config" class="page">
@@ -10498,6 +10613,398 @@ async function nmGenerarDocx() {
     nmSetMsg('nm-generar-msg', 'Error generando el documento: ' + e.message, 'error');
   }
 }
+
+// ═══════════════════════════════════════════════════════
+// INGRESO + COGAYT — carga automática de los 6 documentos
+// ═══════════════════════════════════════════════════════
+
+// IDs fijos confirmados en Odoo
+const IC_PARTNER_FUNDACION   = 1;       // Fundación Argeninta
+const IC_ANALITICA_FUNC_FA   = 116;     // FUNCIONAMIENTO FA
+const IC_CUENTA_211401       = 2379;    // Fondos de Terceros - FdT
+const IC_CUENTA_411000       = 2395;    // COGAYT
+const IC_JOURNAL_DESEMBOLSOS = 30;      // Ventas Preimpreso (DES)
+const IC_JOURNAL_COGAYT_VTA  = 46;      // Ventas Preimpreso (CoGAy)
+const IC_JOURNAL_PROV_FAR    = 31;      // Vendor Bills (CPFAR)
+const IC_PRODUCTO_DESEMBOLSO = 1;       // Ingresos por desembolsos a convenios
+const IC_PRODUCTO_COGAYT     = 2;       // Ingreso Prestaciones de Servicios
+const IC_PRODUCTO_GASTOS_ADM = 10;      // Gastos Administrativos
+
+let icClienteSel  = null;  // {id, name}
+let icConvenioSel = null;  // {id, name}
+let icBancosCache = null;  // lista de journals tipo banco
+let icTimerCliente = null, icTimerConvenio = null;
+
+// ── Cargar bancos disponibles al entrar a la página ──
+async function icCargarBancos() {
+  if (icBancosCache) return icBancosCache;
+  try {
+    const bancos = await odooCall('account.journal', 'search_read',
+      [[['type','in',['bank','cash']],['company_id','=',1]]],
+      { fields: ['id','name','code'], order: 'name asc', limit: 200 });
+    icBancosCache = bancos;
+    const opciones = '<option value="">Seleccionar...</option>' +
+      bancos.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    const sel1 = document.getElementById('ic-banco-ingreso');
+    const sel2 = document.getElementById('ic-banco-cogayt');
+    if (sel1) sel1.innerHTML = opciones;
+    if (sel2) sel2.innerHTML = opciones;
+  } catch(e) {
+    console.error('icCargarBancos error:', e);
+  }
+  return icBancosCache;
+}
+
+// ── Buscador de cliente (organismo que deposita) ──
+function icBuscarCliente(q) {
+  clearTimeout(icTimerCliente);
+  const cont = document.getElementById('ic-cliente-resultados');
+  if (!q || q.length < 3) { if (cont) cont.style.display = 'none'; return; }
+  icTimerCliente = setTimeout(async () => {
+    try {
+      const domain = /^[0-9-]+$/.test(q.replace(/ /g,''))
+        ? [['vat','ilike', q.replace(/[^0-9]/g,'')]]
+        : [['name','ilike', q]];
+      const res = await odooCall('res.partner', 'search_read',
+        [domain], { fields: ['id','name','vat'], limit: 15, order: 'name asc' });
+      if (!cont) return;
+      if (!res.length) { cont.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">Sin resultados</div>'; cont.style.display='block'; return; }
+      cont.innerHTML = res.map(p => {
+        const cuit = p.vat ? p.vat.replace(/(\d{2})(\d{8})(\d{1})/,'$1-$2-$3') : '—';
+        return `<div onclick="icElegirCliente(${p.id},'${(p.name||'').replace(/'/g,"\\'")}')"
+          style="padding:9px 14px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);"
+          onmouseover="this.style.background='var(--surface-alt,#f4f6f5)'" onmouseout="this.style.background=''">
+          <div style="font-weight:500;">${p.name}</div>
+          <div style="font-size:10px;color:var(--muted);">${cuit}</div>
+        </div>`;
+      }).join('');
+      cont.style.display = 'block';
+    } catch(e) { console.error('icBuscarCliente error:', e); }
+  }, 300);
+}
+function icElegirCliente(id, nombre) {
+  icClienteSel = { id, name: nombre };
+  document.getElementById('ic-cliente-resultados').style.display = 'none';
+  document.getElementById('ic-cliente-input').value = '';
+  document.getElementById('ic-cliente-elegido-nombre').textContent = nombre;
+  document.getElementById('ic-cliente-elegido').style.display = 'block';
+}
+function icLimpiarCliente() {
+  icClienteSel = null;
+  document.getElementById('ic-cliente-elegido').style.display = 'none';
+}
+
+// ── Buscador de convenio (analítica) ──
+function icBuscarConvenio(q) {
+  clearTimeout(icTimerConvenio);
+  const cont = document.getElementById('ic-convenio-resultados');
+  if (!q || q.length < 3) { if (cont) cont.style.display = 'none'; return; }
+  icTimerConvenio = setTimeout(async () => {
+    try {
+      const res = await odooCall('account.analytic.account', 'search_read',
+        [[['active','=',true],['name','ilike', q]]],
+        { fields: ['id','name'], limit: 15, order: 'name asc' });
+      if (!cont) return;
+      if (!res.length) { cont.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">Sin resultados</div>'; cont.style.display='block'; return; }
+      cont.innerHTML = res.map(a => `<div onclick="icElegirConvenio(${a.id},'${(a.name||'').replace(/'/g,"\\'")}')"
+        style="padding:9px 14px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);"
+        onmouseover="this.style.background='var(--surface-alt,#f4f6f5)'" onmouseout="this.style.background=''">
+        ${a.name}
+      </div>`).join('');
+      cont.style.display = 'block';
+    } catch(e) { console.error('icBuscarConvenio error:', e); }
+  }, 300);
+}
+function icElegirConvenio(id, nombre) {
+  icConvenioSel = { id, name: nombre };
+  document.getElementById('ic-convenio-resultados').style.display = 'none';
+  document.getElementById('ic-convenio-input').value = '';
+  document.getElementById('ic-convenio-elegido-nombre').textContent = nombre;
+  document.getElementById('ic-convenio-elegido').style.display = 'block';
+}
+function icLimpiarConvenio() {
+  icConvenioSel = null;
+  document.getElementById('ic-convenio-elegido').style.display = 'none';
+}
+
+// ── Cálculo en vivo de COGAYT ──
+function icCalcularCogayt() {
+  const montoRaw = document.getElementById('ic-monto').value;
+  const pctRaw    = document.getElementById('ic-porcentaje').value;
+  const monto = parseFloat((montoRaw||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+  const pct   = parseFloat((pctRaw||'').replace(',','.')) || 0;
+  const preview = document.getElementById('ic-cogayt-preview');
+  if (monto <= 0 || pct <= 0) { if (preview) preview.style.display = 'none'; return; }
+  const cogayt = Math.round(monto * pct / 100 * 100) / 100;
+  const neto   = monto - cogayt;
+  const fmt = n => '$' + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  document.getElementById('ic-cogayt-monto').textContent = fmt(cogayt);
+  document.getElementById('ic-cogayt-neto').textContent  = fmt(neto);
+  if (preview) preview.style.display = 'block';
+}
+
+// ── Helper: actualizar el visual de un paso ──
+function icSetPaso(idx, estado, texto) {
+  const el = document.getElementById('ic-paso-' + idx);
+  if (!el) return;
+  const iconos = {
+    pendiente: '<i class="ti ti-circle" style="color:var(--muted);"></i>',
+    cargando:  '<i class="ti ti-loader" style="color:var(--info);"></i>',
+    ok:        '<i class="ti ti-circle-check" style="color:var(--success);"></i>',
+    error:     '<i class="ti ti-circle-x" style="color:var(--danger);"></i>'
+  };
+  el.querySelector('.ic-paso-icono').innerHTML = iconos[estado] || iconos.pendiente;
+  el.querySelector('.ic-paso-texto').textContent = texto;
+  el.style.opacity = estado === 'pendiente' ? '0.5' : '1';
+}
+
+function icInicializarPasos() {
+  const pasos = [
+    'Creando factura de ingreso al convenio...',
+    'Cobrando la factura de ingreso...',
+    'Creando factura de COGAYT a Fundación...',
+    'Cobrando la factura de COGAYT...',
+    'Creando la liquidación de salida del convenio...',
+    'Pagando la liquidación...'
+  ];
+  const cont = document.getElementById('ic-pasos');
+  cont.innerHTML = pasos.map((texto, i) => `
+    <div id="ic-paso-${i}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:6px;background:var(--surface-alt,#f8faf9);opacity:0.5;">
+      <span class="ic-paso-icono" style="font-size:16px;"><i class="ti ti-circle" style="color:var(--muted);"></i></span>
+      <span class="ic-paso-texto" style="font-size:12px;">${texto}</span>
+    </div>
+  `).join('');
+  document.getElementById('ic-progreso-card').style.display = 'block';
+  document.getElementById('ic-resultado-final').style.display = 'none';
+}
+
+// ── Validación de campos antes de procesar ──
+function icValidar() {
+  const errores = [];
+  if (!icClienteSel) errores.push('Elegí quién depositó la plata');
+  if (!icConvenioSel) errores.push('Elegí el convenio');
+  const monto = parseFloat((document.getElementById('ic-monto').value||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+  if (monto <= 0) errores.push('Ingresá el monto');
+  const pct = parseFloat((document.getElementById('ic-porcentaje').value||'').replace(',','.')) || 0;
+  if (pct <= 0) errores.push('Ingresá el % de COGAYT');
+  if (!document.getElementById('ic-banco-ingreso').value) errores.push('Elegí el banco del ingreso');
+  if (!document.getElementById('ic-banco-cogayt').value) errores.push('Elegí el banco del COGAYT');
+  if (!document.getElementById('ic-ref-ingreso').value.trim()) errores.push('Ingresá el número de operación del ingreso');
+  if (!document.getElementById('ic-ref-cogayt').value.trim()) errores.push('Ingresá el número de operación del COGAYT');
+  return errores;
+}
+
+// ── Proceso principal: ejecuta los 6 pasos en orden ──
+async function icProcesar() {
+  const errores = icValidar();
+  const msgEl = document.getElementById('ic-estado-validacion');
+  if (errores.length) {
+    msgEl.textContent = errores[0];
+    return;
+  }
+  msgEl.textContent = '';
+
+  const btn = document.getElementById('ic-btn-procesar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Procesando...';
+
+  icInicializarPasos();
+
+  const hoy = new Date().toISOString().split('T')[0];
+  const monto = parseFloat((document.getElementById('ic-monto').value||'').replace(/[^0-9.,]/g,'').replace(',','.'));
+  const pct   = parseFloat((document.getElementById('ic-porcentaje').value||'').replace(',','.'));
+  const montoCogayt = Math.round(monto * pct / 100 * 100) / 100;
+  const bancoIngresoId = parseInt(document.getElementById('ic-banco-ingreso').value);
+  const bancoCogaytId  = parseInt(document.getElementById('ic-banco-cogayt').value);
+  const refIngreso = document.getElementById('ic-ref-ingreso').value.trim();
+  const refCogayt  = document.getElementById('ic-ref-cogayt').value.trim();
+
+  try {
+    // ── PASO 1: Factura de ingreso (FA-C) al convenio ──
+    icSetPaso(0, 'cargando', 'Creando factura de ingreso al convenio...');
+    const facIngresoId = await odooCall('account.move', 'create', [{
+      move_type: 'out_invoice',
+      partner_id: icClienteSel.id,
+      journal_id: IC_JOURNAL_DESEMBOLSOS,
+      invoice_date: hoy,
+      date: hoy,
+      invoice_line_ids: [[0, 0, {
+        product_id: IC_PRODUCTO_DESEMBOLSO,
+        name: 'Ingresos por desembolsos a convenios',
+        quantity: 1,
+        price_unit: monto,
+        account_id: IC_CUENTA_211401,
+        analytic_distribution: { [icConvenioSel.id]: 100 }
+      }]]
+    }]);
+    await odooCall('account.move', 'action_post', [[facIngresoId]]);
+    icSetPaso(0, 'ok', `Factura de ingreso creada (ID ${facIngresoId})`);
+
+    // ── PASO 2: Cobro de la factura de ingreso (RE-X) ──
+    icSetPaso(1, 'cargando', 'Cobrando la factura de ingreso...');
+    const pagoIngresoId = await odooCall('account.payment', 'create', [{
+      payment_type: 'inbound',
+      partner_id: icClienteSel.id,
+      partner_type: 'customer',
+      amount: monto,
+      journal_id: bancoIngresoId,
+      date: hoy,
+      memo: `INGRESO ${refIngreso}`
+    }]);
+    await odooCall('account.payment', 'action_post', [[pagoIngresoId]]);
+    await icConciliarPago(pagoIngresoId, facIngresoId);
+    icSetPaso(1, 'ok', 'Cobro registrado y conciliado');
+
+    // ── PASO 3: Factura de COGAYT (FA-C) a Fundación ──
+    icSetPaso(2, 'cargando', 'Creando factura de COGAYT a Fundación...');
+    const facCogaytId = await odooCall('account.move', 'create', [{
+      move_type: 'out_invoice',
+      partner_id: IC_PARTNER_FUNDACION,
+      journal_id: IC_JOURNAL_COGAYT_VTA,
+      invoice_date: hoy,
+      date: hoy,
+      invoice_line_ids: [[0, 0, {
+        product_id: IC_PRODUCTO_COGAYT,
+        name: 'Ingreso Prestaciones de Servicios',
+        quantity: 1,
+        price_unit: montoCogayt,
+        account_id: IC_CUENTA_411000,
+        analytic_distribution: { [IC_ANALITICA_FUNC_FA]: 100 }
+      }]]
+    }]);
+    await odooCall('account.move', 'action_post', [[facCogaytId]]);
+    const facCogaytData = await odooCall('account.move', 'read', [[facCogaytId], ['name']]);
+    const numeroFacCogayt = facCogaytData[0].name;
+    icSetPaso(2, 'ok', `Factura COGAYT creada — N° ${numeroFacCogayt}`);
+
+    // ── PASO 4: Cobro de la factura de COGAYT (RE-X) ──
+    icSetPaso(3, 'cargando', 'Cobrando la factura de COGAYT...');
+    const pagoCogaytInId = await odooCall('account.payment', 'create', [{
+      payment_type: 'inbound',
+      partner_id: IC_PARTNER_FUNDACION,
+      partner_type: 'customer',
+      amount: montoCogayt,
+      journal_id: bancoCogaytId,
+      date: hoy,
+      memo: `INGRESO CH ${refCogayt} COGAYT`
+    }]);
+    await odooCall('account.payment', 'action_post', [[pagoCogaytInId]]);
+    await icConciliarPago(pagoCogaytInId, facCogaytId);
+    icSetPaso(3, 'ok', 'Cobro de COGAYT registrado y conciliado');
+
+    // ── PASO 5: Liquidación de salida del convenio (LU-C) ──
+    icSetPaso(4, 'cargando', 'Creando la liquidación de salida del convenio...');
+    const liquidacionId = await odooCall('account.move', 'create', [{
+      move_type: 'in_invoice',
+      partner_id: IC_PARTNER_FUNDACION,
+      journal_id: IC_JOURNAL_PROV_FAR,
+      invoice_date: hoy,
+      date: hoy,
+      ref: numeroFacCogayt,
+      invoice_line_ids: [[0, 0, {
+        product_id: IC_PRODUCTO_GASTOS_ADM,
+        name: 'G3-Gastos Administrativos',
+        quantity: 1,
+        price_unit: montoCogayt,
+        account_id: IC_CUENTA_211401,
+        analytic_distribution: { [icConvenioSel.id]: 100 }
+      }]]
+    }]);
+    try {
+      await odooCall('account.move', 'write', [[liquidacionId], { l10n_latam_document_number: numeroFacCogayt }]);
+    } catch(eDoc) {
+      console.warn('No se pudo setear l10n_latam_document_number, se omite:', eDoc.message);
+    }
+    await odooCall('account.move', 'action_post', [[liquidacionId]]);
+
+    try {
+      const pdfBase64 = await odooCall('ir.actions.report', 'render_qweb_pdf',
+        ['l10n_ar_edi.report_invoice_document', [facCogaytId]]);
+      const pdfData = Array.isArray(pdfBase64) ? pdfBase64[0] : pdfBase64;
+      if (pdfData) {
+        await odooCall('ir.attachment', 'create', [{
+          name: `Liquidacion_${numeroFacCogayt.replace(/[\/\s]/g,'_')}.pdf`,
+          datas: pdfData,
+          res_model: 'account.move',
+          res_id: liquidacionId,
+          mimetype: 'application/pdf'
+        }]);
+      }
+    } catch(ePdf) {
+      console.warn('No se pudo adjuntar el PDF automáticamente:', ePdf.message);
+    }
+    icSetPaso(4, 'ok', `Liquidación creada con N° de documento ${numeroFacCogayt}`);
+
+    // ── PASO 6: Pago de la liquidación (OP-X) ──
+    icSetPaso(5, 'cargando', 'Pagando la liquidación...');
+    const pagoLiquidacionId = await odooCall('account.payment', 'create', [{
+      payment_type: 'outbound',
+      partner_id: IC_PARTNER_FUNDACION,
+      partner_type: 'supplier',
+      amount: montoCogayt,
+      journal_id: bancoCogaytId,
+      date: hoy,
+      memo: `Ingreso trsfr ${refCogayt}`
+    }]);
+    await odooCall('account.payment', 'action_post', [[pagoLiquidacionId]]);
+    await icConciliarPago(pagoLiquidacionId, liquidacionId);
+    icSetPaso(5, 'ok', 'Liquidación pagada y conciliada');
+
+    const fmt = n => '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:2});
+    const resEl = document.getElementById('ic-resultado-final');
+    resEl.style.background = 'rgba(45,134,89,.08)';
+    resEl.style.border = '1px solid rgba(45,134,89,.3)';
+    resEl.style.color = 'var(--success)';
+    resEl.innerHTML = `
+      <div style="font-weight:700;margin-bottom:6px;"><i class="ti ti-circle-check"></i> Todo cargado correctamente</div>
+      <div>Ingreso de ${fmt(monto)} registrado al convenio "${icConvenioSel.name}".</div>
+      <div>COGAYT de ${fmt(montoCogayt)} (${pct}%) cobrado por Fundación ArgenINTA.</div>
+      <div style="margin-top:6px;font-size:11px;color:var(--muted);">
+        Factura ingreso: ${facIngresoId} · Factura COGAYT: ${numeroFacCogayt} (ID ${facCogaytId}) · Liquidación: ${liquidacionId}
+      </div>`;
+    resEl.style.display = 'block';
+
+  } catch(e) {
+    console.error('icProcesar error:', e);
+    const resEl = document.getElementById('ic-resultado-final');
+    resEl.style.background = 'rgba(192,57,43,.08)';
+    resEl.style.border = '1px solid rgba(192,57,43,.3)';
+    resEl.style.color = 'var(--danger)';
+    resEl.innerHTML = `<div style="font-weight:700;margin-bottom:6px;"><i class="ti ti-alert-triangle"></i> Se interrumpió el proceso</div>
+      <div>${e.message || e}</div>
+      <div style="margin-top:6px;font-size:11px;">Revisá en Odoo qué quedó creado hasta este punto antes de reintentar, para no duplicar documentos.</div>`;
+    resEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-player-play"></i> Cargar todo en Odoo';
+  }
+}
+
+// ── Conciliar un pago contra una factura ──
+async function icConciliarPago(paymentId, moveId) {
+  try {
+    const payMove = await odooCall('account.payment', 'read', [[paymentId], ['move_id']]);
+    const payMoveId = payMove[0].move_id[0];
+
+    const linesPay = await odooCall('account.move.line', 'search_read',
+      [[['move_id','=',payMoveId],['account_id.reconcile','=',true]]],
+      { fields: ['id'] });
+    const linesInv = await odooCall('account.move.line', 'search_read',
+      [[['move_id','=',moveId],['account_id.reconcile','=',true]]],
+      { fields: ['id'] });
+
+    const allLineIds = linesPay.map(l => l.id).concat(linesInv.map(l => l.id));
+    if (allLineIds.length >= 2) {
+      await odooCall('account.move.line', 'reconcile', [allLineIds]);
+    }
+  } catch(e) {
+    console.warn('icConciliarPago: no se pudo conciliar automáticamente —', e.message);
+  }
+}
+
+document.querySelector('.nav-item[onclick*="ingresocogayt"]')?.addEventListener('click', () => {
+  icCargarBancos();
+});
 
 </script>
 </body>
