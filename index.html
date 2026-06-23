@@ -2883,6 +2883,21 @@ async function odooAuth() {
   throw new Error('Auth fallida — verificá las credenciales en Configuración');
 }
 
+// Wrapper seguro para métodos que pueden devolver None y romper XML-RPC marshal
+async function odooCallSafe(model, method, args, kwargs={}) {
+  try {
+    return await odooCall(model, method, args, kwargs);
+  } catch(e) {
+    // Si el error es específicamente el de marshalling de None, asumimos que la acción
+    // se ejecutó correctamente en Odoo (el error ocurre en el camino de vuelta, no en la ejecución)
+    if (e.message && e.message.includes('cannot marshal None')) {
+      console.warn(`${model}.${method} ejecutado pero falló al serializar la respuesta (ignorado):`, e.message);
+      return true;
+    }
+    throw e;
+  }
+}
+
 async function odooCall(model, method, args, kwargs={}) {
   const uid = await odooAuth();
   const cfg = getConfig();
@@ -10837,7 +10852,7 @@ async function icProcesar() {
         analytic_distribution: { [icConvenioSel.id]: 100 }
       }]]
     }]);
-    await odooCall('account.move', 'action_post', [[facIngresoId]]);
+    await odooCallSafe('account.move', 'action_post', [[facIngresoId]]);
     icSetPaso(0, 'ok', `Factura de ingreso creada (ID ${facIngresoId})`);
 
     // ── PASO 2: Cobro de la factura de ingreso (RE-X) ──
@@ -10851,7 +10866,7 @@ async function icProcesar() {
       date: hoy,
       memo: `INGRESO ${refIngreso}`
     }]);
-    await odooCall('account.payment', 'action_post', [[pagoIngresoId]]);
+    await odooCallSafe('account.payment', 'action_post', [[pagoIngresoId]]);
     await icConciliarPago(pagoIngresoId, facIngresoId);
     icSetPaso(1, 'ok', 'Cobro registrado y conciliado');
 
@@ -10872,7 +10887,7 @@ async function icProcesar() {
         analytic_distribution: { [IC_ANALITICA_FUNC_FA]: 100 }
       }]]
     }]);
-    await odooCall('account.move', 'action_post', [[facCogaytId]]);
+    await odooCallSafe('account.move', 'action_post', [[facCogaytId]]);
     const facCogaytData = await odooCall('account.move', 'read', [[facCogaytId], ['name']]);
     const numeroFacCogayt = facCogaytData[0].name;
     icSetPaso(2, 'ok', `Factura COGAYT creada — N° ${numeroFacCogayt}`);
@@ -10888,7 +10903,7 @@ async function icProcesar() {
       date: hoy,
       memo: `INGRESO CH ${refCogayt} COGAYT`
     }]);
-    await odooCall('account.payment', 'action_post', [[pagoCogaytInId]]);
+    await odooCallSafe('account.payment', 'action_post', [[pagoCogaytInId]]);
     await icConciliarPago(pagoCogaytInId, facCogaytId);
     icSetPaso(3, 'ok', 'Cobro de COGAYT registrado y conciliado');
 
@@ -10915,7 +10930,7 @@ async function icProcesar() {
     } catch(eDoc) {
       console.warn('No se pudo setear l10n_latam_document_number, se omite:', eDoc.message);
     }
-    await odooCall('account.move', 'action_post', [[liquidacionId]]);
+    await odooCallSafe('account.move', 'action_post', [[liquidacionId]]);
 
     try {
       const pdfBase64 = await odooCall('ir.actions.report', 'render_qweb_pdf',
@@ -10946,7 +10961,7 @@ async function icProcesar() {
       date: hoy,
       memo: `Ingreso trsfr ${refCogayt}`
     }]);
-    await odooCall('account.payment', 'action_post', [[pagoLiquidacionId]]);
+    await odooCallSafe('account.payment', 'action_post', [[pagoLiquidacionId]]);
     await icConciliarPago(pagoLiquidacionId, liquidacionId);
     icSetPaso(5, 'ok', 'Liquidación pagada y conciliada');
 
@@ -10995,7 +11010,7 @@ async function icConciliarPago(paymentId, moveId) {
 
     const allLineIds = linesPay.map(l => l.id).concat(linesInv.map(l => l.id));
     if (allLineIds.length >= 2) {
-      await odooCall('account.move.line', 'reconcile', [allLineIds]);
+      await odooCallSafe('account.move.line', 'reconcile', [allLineIds]);
     }
   } catch(e) {
     console.warn('icConciliarPago: no se pudo conciliar automáticamente —', e.message);
