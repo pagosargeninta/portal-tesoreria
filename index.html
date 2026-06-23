@@ -10456,6 +10456,7 @@ async function nmGenerarDocx() {
           parHeader('MIAMI, FL. 33131'),
           new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: 'ATTN.: SR. DAVID HANDSCOMBE', bold: true })] }),
           new Paragraph({ spacing: { after: 300 }, children: [new TextRun({ text: 'Ref: Solicitud de Transferencia', bold: true })] }),
+          par('Los costos de transferencia serán cargados a la cuenta de la Fundación ArgenINTA para que el proveedor reciba el monto completo.'),
           par('De mi mayor consideración,'),
           par('A través del presente, solicito realizar la siguiente transferencia:'),
           new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: 'Monto: ', bold: true }), new TextRun({ text: montoTexto, bold: true })] }),
