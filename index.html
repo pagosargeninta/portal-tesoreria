@@ -11000,14 +11000,15 @@ async function icProcesar() {
     const pagoLiquidacionId = await odooCall('account.payment', 'create', [{
       payment_type: 'outbound',
       partner_id: IC_PARTNER_FUNDACION,
-      partner_type: 'supplier',
       amount: montoCogayt,
       journal_id: bancoCogaytId,
       date: hoy,
       memo: `Ingreso trsfr ${refCogayt}`
-      // Sin destination_account_id explícito: Odoo usa automáticamente la
-      // property_account_payable_id del partner (2381), evitando el conflicto
-      // de "Líneas a Pagar deben contener la misma cuenta" que aparece al forzarla.
+      // IMPORTANTE: NO especificar partner_type ni destination_account_id aquí.
+      // Con partner_type:'supplier' Odoo tira 'Líneas a Pagar deben contener la
+      // misma cuenta' para este partner específico. Sin especificarlo, Odoo lo
+      // infiere correctamente del payment_type + partner_id y usa la cuenta
+      // payable real (2381) sin conflicto.
     }]);
     icDocumentosCreados.push({ tipo:'account.payment', id: pagoLiquidacionId, etiqueta: 'Pago de la liquidación' });
     await icPostearVerificado('account.payment', pagoLiquidacionId, 'el pago de la liquidación');
@@ -11142,13 +11143,18 @@ async function icConciliarPago(paymentId, moveId) {
     const pagoData = await odooCall('account.payment', 'read', [[paymentId], ['move_id']]);
     const payMoveId = pagoData[0].move_id[0];
 
-    // 1. Cuenta por cobrar/pagar real de la factura
+    // 1. Cuenta por cobrar/pagar real de la factura — EXCLUYENDO explícitamente
+    //    las cuentas de producto/ingreso conocidas (211401, 411000), que en esta
+    //    instancia de Odoo pueden estar mal clasificadas como receivable/payable.
+    const CUENTAS_PRODUCTO_EXCLUIR = [IC_CUENTA_211401, IC_CUENTA_411000];
     const linesInvAll = await odooCall('account.move.line', 'search_read',
       [[['move_id','=',moveId]]],
       { fields: ['id','account_id','balance','reconciled'] });
-    const linesInv = linesInvAll.filter(l => l.balance !== 0);
+    const linesInv = linesInvAll.filter(l => l.balance !== 0 && !CUENTAS_PRODUCTO_EXCLUIR.includes(l.account_id[0]));
     const accountIdsInv = [...new Set(linesInv.map(l => l.account_id[0]))];
-    const accInfo = await odooCall('account.account', 'read', [accountIdsInv, ['id','reconcile','account_type']]);
+    const accInfo = accountIdsInv.length
+      ? await odooCall('account.account', 'read', [accountIdsInv, ['id','reconcile','account_type']])
+      : [];
     const payableReceivableIds = accInfo
       .filter(a => a.account_type === 'asset_receivable' || a.account_type === 'liability_payable')
       .map(a => a.id);
