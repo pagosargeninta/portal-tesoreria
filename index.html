@@ -11146,13 +11146,25 @@ async function icDeshacerTodo() {
 
 // ── Conciliar un pago contra una factura ──
 // ── Descargar el PDF de una factura (vía proxy, sin bloqueo CORS) y adjuntarlo a otro move ──
+// Genera un UUID v4 — usado para crear el access_token de una factura cuando
+// Odoo todavía no lo generó (solo lo crea al visitar la vista previa del cliente).
+function icGenerarUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 async function icAdjuntarPdfFactura(facturaId, moveDestinoId, nombreFactura) {
-  // 1. Obtener el access_token público de la factura
+  // 1. Obtener el access_token público de la factura; si no existe, generarlo
+  //    nosotros mismos (Odoo solo lo crea automáticamente al visitar la vista
+  //    previa del portal de clientes — acá lo forzamos vía write).
   const facData = await odooCall('account.move', 'read', [[facturaId], ['access_token']]);
-  const token = facData[0]?.access_token;
+  let token = facData[0]?.access_token;
   if (!token) {
-    console.warn('icAdjuntarPdfFactura: la factura no tiene access_token disponible.');
-    return false;
+    token = icGenerarUUID();
+    await odooCall('account.move', 'write', [[facturaId], { access_token: token }]);
   }
 
   // 2. Armar la URL del reporte (la misma que usa el botón "Vista previa / Descargar")
