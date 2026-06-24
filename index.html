@@ -685,6 +685,9 @@ tbody tr:hover td { background: #f8faf9; }
   <div class="nav-item" onclick="showPage('anticipos',this)">
     <i class="ti ti-report-money"></i> Control Anticipos
   </div>
+  <div class="nav-item" onclick="showPage('cogayt',this)">
+    <i class="ti ti-percentage"></i> Control COGAYT
+  </div>
 
   <div class="sidebar-section">Config</div>
   <div class="nav-item" onclick="showPage('config',this)">
@@ -2658,6 +2661,88 @@ tbody tr:hover td { background: #f8faf9; }
 
     </div>
     <!-- ══════════ FIN CONTROL DE ANTICIPOS ══════════ -->
+
+    <!-- ══════════ CONTROL DE COGAYT ══════════ -->
+    <div id="page-cogayt" class="page">
+
+      <!-- Filtros y botón generar -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="padding:14px 20px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="font-size:12px;color:var(--muted);white-space:nowrap;">Desde</label>
+              <input type="date" id="cog-desde" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);">
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="font-size:12px;color:var(--muted);white-space:nowrap;">Hasta</label>
+              <input type="date" id="cog-hasta" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);">
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="font-size:12px;color:var(--muted);white-space:nowrap;">Solo con brecha</label>
+              <input type="checkbox" id="cog-solo-brecha" checked style="cursor:pointer;">
+            </div>
+            <button class="btn btn-primary" onclick="cogGenerar()" id="cog-btn-generar" style="padding:7px 18px;">
+              <i class="ti ti-player-play"></i> Generar reporte
+            </button>
+            <div id="cog-estado" style="font-size:12px;color:var(--muted);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPIs globales -->
+      <div id="cog-kpis" style="display:none;margin-bottom:16px;">
+        <div class="metrics-grid">
+          <div class="metric-card success">
+            <div class="metric-label">Total ingresos</div>
+            <div class="metric-value" id="cog-k-ingresos">—</div>
+            <div class="metric-sub" id="cog-k-ingresos-sub"></div>
+          </div>
+          <div class="metric-card warn">
+            <div class="metric-label">COGAYT cobrado</div>
+            <div class="metric-value" id="cog-k-cobrado">—</div>
+            <div class="metric-sub" id="cog-k-cobrado-sub"></div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-label">Brecha (sin cobrar)</div>
+            <div class="metric-value" id="cog-k-brecha">—</div>
+            <div class="metric-sub" id="cog-k-brecha-sub"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Convenios con brecha</div>
+            <div class="metric-value" id="cog-k-convenios">—</div>
+            <div class="metric-sub">de los analizados</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla de convenios -->
+      <div id="cog-tabla-card" class="card" style="display:none;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-percentage"></i> Control de COGAYT por convenio</div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="cog-filtro" placeholder="Filtrar por convenio..."
+              style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);"
+              oninput="cogFiltrar(this.value)">
+          </div>
+        </div>
+        <div class="table-wrap" style="border:none;border-radius:0;">
+          <table style="font-size:12px;">
+            <thead><tr>
+              <th style="width:24px;"></th>
+              <th>Convenio</th>
+              <th style="text-align:right;">Ingresos</th>
+              <th style="text-align:right;">COGAYT cobrado</th>
+              <th style="text-align:right;">% real</th>
+              <th style="text-align:right;">Brecha</th>
+              <th style="text-align:center;">Estado</th>
+            </tr></thead>
+            <tbody id="cog-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <!-- ══════════ FIN CONTROL DE COGAYT ══════════ -->
 
     <!-- ══════════ INGRESO + COGAYT ══════════ -->
     <div id="page-ingresocogayt" class="page">
@@ -11308,6 +11393,284 @@ async function icConciliarPago(paymentId, moveId) {
 document.querySelector('.nav-item[onclick*="ingresocogayt"]')?.addEventListener('click', () => {
   icCargarBancos();
 });
+
+// ═══════════════════════════════════════════════════════
+// CONTROL DE COGAYT — detectar brecha entre ingresos y COGAYT cobrado
+// ═══════════════════════════════════════════════════════
+
+var _cogData = [];      // datos de todos los convenios analizados
+var _cogFiltrado = [];  // datos filtrados para mostrar
+
+// Inicializar fechas: 1 enero del año actual hasta hoy
+(function(){
+  var hoy   = new Date();
+  var desde = new Date(hoy.getFullYear(), 0, 1);
+  var fmtD  = function(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  var dEl = document.getElementById('cog-desde');
+  var hEl = document.getElementById('cog-hasta');
+  if (dEl) dEl.value = fmtD(desde);
+  if (hEl) hEl.value = fmtD(hoy);
+})();
+
+// % "redondos" esperados — cualquier % real que no esté cerca de uno de estos
+// es señal de que algo está mal (cobro parcial, cálculo erróneo, etc.)
+var COG_PORCENTAJES_REDONDOS = [3, 5, 6, 8, 10, 12];
+
+function cogEsRedondo(pct) {
+  return COG_PORCENTAJES_REDONDOS.some(function(p){ return Math.abs(pct - p) < 0.3; });
+}
+
+async function cogGenerar() {
+  var desde = document.getElementById('cog-desde')?.value;
+  var hasta = document.getElementById('cog-hasta')?.value;
+  var soloBrecha = document.getElementById('cog-solo-brecha')?.checked;
+  var estado = document.getElementById('cog-estado');
+  var btn = document.getElementById('cog-btn-generar');
+
+  if (!desde || !hasta) { if (estado) estado.textContent = 'Seleccioná el período'; return; }
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Cargando...'; }
+  if (estado) estado.textContent = 'Buscando ingresos...';
+  document.getElementById('cog-kpis').style.display = 'none';
+  document.getElementById('cog-tabla-card').style.display = 'none';
+
+  try {
+    // 1. Traer todos los INGRESOS (out_invoice, cuenta 211401) del período
+    var ingresos = await odooCall('account.move.line', 'search_read', [[
+      ['account_id','=', IC_CUENTA_211401],
+      ['move_id.move_type','=','out_invoice'],
+      ['move_id.state','=','posted'],
+      ['date','>=',desde],
+      ['date','<=',hasta],
+      ['analytic_distribution','!=',false]
+    ], ['id','balance','analytic_distribution','move_id','date']],
+    { limit: 10000, order: 'date desc' });
+
+    if (estado) estado.textContent = 'Buscando COGAYT cobrado...';
+
+    // 2. Traer todas las LIQUIDACIONES de COGAYT (in_invoice, cuenta 211401) del período
+    var liquidaciones = await odooCall('account.move.line', 'search_read', [[
+      ['account_id','=', IC_CUENTA_211401],
+      ['move_id.move_type','=','in_invoice'],
+      ['move_id.state','=','posted'],
+      ['date','>=',desde],
+      ['date','<=',hasta],
+      ['analytic_distribution','!=',false]
+    ], ['id','balance','analytic_distribution','move_id','date']],
+    { limit: 10000, order: 'date desc' });
+
+    if (estado) estado.textContent = 'Procesando convenios...';
+
+    // 3. Agrupar por analítica (convenio)
+    var convenios = {}; // analyticId -> { ingresos: total, cogayt: total }
+
+    function _sumarPorAnalitica(lineas, campo) {
+      lineas.forEach(function(l){
+        if (!l.analytic_distribution) return;
+        Object.keys(l.analytic_distribution).forEach(function(analyticIdStr){
+          var analyticId = parseInt(analyticIdStr);
+          var pct = l.analytic_distribution[analyticIdStr] / 100; // distribución parcial si aplica
+          if (!convenios[analyticId]) convenios[analyticId] = { ingresos: 0, cogayt: 0 };
+          convenios[analyticId][campo] += Math.abs(l.balance) * pct;
+        });
+      });
+    }
+    _sumarPorAnalitica(ingresos, 'ingresos');
+    _sumarPorAnalitica(liquidaciones, 'cogayt');
+
+    // 4. Traer nombres de las analíticas
+    var analyticIds = Object.keys(convenios).map(Number);
+    var nombresMap = {};
+    if (analyticIds.length > 0) {
+      // Chunked para no saturar
+      for (var ci = 0; ci < analyticIds.length; ci += 200) {
+        var chunk = analyticIds.slice(ci, ci+200);
+        var nombres = await odooCall('account.analytic.account', 'read', [chunk, ['id','name']]);
+        nombres.forEach(function(n){ nombresMap[n.id] = n.name; });
+      }
+    }
+
+    // 5. Calcular % real, brecha y estado para cada convenio
+    _cogData = Object.keys(convenios).map(function(idStr){
+      var id = parseInt(idStr);
+      var c = convenios[id];
+      var pctReal = c.ingresos > 0 ? (c.cogayt / c.ingresos * 100) : 0;
+
+      // Determinar el % esperado más cercano (el redondo más próximo, o 6% por defecto si no cobró nada)
+      var pctEsperado = 6;
+      if (c.cogayt > 0) {
+        // Buscar el % redondo más cercano al real
+        pctEsperado = COG_PORCENTAJES_REDONDOS.reduce(function(best, p){
+          return Math.abs(p - pctReal) < Math.abs(best - pctReal) ? p : best;
+        }, COG_PORCENTAJES_REDONDOS[0]);
+      }
+
+      var cogaytEsperado = c.ingresos * pctEsperado / 100;
+      var brecha = cogaytEsperado - c.cogayt;
+
+      var esRedondo = c.cogayt === 0 ? null : cogEsRedondo(pctReal);
+      var estadoConv;
+      if (c.ingresos === 0) {
+        estadoConv = 'sin_ingreso'; // no debería pasar, pero por si acaso
+      } else if (c.cogayt === 0) {
+        estadoConv = 'sin_cobrar'; // el caso más grave: nunca se cobró nada
+      } else if (esRedondo === false) {
+        estadoConv = 'pct_raro'; // cobró algo pero el % no es redondo — sospechoso
+      } else if (brecha > c.ingresos * 0.005) {
+        estadoConv = 'parcial'; // cobró pero falta una parte
+      } else {
+        estadoConv = 'ok';
+      }
+
+      return {
+        id: id,
+        nombre: nombresMap[id] || ('Convenio #'+id),
+        ingresos: c.ingresos,
+        cogayt: c.cogayt,
+        pctReal: pctReal,
+        pctEsperado: pctEsperado,
+        cogaytEsperado: cogaytEsperado,
+        brecha: brecha,
+        estado: estadoConv
+      };
+    }).filter(function(c){ return c.ingresos > 0; }) // ignorar analíticas sin ingresos en el período
+      .sort(function(a,b){ return b.brecha - a.brecha; }); // los de mayor brecha primero
+
+    // 6. KPIs globales
+    var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+    var totalIngresos = _cogData.reduce(function(s,c){ return s+c.ingresos; },0);
+    var totalCogayt   = _cogData.reduce(function(s,c){ return s+c.cogayt; },0);
+    var totalBrecha   = _cogData.reduce(function(s,c){ return s + Math.max(c.brecha,0); },0);
+    var conBrecha     = _cogData.filter(function(c){ return c.estado !== 'ok'; }).length;
+
+    var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+    set('cog-k-ingresos',     fmt(totalIngresos));
+    set('cog-k-ingresos-sub', _cogData.length + ' convenios');
+    set('cog-k-cobrado',      fmt(totalCogayt));
+    set('cog-k-cobrado-sub',  totalIngresos>0 ? (totalCogayt/totalIngresos*100).toFixed(1)+'% efectivo' : '');
+    set('cog-k-brecha',       fmt(totalBrecha));
+    set('cog-k-brecha-sub',   'pendiente de cobrar');
+    set('cog-k-convenios',    conBrecha);
+
+    document.getElementById('cog-kpis').style.display = 'block';
+
+    // 7. Filtrar y renderizar
+    _cogFiltrado = soloBrecha ? _cogData.filter(function(c){ return c.estado !== 'ok'; }) : _cogData;
+    cogRenderTabla(_cogFiltrado);
+
+    document.getElementById('cog-tabla-card').style.display = 'block';
+    if (estado) estado.textContent = _cogData.length + ' convenios analizados';
+
+  } catch(e) {
+    if (estado) estado.textContent = 'Error: ' + e.message;
+    console.error('cogGenerar error:', e);
+  } finally {
+    if (btn) { btn.disabled=false; btn.innerHTML='<i class="ti ti-player-play"></i> Generar reporte'; }
+  }
+}
+
+function cogRenderTabla(data) {
+  var tbody = document.getElementById('cog-tbody');
+  if (!tbody) return;
+  var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+
+  var ESTADO_INFO = {
+    'sin_cobrar': { badge: '<span class="badge badge-danger">🔴 Nunca cobrado</span>', color: 'var(--danger)' },
+    'pct_raro':   { badge: '<span class="badge badge-warn">⚠ % irregular</span>',     color: 'var(--warn)'   },
+    'parcial':    { badge: '<span class="badge badge-warn">⚠ Parcial</span>',          color: 'var(--warn)'   },
+    'ok':         { badge: '<span class="badge badge-ok">✅ OK</span>',                color: 'var(--success)'},
+    'sin_ingreso':{ badge: '<span class="badge badge-muted">—</span>',                 color: 'var(--muted)'  }
+  };
+
+  tbody.innerHTML = data.map(function(c, idx){
+    var info = ESTADO_INFO[c.estado] || ESTADO_INFO.ok;
+    var pctColor = c.estado === 'pct_raro' ? 'var(--warn)' : (c.estado === 'ok' ? 'var(--success)' : 'var(--text)');
+    return '<tr id="cog-row-'+idx+'">' +
+      '<td style="text-align:center;cursor:pointer;" onclick="cogToggle('+idx+')">' +
+        '<i class="ti ti-chevron-right" id="cog-icon-'+idx+'" style="font-size:13px;color:var(--muted);transition:transform .2s;"></i>' +
+      '</td>' +
+      '<td style="font-weight:500;max-width:280px;cursor:pointer;" onclick="cogToggle('+idx+')">'+c.nombre+'</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">'+fmt(c.ingresos)+'</td>' +
+      '<td class="mono" style="text-align:right;">'+(c.cogayt>0?fmt(c.cogayt):'—')+'</td>' +
+      '<td class="mono" style="text-align:right;font-weight:600;color:'+pctColor+';">'+(c.cogayt>0?c.pctReal.toFixed(1)+'%':'0%')+'</td>' +
+      '<td class="mono" style="text-align:right;font-weight:700;color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';">'+(c.brecha>0?fmt(c.brecha):'$0')+'</td>' +
+      '<td style="text-align:center;">'+info.badge+'</td>' +
+    '</tr>' +
+    '<tr id="cog-detail-'+idx+'" style="display:none;background:var(--surface-alt,#f8faf9);">' +
+      '<td colspan="7" style="padding:0;">' +
+        '<div id="cog-detail-content-'+idx+'" style="padding:14px 20px 14px 32px;"></div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--success);"><i class="ti ti-circle-check"></i> Sin brechas detectadas en el período</td></tr>';
+  }
+}
+
+function cogToggle(idx) {
+  var detailRow = document.getElementById('cog-detail-'+idx);
+  var icon      = document.getElementById('cog-icon-'+idx);
+  var content   = document.getElementById('cog-detail-content-'+idx);
+  if (!detailRow) return;
+
+  var isOpen = detailRow.style.display !== 'none';
+  if (isOpen) {
+    detailRow.style.display = 'none';
+    if (icon) icon.style.transform = '';
+    return;
+  }
+  detailRow.style.display = 'table-row';
+  if (icon) icon.style.transform = 'rotate(90deg)';
+
+  if (content && !content.dataset.loaded) {
+    content.dataset.loaded = '1';
+    var c = _cogFiltrado[idx];
+    var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
+
+    var mensaje = '';
+    if (c.estado === 'sin_cobrar') {
+      mensaje = `Este convenio recibió ${fmt(c.ingresos)} en ingresos durante el período, pero <strong style="color:var(--danger);">nunca se le cobró COGAYT</strong>. Esperado (${c.pctEsperado}%): ${fmt(c.cogaytEsperado)}.`;
+    } else if (c.estado === 'pct_raro') {
+      mensaje = `El % real cobrado (${c.pctReal.toFixed(2)}%) no coincide con ningún porcentaje habitual (3/5/6/8/10/12%). Puede haber un cálculo manual erróneo o un cobro parcial sin completar. Revisar las liquidaciones de este convenio en Odoo.`;
+    } else if (c.estado === 'parcial') {
+      mensaje = `Se cobró ${fmt(c.cogayt)} de COGAYT (${c.pctReal.toFixed(1)}%), pero según el ${c.pctEsperado}% esperado debería ser ${fmt(c.cogaytEsperado)}. Falta cobrar ${fmt(c.brecha)}.`;
+    } else {
+      mensaje = `COGAYT cobrado correctamente: ${fmt(c.cogayt)} (${c.pctReal.toFixed(1)}%, dentro de lo esperado).`;
+    }
+
+    content.innerHTML =
+      '<div style="padding:10px 14px;border-radius:6px;border-left:3px solid '+(c.brecha>0?'var(--danger)':'var(--success)')+';background:var(--surface);font-size:12px;margin-bottom:10px;">' +
+        mensaje +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;font-size:11px;">' +
+        '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;color:var(--success);">'+fmt(c.ingresos)+'</div><div style="color:var(--muted);margin-top:2px;">Ingresos</div></div>' +
+        '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;">'+fmt(c.cogayt)+'</div><div style="color:var(--muted);margin-top:2px;">COGAYT cobrado</div></div>' +
+        '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;">'+fmt(c.cogaytEsperado)+'</div><div style="color:var(--muted);margin-top:2px;">Esperado ('+c.pctEsperado+'%)</div></div>' +
+        '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;border-color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';"><div style="font-weight:700;color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';">'+fmt(c.brecha)+'</div><div style="color:var(--muted);margin-top:2px;">Brecha</div></div>' +
+      '</div>' +
+      '<button class="btn" style="margin-top:10px;padding:5px 12px;font-size:11px;" onclick="cogVerEnConvenios('+c.id+')">Ver detalle completo en Convenios →</button>';
+  }
+}
+
+function cogFiltrar(q) {
+  if (!q) {
+    _cogFiltrado = document.getElementById('cog-solo-brecha')?.checked
+      ? _cogData.filter(function(c){ return c.estado !== 'ok'; })
+      : _cogData;
+  } else {
+    _cogFiltrado = _cogData.filter(function(c){ return c.nombre.toLowerCase().includes(q.toLowerCase()); });
+  }
+  cogRenderTabla(_cogFiltrado);
+}
+
+function cogVerEnConvenios(analyticId) {
+  var navEl = document.querySelector('.nav-item[onclick*="convenios"]');
+  if (navEl) showPage('convenios', navEl);
+  // El módulo de Convenios ya tiene buscador propio; el usuario puede buscar
+  // por nombre desde ahí. Si existiera una función de selección directa por ID
+  // se podría invocar aquí.
+}
 
 </script>
 </body>
