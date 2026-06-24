@@ -10934,30 +10934,11 @@ async function icProcesar() {
     }
     await odooCallSafe('account.move', 'action_post', [[liquidacionId]]);
 
-    try {
-      // Buscar el reporte de factura estándar y generar el PDF
-      const reportAction = await odooCall('ir.actions.report', 'search_read',
-        [[['report_name','like','account.report_invoice']]],
-        { fields: ['id','report_name'], limit: 1 });
-      if (reportAction && reportAction.length > 0) {
-        const pdfResult = await odooCall('ir.actions.report', '_render_qweb_pdf',
-          [reportAction[0].id, [facCogaytId]]);
-        const pdfData = Array.isArray(pdfResult) ? pdfResult[0] : pdfResult;
-        if (pdfData) {
-          await odooCall('ir.attachment', 'create', [{
-            name: `Liquidacion_${numeroFacCogayt.replace(/[\/\s]/g,'_')}.pdf`,
-            datas: pdfData,
-            res_model: 'account.move',
-            res_id: liquidacionId,
-            mimetype: 'application/pdf'
-          }]);
-        }
-      } else {
-        console.warn('No se encontró el reporte estándar de factura para adjuntar el PDF.');
-      }
-    } catch(ePdf) {
-      console.warn('No se pudo adjuntar el PDF automáticamente:', ePdf.message);
-    }
+    // NOTA: la generación automática de PDF se omite — los métodos de reporte (render_qweb_pdf,
+    // _render_qweb_pdf) no son invocables vía RPC externo en esta instancia de Odoo.
+    // El PDF de la factura COGAYT se puede descargar e adjuntar manualmente a la liquidación
+    // desde la vista previa de la factura en Odoo (botón Imprimir → guardar → adjuntar).
+    console.info(`Recordatorio: adjuntar manualmente el PDF de la factura ${numeroFacCogayt} a la liquidación ${liquidacionId}.`);
     icSetPaso(4, 'ok', `Liquidación creada con N° de documento ${numeroFacCogayt}`);
 
     // ── PASO 6: Pago de la liquidación (OP-X) ──
@@ -10986,6 +10967,10 @@ async function icProcesar() {
       <div>COGAYT de ${fmt(montoCogayt)} (${pct}%) cobrado por Fundación ArgenINTA.</div>
       <div style="margin-top:6px;font-size:11px;color:var(--muted);">
         Factura ingreso: ${facIngresoId} · Factura COGAYT: ${numeroFacCogayt} (ID ${facCogaytId}) · Liquidación: ${liquidacionId}
+      </div>
+      <div style="margin-top:8px;padding:8px 12px;background:rgba(183,96,10,.08);border-radius:6px;font-size:11px;color:var(--warn);">
+        <i class="ti ti-info-circle"></i> Falta un paso manual: abrí la factura COGAYT (N° ${numeroFacCogayt}) en Odoo,
+        descargá el PDF desde "Imprimir" y adjuntalo a la liquidación (ID ${liquidacionId}).
       </div>`;
     resEl.style.display = 'block';
 
@@ -11017,34 +11002,51 @@ async function icProcesar() {
 
 // ── Conciliar un pago contra una factura ──
 async function icConciliarPago(paymentId, moveId) {
-  // Conciliación EXPLÍCITA: buscar la línea exigible (receivable/payable) del pago
-  // y de la factura, y reconciliarlas manualmente vía account.move.line.reconcile
+  // Conciliación EXPLÍCITA: la línea de la factura y la del pago deben compartir
+  // la MISMA cuenta contable (la cuenta por cobrar/pagar del partner) para poder
+  // reconciliarse. Hay que filtrar por account_id explícito, no solo por reconcile=true.
   try {
-    const pagoData = await odooCall('account.payment', 'read', [[paymentId], ['move_id','partner_id']]);
+    const pagoData = await odooCall('account.payment', 'read', [[paymentId], ['move_id']]);
     const payMoveId = pagoData[0].move_id[0];
 
-    // Líneas del pago en cuentas por cobrar/pagar (reconciliables)
+    // 1. Obtener la cuenta de la línea principal de la FACTURA (la cuenta por cobrar/pagar,
+    //    que es la que NO es la cuenta de producto/ingreso — suele ser la última línea o
+    //    la que tiene reconcile=true y es distinta de la cuenta de ingreso 211401/411000).
+    const linesInvAll = await odooCall('account.move.line', 'search_read',
+      [[['move_id','=',moveId],['reconciled','=',false]]],
+      { fields: ['id','account_id','balance','reconciled'] });
+
+    // La línea reconciliable de la factura es la de cuenta por cobrar/pagar (account_id.reconcile=true)
+    const linesInv = linesInvAll.filter(l => l.balance !== 0);
+    // Buscar cuál de ellas tiene cuenta marcada como reconciliable
+    const accountIdsInv = [...new Set(linesInv.map(l => l.account_id[0]))];
+    const accInfo = await odooCall('account.account', 'read', [accountIdsInv, ['id','reconcile']]);
+    const reconciliableAccIds = accInfo.filter(a => a.reconcile).map(a => a.id);
+    const lineaFacturaReconciliable = linesInv.filter(l => reconciliableAccIds.includes(l.account_id[0]));
+
+    if (lineaFacturaReconciliable.length === 0) {
+      console.warn('icConciliarPago: la factura no tiene línea con cuenta reconciliable.');
+      return;
+    }
+    const cuentaObjetivo = lineaFacturaReconciliable[0].account_id[0];
+
+    // 2. Buscar en el PAGO la línea que use exactamente esa misma cuenta
     const linesPay = await odooCall('account.move.line', 'search_read',
-      [[['move_id','=',payMoveId],['reconciled','=',false],
-        ['account_id.reconcile','=',true]]],
-      { fields: ['id','balance'] });
+      [[['move_id','=',payMoveId],['reconciled','=',false],['account_id','=',cuentaObjetivo]]],
+      { fields: ['id','account_id','balance'] });
 
-    // Líneas de la factura en cuentas por cobrar/pagar (reconciliables)
-    const linesInv = await odooCall('account.move.line', 'search_read',
-      [[['move_id','=',moveId],['reconciled','=',false],
-        ['account_id.reconcile','=',true]]],
-      { fields: ['id','balance'] });
+    // 3. Tomar solo las líneas de la factura que también son de esa cuenta
+    const lineasFacturaMismaCuenta = lineaFacturaReconciliable.filter(l => l.account_id[0] === cuentaObjetivo);
 
-    const allLineIds = linesPay.map(l => l.id).concat(linesInv.map(l => l.id));
+    const allLineIds = linesPay.map(l => l.id).concat(lineasFacturaMismaCuenta.map(l => l.id));
 
     if (allLineIds.length < 2) {
-      console.warn(`icConciliarPago: no se encontraron suficientes líneas reconciliables (pago=${linesPay.length}, factura=${linesInv.length})`);
+      console.warn(`icConciliarPago: no coincide la cuenta entre pago (${linesPay.length}) y factura (${lineasFacturaMismaCuenta.length}) — cuenta objetivo: ${cuentaObjetivo}`);
       return;
     }
 
     await odooCallSafe('account.move.line', 'reconcile', [allLineIds]);
 
-    // Verificar resultado
     const factura = await odooCall('account.move', 'read', [[moveId], ['payment_state']]);
     const estado = factura[0]?.payment_state;
     if (estado !== 'paid' && estado !== 'in_payment' && estado !== 'partial') {
