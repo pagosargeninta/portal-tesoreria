@@ -10868,7 +10868,9 @@ async function icProcesar() {
 
   icInicializarPasos();
 
-  const hoy = new Date().toISOString().split('T')[0];
+  // Usar fecha LOCAL (no UTC) para evitar desfasajes de día según la hora
+  const _ahora = new Date();
+  const hoy = `${_ahora.getFullYear()}-${String(_ahora.getMonth()+1).padStart(2,'0')}-${String(_ahora.getDate()).padStart(2,'0')}`;
   const monto = parseFloat((document.getElementById('ic-monto').value||'').replace(/[^0-9.,]/g,'').replace(',','.'));
   const pct   = parseFloat((document.getElementById('ic-porcentaje').value||'').replace(',','.'));
   const montoCogayt = Math.round(monto * pct / 100 * 100) / 100;
