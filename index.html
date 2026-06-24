@@ -10852,11 +10852,20 @@ async function icProcesar() {
         analytic_distribution: { [icConvenioSel.id]: 100 }
       }]]
     }]);
-    await odooCallSafe('account.move', 'action_post', [[facIngresoId]]);
+    try {
+      await odooCall('account.move', 'action_post', [[facIngresoId]]);
+    } catch(ePost) {
+      throw new Error('No se pudo confirmar la factura de ingreso: ' + ePost.message);
+    }
     icSetPaso(0, 'ok', `Factura de ingreso creada (ID ${facIngresoId})`);
 
     // ── PASO 2: Cobro de la factura de ingreso (RE-X) ──
     icSetPaso(1, 'cargando', 'Cobrando la factura de ingreso...');
+    // Obtener la cuenta receivable real del cliente para evitar ambigüedad
+    const clienteAccData = await odooCall('res.partner', 'read',
+      [[icClienteSel.id], ['property_account_receivable_id']]);
+    const clienteCuentaReceivable = clienteAccData[0]?.property_account_receivable_id?.[0];
+
     const pagoIngresoId = await odooCall('account.payment', 'create', [{
       payment_type: 'inbound',
       partner_id: icClienteSel.id,
@@ -10864,9 +10873,14 @@ async function icProcesar() {
       amount: monto,
       journal_id: bancoIngresoId,
       date: hoy,
-      memo: `INGRESO ${refIngreso}`
+      memo: `INGRESO ${refIngreso}`,
+      ...(clienteCuentaReceivable ? { destination_account_id: clienteCuentaReceivable } : {})
     }]);
-    await odooCallSafe('account.payment', 'action_post', [[pagoIngresoId]]);
+    try {
+      await odooCall('account.payment', 'action_post', [[pagoIngresoId]]);
+    } catch(ePost) {
+      throw new Error('No se pudo confirmar el cobro del ingreso: ' + ePost.message);
+    }
     await icConciliarPago(pagoIngresoId, facIngresoId);
     icSetPaso(1, 'ok', 'Cobro registrado y conciliado');
 
@@ -10887,7 +10901,11 @@ async function icProcesar() {
         analytic_distribution: { [IC_ANALITICA_FUNC_FA]: 100 }
       }]]
     }]);
-    await odooCallSafe('account.move', 'action_post', [[facCogaytId]]);
+    try {
+      await odooCall('account.move', 'action_post', [[facCogaytId]]);
+    } catch(ePost) {
+      throw new Error('No se pudo confirmar la factura de COGAYT: ' + ePost.message);
+    }
     const facCogaytData = await odooCall('account.move', 'read', [[facCogaytId], ['name']]);
     const numeroFacCogayt = facCogaytData[0].name;
     icSetPaso(2, 'ok', `Factura COGAYT creada — N° ${numeroFacCogayt}`);
@@ -10901,9 +10919,14 @@ async function icProcesar() {
       amount: montoCogayt,
       journal_id: bancoCogaytId,
       date: hoy,
-      memo: `INGRESO CH ${refCogayt} COGAYT`
+      memo: `INGRESO CH ${refCogayt} COGAYT`,
+      destination_account_id: 2323  // 112201 Cogayt a Cobrar — cuenta receivable real de Fundación
     }]);
-    await odooCallSafe('account.payment', 'action_post', [[pagoCogaytInId]]);
+    try {
+      await odooCall('account.payment', 'action_post', [[pagoCogaytInId]]);
+    } catch(ePost) {
+      throw new Error('No se pudo confirmar el cobro de COGAYT: ' + ePost.message);
+    }
     await icConciliarPago(pagoCogaytInId, facCogaytId);
     icSetPaso(3, 'ok', 'Cobro de COGAYT registrado y conciliado');
 
@@ -10932,7 +10955,11 @@ async function icProcesar() {
     } catch(eDoc) {
       console.warn('No se pudo setear l10n_latam_document_number, se omite:', eDoc.message);
     }
-    await odooCallSafe('account.move', 'action_post', [[liquidacionId]]);
+    try {
+      await odooCall('account.move', 'action_post', [[liquidacionId]]);
+    } catch(ePost) {
+      throw new Error('No se pudo confirmar la liquidación: ' + ePost.message);
+    }
 
     // NOTA: la generación automática de PDF se omite — los métodos de reporte (render_qweb_pdf,
     // _render_qweb_pdf) no son invocables vía RPC externo en esta instancia de Odoo.
