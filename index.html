@@ -11002,22 +11002,32 @@ async function icProcesar() {
       : `Liquidación creada con N° ${numeroFacCogayt} (PDF no se pudo adjuntar — revisar manualmente)`);
 
     // ── PASO 6: Pago de la liquidación (OP-X) ──
+    // Usamos el wizard oficial account.payment.register en vez de crear el
+    // account.payment directo: para este partner específico (Fundación como
+    // proveedor), account.payment.create dispara 'Líneas a Pagar deben
+    // contener la misma cuenta' por la auto-reconciliación contra todas las
+    // facturas abiertas del partner. El wizard resuelve eso internamente.
     icSetPaso(5, 'cargando', 'Pagando la liquidación...');
-    const pagoLiquidacionId = await odooCall('account.payment', 'create', [{
-      payment_type: 'outbound',
-      partner_id: IC_PARTNER_FUNDACION,
+    const wizardPagoId = await odooCall('account.payment.register', 'create', [{
       amount: montoCogayt,
       journal_id: bancoCogaytId,
-      date: hoy,
-      memo: `Ingreso trsfr ${refCogayt}`
-      // IMPORTANTE: NO especificar partner_type ni destination_account_id aquí.
-      // Con partner_type:'supplier' Odoo tira 'Líneas a Pagar deben contener la
-      // misma cuenta' para este partner específico. Sin especificarlo, Odoo lo
-      // infiere correctamente del payment_type + partner_id y usa la cuenta
-      // payable real (2381) sin conflicto.
-    }]);
+      payment_date: hoy
+    }], { context: { active_model: 'account.move', active_ids: [liquidacionId] } });
+
+    const wizardResult = await odooCall('account.payment.register', 'action_create_payments', [[wizardPagoId]]);
+    const pagoLiquidacionId = wizardResult?.res_id;
+    if (!pagoLiquidacionId) {
+      throw new Error('El wizard de pago no devolvió el ID del pago creado.');
+    }
     icDocumentosCreados.push({ tipo:'account.payment', id: pagoLiquidacionId, etiqueta: 'Pago de la liquidación' });
-    await icPostearVerificado('account.payment', pagoLiquidacionId, 'el pago de la liquidación');
+
+    // Setear el memo (el wizard no lo toma del create original)
+    try {
+      await odooCall('account.payment', 'write', [[pagoLiquidacionId], { memo: `Ingreso trsfr ${refCogayt}` }]);
+    } catch(eMemo) {
+      console.warn('No se pudo actualizar el memo del pago de liquidación:', eMemo.message);
+    }
+
     await icConciliarPago(pagoLiquidacionId, liquidacionId);
     icSetPaso(5, 'ok', 'Liquidación pagada y conciliada');
 
