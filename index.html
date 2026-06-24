@@ -11009,23 +11009,31 @@ async function icConciliarPago(paymentId, moveId) {
     const pagoData = await odooCall('account.payment', 'read', [[paymentId], ['move_id']]);
     const payMoveId = pagoData[0].move_id[0];
 
-    // 1. Obtener la cuenta de la línea principal de la FACTURA (la cuenta por cobrar/pagar,
-    //    que es la que NO es la cuenta de producto/ingreso — suele ser la última línea o
-    //    la que tiene reconcile=true y es distinta de la cuenta de ingreso 211401/411000).
+    // 1. Obtener la cuenta POR COBRAR/PAGAR real de la factura (account_type
+    //    asset_receivable o liability_payable), NO la cuenta del producto (211401/411000).
+    //    Una factura puede tener varias cuentas reconciliables; la correcta es
+    //    específicamente la de tipo receivable/payable.
     const linesInvAll = await odooCall('account.move.line', 'search_read',
       [[['move_id','=',moveId],['reconciled','=',false]]],
       { fields: ['id','account_id','balance','reconciled'] });
 
-    // La línea reconciliable de la factura es la de cuenta por cobrar/pagar (account_id.reconcile=true)
     const linesInv = linesInvAll.filter(l => l.balance !== 0);
-    // Buscar cuál de ellas tiene cuenta marcada como reconciliable
     const accountIdsInv = [...new Set(linesInv.map(l => l.account_id[0]))];
-    const accInfo = await odooCall('account.account', 'read', [accountIdsInv, ['id','reconcile']]);
-    const reconciliableAccIds = accInfo.filter(a => a.reconcile).map(a => a.id);
-    const lineaFacturaReconciliable = linesInv.filter(l => reconciliableAccIds.includes(l.account_id[0]));
+    const accInfo = await odooCall('account.account', 'read', [accountIdsInv, ['id','reconcile','account_type']]);
+    const payableReceivableIds = accInfo
+      .filter(a => a.account_type === 'asset_receivable' || a.account_type === 'liability_payable')
+      .map(a => a.id);
+
+    let lineaFacturaReconciliable = linesInv.filter(l => payableReceivableIds.includes(l.account_id[0]));
+
+    // Fallback: si no encontró por account_type, usar la que tenga reconcile=true
+    if (lineaFacturaReconciliable.length === 0) {
+      const reconciliableAccIds = accInfo.filter(a => a.reconcile).map(a => a.id);
+      lineaFacturaReconciliable = linesInv.filter(l => reconciliableAccIds.includes(l.account_id[0]));
+    }
 
     if (lineaFacturaReconciliable.length === 0) {
-      console.warn('icConciliarPago: la factura no tiene línea con cuenta reconciliable.');
+      console.warn('icConciliarPago: la factura no tiene línea con cuenta por cobrar/pagar reconciliable.');
       return;
     }
     const cuentaObjetivo = lineaFacturaReconciliable[0].account_id[0];
