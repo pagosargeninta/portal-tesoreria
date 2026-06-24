@@ -2888,13 +2888,41 @@ async function odooCallSafe(model, method, args, kwargs={}) {
   try {
     return await odooCall(model, method, args, kwargs);
   } catch(e) {
-    // Si el error es específicamente el de marshalling de None, asumimos que la acción
-    // se ejecutó correctamente en Odoo (el error ocurre en el camino de vuelta, no en la ejecución)
+    // Si el error es específicamente el de marshalling de None, NO sabemos si la acción
+    // se ejecutó o no — el error ocurre en el camino de vuelta. El llamador debe
+    // verificar el estado real del registro después de esto.
     if (e.message && e.message.includes('cannot marshal None')) {
-      console.warn(`${model}.${method} ejecutado pero falló al serializar la respuesta (ignorado):`, e.message);
-      return true;
+      console.warn(`${model}.${method} — falló al serializar la respuesta, verificar estado real:`, e.message);
+      return null; // señal de "incierto", no asumir éxito ni error
     }
     throw e;
+  }
+}
+
+// Postear un account.move o account.payment, verificando el estado real
+// si la respuesta falla al serializar (problema conocido del proxy XML-RPC).
+async function icPostearVerificado(model, id, etiqueta) {
+  let fallóSerializacion = false;
+  try {
+    await odooCall(model, 'action_post', [[id]]);
+  } catch(e) {
+    if (e.message && e.message.includes('cannot marshal None')) {
+      fallóSerializacion = true;
+    } else {
+      throw new Error(`No se pudo confirmar ${etiqueta}: ${e.message}`);
+    }
+  }
+  if (fallóSerializacion) {
+    // Verificar el estado real
+    const campoEstado = model === 'account.move' ? 'state' : 'state';
+    const check = await odooCall(model, 'read', [[id], [campoEstado, 'name']]);
+    const estadoOk = model === 'account.move'
+      ? check[0]?.state === 'posted'
+      : ['posted','in_process','paid'].includes(check[0]?.state);
+    if (!estadoOk) {
+      throw new Error(`No se pudo confirmar ${etiqueta} (quedó en estado "${check[0]?.state}")`);
+    }
+    console.info(`${etiqueta} confirmado correctamente (verificado tras error de serialización). Estado: ${check[0]?.state}`);
   }
 }
 
@@ -10852,11 +10880,7 @@ async function icProcesar() {
         analytic_distribution: { [icConvenioSel.id]: 100 }
       }]]
     }]);
-    try {
-      await odooCall('account.move', 'action_post', [[facIngresoId]]);
-    } catch(ePost) {
-      throw new Error('No se pudo confirmar la factura de ingreso: ' + ePost.message);
-    }
+    await icPostearVerificado('account.move', facIngresoId, 'la factura de ingreso');
     icSetPaso(0, 'ok', `Factura de ingreso creada (ID ${facIngresoId})`);
 
     // ── PASO 2: Cobro de la factura de ingreso (RE-X) ──
@@ -10876,11 +10900,7 @@ async function icProcesar() {
       memo: `INGRESO ${refIngreso}`,
       ...(clienteCuentaReceivable ? { destination_account_id: clienteCuentaReceivable } : {})
     }]);
-    try {
-      await odooCall('account.payment', 'action_post', [[pagoIngresoId]]);
-    } catch(ePost) {
-      throw new Error('No se pudo confirmar el cobro del ingreso: ' + ePost.message);
-    }
+    await icPostearVerificado('account.payment', pagoIngresoId, 'el cobro del ingreso');
     await icConciliarPago(pagoIngresoId, facIngresoId);
     icSetPaso(1, 'ok', 'Cobro registrado y conciliado');
 
@@ -10901,11 +10921,7 @@ async function icProcesar() {
         analytic_distribution: { [IC_ANALITICA_FUNC_FA]: 100 }
       }]]
     }]);
-    try {
-      await odooCall('account.move', 'action_post', [[facCogaytId]]);
-    } catch(ePost) {
-      throw new Error('No se pudo confirmar la factura de COGAYT: ' + ePost.message);
-    }
+    await icPostearVerificado('account.move', facCogaytId, 'la factura de COGAYT');
     const facCogaytData = await odooCall('account.move', 'read', [[facCogaytId], ['name']]);
     const numeroFacCogayt = facCogaytData[0].name;
     icSetPaso(2, 'ok', `Factura COGAYT creada — N° ${numeroFacCogayt}`);
@@ -10922,11 +10938,7 @@ async function icProcesar() {
       memo: `INGRESO CH ${refCogayt} COGAYT`,
       destination_account_id: 2323  // 112201 Cogayt a Cobrar — cuenta receivable real de Fundación
     }]);
-    try {
-      await odooCall('account.payment', 'action_post', [[pagoCogaytInId]]);
-    } catch(ePost) {
-      throw new Error('No se pudo confirmar el cobro de COGAYT: ' + ePost.message);
-    }
+    await icPostearVerificado('account.payment', pagoCogaytInId, 'el cobro de COGAYT');
     await icConciliarPago(pagoCogaytInId, facCogaytId);
     icSetPaso(3, 'ok', 'Cobro de COGAYT registrado y conciliado');
 
@@ -10955,11 +10967,7 @@ async function icProcesar() {
     } catch(eDoc) {
       console.warn('No se pudo setear l10n_latam_document_number, se omite:', eDoc.message);
     }
-    try {
-      await odooCall('account.move', 'action_post', [[liquidacionId]]);
-    } catch(ePost) {
-      throw new Error('No se pudo confirmar la liquidación: ' + ePost.message);
-    }
+    await icPostearVerificado('account.move', liquidacionId, 'la liquidación');
 
     // NOTA: la generación automática de PDF se omite — los métodos de reporte (render_qweb_pdf,
     // _render_qweb_pdf) no son invocables vía RPC externo en esta instancia de Odoo.
@@ -10977,9 +10985,10 @@ async function icProcesar() {
       amount: montoCogayt,
       journal_id: bancoCogaytId,
       date: hoy,
-      memo: `Ingreso trsfr ${refCogayt}`
+      memo: `Ingreso trsfr ${refCogayt}`,
+      destination_account_id: 2381  // 211403 Deudas con Proveedores de Terceros — cuenta payable real de Fundación
     }]);
-    await odooCallSafe('account.payment', 'action_post', [[pagoLiquidacionId]]);
+    await icPostearVerificado('account.payment', pagoLiquidacionId, 'el pago de la liquidación');
     await icConciliarPago(pagoLiquidacionId, liquidacionId);
     icSetPaso(5, 'ok', 'Liquidación pagada y conciliada');
 
@@ -11029,21 +11038,18 @@ async function icProcesar() {
 
 // ── Conciliar un pago contra una factura ──
 async function icConciliarPago(paymentId, moveId) {
-  // Conciliación EXPLÍCITA: la línea de la factura y la del pago deben compartir
-  // la MISMA cuenta contable (la cuenta por cobrar/pagar del partner) para poder
-  // reconciliarse. Hay que filtrar por account_id explícito, no solo por reconcile=true.
+  // La línea de la factura y la del pago deben compartir la MISMA cuenta contable
+  // (la cuenta por cobrar/pagar del partner). Además, la línea del pago puede haber
+  // nacido YA conciliada contra otra cosa (un asiento interno del propio pago) —
+  // en ese caso hay que desconciliarla primero antes de unirla a la factura real.
   try {
     const pagoData = await odooCall('account.payment', 'read', [[paymentId], ['move_id']]);
     const payMoveId = pagoData[0].move_id[0];
 
-    // 1. Obtener la cuenta POR COBRAR/PAGAR real de la factura (account_type
-    //    asset_receivable o liability_payable), NO la cuenta del producto (211401/411000).
-    //    Una factura puede tener varias cuentas reconciliables; la correcta es
-    //    específicamente la de tipo receivable/payable.
+    // 1. Cuenta por cobrar/pagar real de la factura
     const linesInvAll = await odooCall('account.move.line', 'search_read',
-      [[['move_id','=',moveId],['reconciled','=',false]]],
+      [[['move_id','=',moveId]]],
       { fields: ['id','account_id','balance','reconciled'] });
-
     const linesInv = linesInvAll.filter(l => l.balance !== 0);
     const accountIdsInv = [...new Set(linesInv.map(l => l.account_id[0]))];
     const accInfo = await odooCall('account.account', 'read', [accountIdsInv, ['id','reconcile','account_type']]);
@@ -11051,41 +11057,55 @@ async function icConciliarPago(paymentId, moveId) {
       .filter(a => a.account_type === 'asset_receivable' || a.account_type === 'liability_payable')
       .map(a => a.id);
 
-    let lineaFacturaReconciliable = linesInv.filter(l => payableReceivableIds.includes(l.account_id[0]));
-
-    // Fallback: si no encontró por account_type, usar la que tenga reconcile=true
-    if (lineaFacturaReconciliable.length === 0) {
+    let lineaFactura = linesInv.filter(l => payableReceivableIds.includes(l.account_id[0]) && !l.reconciled);
+    if (lineaFactura.length === 0) {
       const reconciliableAccIds = accInfo.filter(a => a.reconcile).map(a => a.id);
-      lineaFacturaReconciliable = linesInv.filter(l => reconciliableAccIds.includes(l.account_id[0]));
+      lineaFactura = linesInv.filter(l => reconciliableAccIds.includes(l.account_id[0]) && !l.reconciled);
     }
-
-    if (lineaFacturaReconciliable.length === 0) {
-      console.warn('icConciliarPago: la factura no tiene línea con cuenta por cobrar/pagar reconciliable.');
+    if (lineaFactura.length === 0) {
+      console.warn(`icConciliarPago: la factura ${moveId} ya no tiene línea pendiente de conciliar (puede que ya esté pagada).`);
       return;
     }
-    const cuentaObjetivo = lineaFacturaReconciliable[0].account_id[0];
+    const cuentaObjetivo = lineaFactura[0].account_id[0];
 
-    // 2. Buscar en el PAGO la línea que use exactamente esa misma cuenta
+    // 2. Buscar en el PAGO la línea de esa misma cuenta (puede estar reconciled=true o false)
     const linesPay = await odooCall('account.move.line', 'search_read',
-      [[['move_id','=',payMoveId],['reconciled','=',false],['account_id','=',cuentaObjetivo]]],
-      { fields: ['id','account_id','balance'] });
+      [[['move_id','=',payMoveId],['account_id','=',cuentaObjetivo]]],
+      { fields: ['id','account_id','balance','reconciled'] });
 
-    // 3. Tomar solo las líneas de la factura que también son de esa cuenta
-    const lineasFacturaMismaCuenta = lineaFacturaReconciliable.filter(l => l.account_id[0] === cuentaObjetivo);
-
-    const allLineIds = linesPay.map(l => l.id).concat(lineasFacturaMismaCuenta.map(l => l.id));
-
-    if (allLineIds.length < 2) {
-      console.warn(`icConciliarPago: no coincide la cuenta entre pago (${linesPay.length}) y factura (${lineasFacturaMismaCuenta.length}) — cuenta objetivo: ${cuentaObjetivo}`);
+    if (linesPay.length === 0) {
+      console.warn(`icConciliarPago: el pago no tiene ninguna línea en la cuenta ${cuentaObjetivo}.`);
       return;
     }
 
-    await odooCallSafe('account.move.line', 'reconcile', [allLineIds]);
+    // 3. Si la línea del pago ya está conciliada (contra otra cosa), desconciliarla primero
+    for (const lp of linesPay) {
+      if (lp.reconciled) {
+        try {
+          await odooCall('account.move.line', 'remove_move_reconcile', [[lp.id]]);
+        } catch(eUnrec) {
+          if (!eUnrec.message?.includes('cannot marshal None')) throw eUnrec;
+          // marshal None: verificar si igual quedó desconciliada
+        }
+      }
+    }
 
-    const factura = await odooCall('account.move', 'read', [[moveId], ['payment_state']]);
+    // 4. Reconciliar la línea de la factura con la línea del pago
+    const idsAReconciliar = [lineaFactura[0].id, linesPay[0].id];
+    try {
+      await odooCall('account.move.line', 'reconcile', [idsAReconciliar]);
+    } catch(eRec) {
+      if (!eRec.message?.includes('cannot marshal None')) throw eRec;
+      // marshal None: verificamos abajo si igual se aplicó
+    }
+
+    // 5. Verificar resultado real
+    const factura = await odooCall('account.move', 'read', [[moveId], ['payment_state','amount_residual']]);
     const estado = factura[0]?.payment_state;
-    if (estado !== 'paid' && estado !== 'in_payment' && estado !== 'partial') {
-      console.warn(`icConciliarPago: tras reconciliar, factura ${moveId} sigue en estado "${estado}"`);
+    if (estado === 'paid' || estado === 'in_payment' || estado === 'partial') {
+      console.info(`icConciliarPago: factura ${moveId} conciliada correctamente. Estado: ${estado}`);
+    } else {
+      console.warn(`icConciliarPago: factura ${moveId} sigue en estado "${estado}" (residual: ${factura[0]?.amount_residual}) — revisar manualmente en Odoo.`);
     }
   } catch(e) {
     console.warn('icConciliarPago: no se pudo conciliar —', e.message);
