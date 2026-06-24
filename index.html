@@ -11005,88 +11005,24 @@ async function icProcesar() {
       ? `Liquidación creada con N° ${numeroFacCogayt} y PDF adjuntado`
       : `Liquidación creada con N° ${numeroFacCogayt} (PDF no se pudo adjuntar — revisar manualmente)`);
 
-    // ── PASO 6: Pago de la liquidación ── [TEMPORALMENTE DESHABILITADO PARA DEBUG]
-    // El flujo se detiene aquí a propósito, dejando la liquidación creada y
-    // SIN PAGAR, para poder diagnosticar el problema de account.payment.register
-    // contra una liquidación real recién creada (no de prueba aislada).
-    icSetPaso(5, 'ok', `Liquidación creada (ID ${liquidacionId}) — pago pendiente para diagnóstico`);
+    // ── PASO 6: Pago de la liquidación ──
+    // NOTA TÉCNICA (documentada para referencia futura): account.payment con
+    // partner_type:'supplier' falla de forma consistente con 'Líneas a Pagar
+    // deben contener la misma cuenta' específicamente cuando el partner es
+    // Fundación ArgenINTA (id=1, que es la propia compañía actuando como su
+    // propio proveedor). Se probaron más de 10 variantes — wizard oficial,
+    // create directo, todos los campos de cuenta explícitos copiados de un
+    // pago de cliente que sí funciona, reintentos — todas fallan igual. Con
+    // OTRO partner proveedor funciona (devuelve un error distinto, de
+    // analítica faltante, no de cuentas) — confirma que es específico de
+    // pagarle a la propia empresa. Por eso este paso queda manual: la
+    // liquidación se crea, postea y adjunta el PDF correctamente; solo el
+    // pago final se hace con 2 clicks en Odoo, que sabemos funciona siempre.
+    icSetPaso(5, 'ok', `Liquidación creada con N° ${numeroFacCogayt}${pdfAdjuntado ? ' y PDF adjuntado' : ''} — falta pagarla`);
 
-    document.getElementById('ic-resultado-final').style.background = 'rgba(183,96,10,.08)';
-    document.getElementById('ic-resultado-final').style.border = '1px solid rgba(183,96,10,.3)';
-    document.getElementById('ic-resultado-final').style.color = 'var(--warn)';
-    document.getElementById('ic-resultado-final').innerHTML = `
-      <div style="font-weight:700;margin-bottom:6px;"><i class="ti ti-bug"></i> Modo debug — pago de liquidación pausado</div>
-      <div>Liquidación creada con ID <strong>${liquidacionId}</strong>, SIN PAGAR a propósito.</div>
-      <div style="margin-top:6px;font-size:11px;">Usá este ID en la consola para probar account.payment.register manualmente.</div>`;
-    document.getElementById('ic-resultado-final').style.display = 'block';
-    document.getElementById('ic-undo-container').style.display = 'block';
-    return; // ── detener acá, no seguir al resto del flujo
-
-    /* ─── CÓDIGO ORIGINAL DEL PASO 6 (deshabilitado temporalmente) ───
-    const journalCogaytData = await odooCall('account.journal', 'read',
-      [[bancoCogaytId], ['default_account_id']]);
-    const cuentaBancoCogayt = journalCogaytData[0]?.default_account_id?.[0];
-    if (!cuentaBancoCogayt) {
-      throw new Error('No se pudo determinar la cuenta contable del banco elegido para pagar la liquidación.');
-    }
-
-    const asientoPagoId = await odooCall('account.move', 'create', [{
-      move_type: 'entry',
-      journal_id: bancoCogaytId,
-      date: hoy,
-      ref: `Ingreso trsfr ${refCogayt}`,
-      line_ids: [
-        [0, 0, {
-          account_id: cuentaBancoCogayt,
-          partner_id: IC_PARTNER_FUNDACION,
-          credit: montoCogayt, debit: 0,
-          name: `Ingreso trsfr ${refCogayt}`
-        }],
-        [0, 0, {
-          account_id: 2381,
-          partner_id: IC_PARTNER_FUNDACION,
-          debit: montoCogayt, credit: 0,
-          name: `Ingreso trsfr ${refCogayt}`
-        }]
-      ]
-    }]);
-    icDocumentosCreados.push({ tipo:'account.move', id: asientoPagoId, etiqueta: 'Pago de la liquidación (asiento manual)' });
-    await icPostearVerificado('account.move', asientoPagoId, 'el pago de la liquidación');
-
-    const lineaLiquidacionPay = await odooCall('account.move.line', 'search_read',
-      [[['move_id','=',liquidacionId],['account_id','=',2381],['reconciled','=',false]]],
-      { fields: ['id'] });
-    const lineaPagoPay = await odooCall('account.move.line', 'search_read',
-      [[['move_id','=',asientoPagoId],['account_id','=',2381],['reconciled','=',false]]],
-      { fields: ['id'] });
-
-    const idsAConciliar = [...lineaLiquidacionPay.map(l=>l.id), ...lineaPagoPay.map(l=>l.id)];
-    if (idsAConciliar.length >= 2) {
-      try {
-        await odooCall('account.move.line', 'reconcile', [idsAConciliar]);
-      } catch(eRec) {
-        if (!eRec.message?.includes('cannot marshal None')) throw eRec;
-      }
-    } else {
-      console.warn('icProcesar: no se encontraron ambas líneas para reconciliar el pago de la liquidación.');
-    }
-
-    const liqFinalCheck = await odooCall('account.move', 'read', [[liquidacionId], ['payment_state']]);
-    const estadoLiqFinal = liqFinalCheck[0]?.payment_state;
-    if (estadoLiqFinal !== 'paid' && estadoLiqFinal !== 'in_payment' && estadoLiqFinal !== 'partial') {
-      throw new Error(`La liquidación quedó en estado "${estadoLiqFinal}" tras intentar conciliar el pago — revisar manualmente.`);
-    }
-
-    try {
-      await odooCall('account.move', 'message_post', [liquidacionId], {
-        body: `Pagado automáticamente desde el portal de Tesorería vía asiento contable directo (ID ${asientoPagoId}), banco: ${journalCogaytData[0]?.default_account_id?.[1]||''}. Conciliado correctamente con la cuenta 211403.`
-      });
-    } catch(eMsg) {
-      console.warn('No se pudo dejar la nota en el chatter:', eMsg.message);
-    }
-
-    icSetPaso(5, 'ok', 'Liquidación pagada y conciliada');
-    ─── FIN CÓDIGO ORIGINAL ─── */
+    const cfgPago = getConfig();
+    const baseUrlPago = (cfgPago.url || 'https://argeninta.odoo.com').replace(/\/$/, '');
+    const liqUrlPago = `${baseUrlPago}/odoo/account.move/${liquidacionId}`;
 
     const fmt = n => '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:2});
     const resEl = document.getElementById('ic-resultado-final');
@@ -11102,16 +11038,23 @@ async function icProcesar() {
           descargá el PDF desde "Imprimir" y adjuntalo a la liquidación (ID ${liquidacionId}).
         </div>`;
     resEl.innerHTML = `
-      <div style="font-weight:700;margin-bottom:6px;"><i class="ti ti-circle-check"></i> Todo cargado correctamente</div>
+      <div style="font-weight:700;margin-bottom:6px;"><i class="ti ti-circle-check"></i> Ingreso y COGAYT cargados — falta un último paso manual</div>
       <div>Ingreso de ${fmt(monto)} registrado al convenio "${icConvenioSel.name}".</div>
       <div>COGAYT de ${fmt(montoCogayt)} (${pct}%) cobrado por Fundación ArgenINTA.</div>
       <div style="margin-top:6px;font-size:11px;color:var(--muted);">
         Factura ingreso: ${facIngresoId} · Factura COGAYT: ${numeroFacCogayt} (ID ${facCogaytId}) · Liquidación: ${liquidacionId}
       </div>
-      ${pdfMsg}`;
+      ${pdfMsg}
+      <div style="margin-top:10px;padding:10px 14px;background:rgba(183,96,10,.08);border:1px solid rgba(183,96,10,.3);border-radius:6px;font-size:12px;">
+        <strong style="color:var(--warn);"><i class="ti ti-alert-triangle"></i> Falta pagar la liquidación.</strong>
+        Por una limitación de Odoo al pagar facturas donde Fundación es su propio proveedor, este último paso
+        se hace manual — abrí la liquidación y apretá "Pagar" (2 clicks):
+        <br><a href="${liqUrlPago}" target="_blank" style="color:var(--info);font-weight:600;">Abrir la liquidación en Odoo →</a>
+      </div>`;
     resEl.style.display = 'block';
     document.getElementById('ic-undo-container').style.display = 'block';
     document.getElementById('ic-btn-undo').innerHTML = '<i class="ti ti-arrow-back-up"></i> Deshacer todo lo creado';
+    return; // ── el flujo termina aquí; el resultado final ya se mostró arriba
 
   } catch(e) {
     console.error('icProcesar error:', e);
