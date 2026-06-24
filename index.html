@@ -2765,6 +2765,12 @@ tbody tr:hover td { background: #f8faf9; }
         <div class="card-body">
           <div id="ic-pasos" style="display:flex;flex-direction:column;gap:10px;"></div>
           <div id="ic-resultado-final" style="display:none;margin-top:16px;padding:14px 18px;border-radius:8px;font-size:13px;"></div>
+          <div id="ic-undo-container" style="display:none;margin-top:14px;">
+            <button class="btn" id="ic-btn-undo" onclick="icDeshacerTodo()" style="padding:8px 18px;font-size:12px;border-color:var(--danger);color:var(--danger);">
+              <i class="ti ti-arrow-back-up"></i> Deshacer todo lo creado
+            </button>
+            <div id="ic-undo-log" style="margin-top:10px;font-size:11px;color:var(--muted);"></div>
+          </div>
         </div>
       </div>
 
@@ -10838,6 +10844,10 @@ function icValidar() {
 }
 
 // ── Proceso principal: ejecuta los 6 pasos en orden ──
+// Rastrea los documentos creados en el proceso actual, en orden cronológico,
+// para poder deshacerlos en orden inverso (pagos primero, facturas después).
+let icDocumentosCreados = [];
+
 async function icProcesar() {
   const errores = icValidar();
   const msgEl = document.getElementById('ic-estado-validacion');
@@ -10846,6 +10856,10 @@ async function icProcesar() {
     return;
   }
   msgEl.textContent = '';
+
+  icDocumentosCreados = [];
+  document.getElementById('ic-undo-container').style.display = 'none';
+  document.getElementById('ic-undo-log').innerHTML = '';
 
   const btn = document.getElementById('ic-btn-procesar');
   btn.disabled = true;
@@ -10880,6 +10894,7 @@ async function icProcesar() {
         analytic_distribution: { [icConvenioSel.id]: 100 }
       }]]
     }]);
+    icDocumentosCreados.push({ tipo:'account.move', id: facIngresoId, etiqueta: 'Factura de ingreso' });
     await icPostearVerificado('account.move', facIngresoId, 'la factura de ingreso');
     icSetPaso(0, 'ok', `Factura de ingreso creada (ID ${facIngresoId})`);
 
@@ -10900,6 +10915,7 @@ async function icProcesar() {
       memo: `INGRESO ${refIngreso}`,
       ...(clienteCuentaReceivable ? { destination_account_id: clienteCuentaReceivable } : {})
     }]);
+    icDocumentosCreados.push({ tipo:'account.payment', id: pagoIngresoId, etiqueta: 'Cobro del ingreso' });
     await icPostearVerificado('account.payment', pagoIngresoId, 'el cobro del ingreso');
     await icConciliarPago(pagoIngresoId, facIngresoId);
     icSetPaso(1, 'ok', 'Cobro registrado y conciliado');
@@ -10921,6 +10937,7 @@ async function icProcesar() {
         analytic_distribution: { [IC_ANALITICA_FUNC_FA]: 100 }
       }]]
     }]);
+    icDocumentosCreados.push({ tipo:'account.move', id: facCogaytId, etiqueta: 'Factura de COGAYT (cliente)' });
     await icPostearVerificado('account.move', facCogaytId, 'la factura de COGAYT');
     const facCogaytData = await odooCall('account.move', 'read', [[facCogaytId], ['name']]);
     const numeroFacCogayt = facCogaytData[0].name;
@@ -10938,6 +10955,7 @@ async function icProcesar() {
       memo: `INGRESO CH ${refCogayt} COGAYT`,
       destination_account_id: 2323  // 112201 Cogayt a Cobrar — cuenta receivable real de Fundación
     }]);
+    icDocumentosCreados.push({ tipo:'account.payment', id: pagoCogaytInId, etiqueta: 'Cobro de COGAYT' });
     await icPostearVerificado('account.payment', pagoCogaytInId, 'el cobro de COGAYT');
     await icConciliarPago(pagoCogaytInId, facCogaytId);
     icSetPaso(3, 'ok', 'Cobro de COGAYT registrado y conciliado');
@@ -10967,6 +10985,7 @@ async function icProcesar() {
     } catch(eDoc) {
       console.warn('No se pudo setear l10n_latam_document_number, se omite:', eDoc.message);
     }
+    icDocumentosCreados.push({ tipo:'account.move', id: liquidacionId, etiqueta: 'Liquidación (proveedor)' });
     await icPostearVerificado('account.move', liquidacionId, 'la liquidación');
 
     // NOTA: la generación automática de PDF se omite — los métodos de reporte (render_qweb_pdf,
@@ -10985,9 +11004,12 @@ async function icProcesar() {
       amount: montoCogayt,
       journal_id: bancoCogaytId,
       date: hoy,
-      memo: `Ingreso trsfr ${refCogayt}`,
-      destination_account_id: 2381  // 211403 Deudas con Proveedores de Terceros — cuenta payable real de Fundación
+      memo: `Ingreso trsfr ${refCogayt}`
+      // Sin destination_account_id explícito: Odoo usa automáticamente la
+      // property_account_payable_id del partner (2381), evitando el conflicto
+      // de "Líneas a Pagar deben contener la misma cuenta" que aparece al forzarla.
     }]);
+    icDocumentosCreados.push({ tipo:'account.payment', id: pagoLiquidacionId, etiqueta: 'Pago de la liquidación' });
     await icPostearVerificado('account.payment', pagoLiquidacionId, 'el pago de la liquidación');
     await icConciliarPago(pagoLiquidacionId, liquidacionId);
     icSetPaso(5, 'ok', 'Liquidación pagada y conciliada');
@@ -11009,6 +11031,8 @@ async function icProcesar() {
         descargá el PDF desde "Imprimir" y adjuntalo a la liquidación (ID ${liquidacionId}).
       </div>`;
     resEl.style.display = 'block';
+    document.getElementById('ic-undo-container').style.display = 'block';
+    document.getElementById('ic-btn-undo').innerHTML = '<i class="ti ti-arrow-back-up"></i> Deshacer todo lo creado';
 
   } catch(e) {
     console.error('icProcesar error:', e);
@@ -11030,10 +11054,82 @@ async function icProcesar() {
       <div>${mensaje}</div>
       <div style="margin-top:8px;font-size:12px;">${ayuda}</div>`;
     resEl.style.display = 'block';
+
+    if (icDocumentosCreados.length > 0) {
+      document.getElementById('ic-undo-container').style.display = 'block';
+    }
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="ti ti-player-play"></i> Cargar todo en Odoo';
   }
+}
+
+// ── Deshacer todo lo creado en el proceso actual ──
+// Recorre icDocumentosCreados en orden INVERSO: primero los pagos (porque
+// están conciliados/posteados más "arriba" en la cadena), después las facturas.
+async function icDeshacerTodo() {
+  if (!icDocumentosCreados.length) return;
+  if (!confirm(`Se van a deshacer ${icDocumentosCreados.length} documento(s) creados en este proceso. Esta acción no se puede revertir desde el portal. ¿Continuar?`)) return;
+
+  const btnUndo = document.getElementById('ic-btn-undo');
+  const logEl = document.getElementById('ic-undo-log');
+  btnUndo.disabled = true;
+  btnUndo.innerHTML = '<i class="ti ti-loader"></i> Deshaciendo...';
+  logEl.innerHTML = '';
+
+  const log = (txt, ok=true) => {
+    logEl.innerHTML += `<div style="color:${ok?'var(--success)':'var(--danger)'};">${ok?'✓':'✗'} ${txt}</div>`;
+  };
+
+  // Orden inverso: lo último creado se deshace primero
+  const orden = [...icDocumentosCreados].reverse();
+
+  for (const doc of orden) {
+    try {
+      if (doc.tipo === 'account.payment') {
+        // 1. Desconciliar si está conciliado
+        const payData = await odooCall('account.payment', 'read', [[doc.id], ['move_id','state']]);
+        const payMoveId = payData[0]?.move_id?.[0];
+        if (payMoveId) {
+          const lineas = await odooCall('account.move.line', 'search_read',
+            [[['move_id','=',payMoveId],['reconciled','=',true]]], { fields: ['id'] });
+          for (const l of lineas) {
+            try { await odooCall('account.move.line', 'remove_move_reconcile', [[l.id]]); }
+            catch(eU) { if (!eU.message?.includes('cannot marshal None')) throw eU; }
+          }
+        }
+        // 2. Resetear a borrador
+        try { await odooCall('account.payment', 'action_draft', [[doc.id]]); }
+        catch(eD) { if (!eD.message?.includes('cannot marshal None')) throw eD; }
+        // 3. Borrar
+        try { await odooCall('account.payment', 'unlink', [[doc.id]]); }
+        catch(eDel) { if (!eDel.message?.includes('cannot marshal None')) throw eDel; }
+
+        // Verificar que efectivamente se borró
+        const check = await odooCall('account.payment', 'search_read', [[['id','=',doc.id]]], { fields: ['id'] });
+        if (check.length === 0) log(`${doc.etiqueta} (pago) eliminado`);
+        else log(`${doc.etiqueta} (pago) no se pudo eliminar — revisar manualmente (ID ${doc.id})`, false);
+
+      } else if (doc.tipo === 'account.move') {
+        // 1. Resetear a borrador
+        try { await odooCall('account.move', 'button_draft', [[doc.id]]); }
+        catch(eD) { if (!eD.message?.includes('cannot marshal None')) throw eD; }
+        // 2. Borrar
+        try { await odooCall('account.move', 'unlink', [[doc.id]]); }
+        catch(eDel) { if (!eDel.message?.includes('cannot marshal None')) throw eDel; }
+
+        const check = await odooCall('account.move', 'search_read', [[['id','=',doc.id]]], { fields: ['id'] });
+        if (check.length === 0) log(`${doc.etiqueta} eliminada`);
+        else log(`${doc.etiqueta} no se pudo eliminar — revisar manualmente (ID ${doc.id})`, false);
+      }
+    } catch(e) {
+      log(`${doc.etiqueta} (ID ${doc.id}): ${e.message}`, false);
+    }
+  }
+
+  btnUndo.innerHTML = '<i class="ti ti-check"></i> Listo';
+  logEl.innerHTML += `<div style="margin-top:8px;font-weight:600;">Revisión finalizada — los documentos que no se pudieron borrar quedan marcados arriba para revisar manualmente en Odoo.</div>`;
+  icDocumentosCreados = [];
 }
 
 // ── Conciliar un pago contra una factura ──
