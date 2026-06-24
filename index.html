@@ -11003,54 +11003,73 @@ async function icProcesar() {
       ? `Liquidación creada con N° ${numeroFacCogayt} y PDF adjuntado`
       : `Liquidación creada con N° ${numeroFacCogayt} (PDF no se pudo adjuntar — revisar manualmente)`);
 
-    // ── PASO 6: Pago de la liquidación (OP-X) ──
-    // Usamos el wizard oficial account.payment.register. Este paso puede fallar
-    // de forma intermitente con "Líneas a Pagar deben contener la misma cuenta"
-    // por una condición de carrera del lado del servidor (confirmado: la misma
-    // operación con los mismos datos a veces funciona y a veces no). Por eso
-    // agregamos una pequeña espera + reintento automático antes de rendirnos.
+    // ── PASO 6: Pago de la liquidación ──
+    // NOTA TÉCNICA: account.payment (tanto create directo como el wizard
+    // account.payment.register) falla consistentemente con 'Líneas a Pagar
+    // deben contener la misma cuenta' para este partner/contexto específico,
+    // incluso replicando exactamente los defaults que la UI usa. Confirmado
+    // con múltiples pruebas que es un problema del modelo account.payment en
+    // sí. La solución que SÍ funciona de forma confiable: crear un asiento
+    // contable manual (account.move tipo 'entry') con las líneas banco↔payable,
+    // postearlo, y reconciliar esa línea directo contra la de la liquidación.
+    // Esto es contablemente equivalente a un pago y se ve igual en los libros.
     icSetPaso(5, 'cargando', 'Pagando la liquidación...');
 
-    async function icCrearWizardPago() {
-      const wId = await odooCall('account.payment.register', 'create', [{
-        amount: montoCogayt,
-        journal_id: bancoCogaytId,
-        payment_date: hoy
-      }], { context: { active_model: 'account.move', active_ids: [liquidacionId] } });
-      const wResult = await odooCall('account.payment.register', 'action_create_payments', [[wId]]);
-      return wResult?.res_id;
+    const journalCogaytData = await odooCall('account.journal', 'read',
+      [[bancoCogaytId], ['default_account_id']]);
+    const cuentaBancoCogayt = journalCogaytData[0]?.default_account_id?.[0];
+    if (!cuentaBancoCogayt) {
+      throw new Error('No se pudo determinar la cuenta contable del banco elegido para pagar la liquidación.');
     }
 
-    let pagoLiquidacionId = null;
-    let intentos = 0;
-    let ultimoError = null;
-    while (intentos < 3 && !pagoLiquidacionId) {
-      intentos++;
+    const asientoPagoId = await odooCall('account.move', 'create', [{
+      move_type: 'entry',
+      journal_id: bancoCogaytId,
+      date: hoy,
+      ref: `Ingreso trsfr ${refCogayt}`,
+      line_ids: [
+        [0, 0, {
+          account_id: cuentaBancoCogayt,
+          partner_id: IC_PARTNER_FUNDACION,
+          credit: montoCogayt, debit: 0,
+          name: `Ingreso trsfr ${refCogayt}`
+        }],
+        [0, 0, {
+          account_id: 2381, // 211403 Deudas con Proveedores de Terceros (payable de Fundación)
+          partner_id: IC_PARTNER_FUNDACION,
+          debit: montoCogayt, credit: 0,
+          name: `Ingreso trsfr ${refCogayt}`
+        }]
+      ]
+    }]);
+    icDocumentosCreados.push({ tipo:'account.move', id: asientoPagoId, etiqueta: 'Pago de la liquidación (asiento manual)' });
+    await icPostearVerificado('account.move', asientoPagoId, 'el pago de la liquidación');
+
+    // Reconciliar la línea payable del asiento de pago contra la línea payable de la liquidación
+    const lineaLiquidacionPay = await odooCall('account.move.line', 'search_read',
+      [[['move_id','=',liquidacionId],['account_id','=',2381],['reconciled','=',false]]],
+      { fields: ['id'] });
+    const lineaPagoPay = await odooCall('account.move.line', 'search_read',
+      [[['move_id','=',asientoPagoId],['account_id','=',2381],['reconciled','=',false]]],
+      { fields: ['id'] });
+
+    const idsAConciliar = [...lineaLiquidacionPay.map(l=>l.id), ...lineaPagoPay.map(l=>l.id)];
+    if (idsAConciliar.length >= 2) {
       try {
-        pagoLiquidacionId = await icCrearWizardPago();
-      } catch(eWizard) {
-        ultimoError = eWizard;
-        if (eWizard.message?.includes('Líneas a Pagar') && intentos < 3) {
-          icSetPaso(5, 'cargando', `Pagando la liquidación... (reintento ${intentos+1}/3)`);
-          await new Promise(r => setTimeout(r, 2000));
-        } else {
-          throw eWizard;
-        }
+        await odooCall('account.move.line', 'reconcile', [idsAConciliar]);
+      } catch(eRec) {
+        if (!eRec.message?.includes('cannot marshal None')) throw eRec;
+        // marshal None: verificamos el resultado real abajo igual
       }
-    }
-    if (!pagoLiquidacionId) {
-      throw new Error('El wizard de pago no devolvió el ID del pago creado tras varios intentos: ' + (ultimoError?.message||''));
-    }
-    icDocumentosCreados.push({ tipo:'account.payment', id: pagoLiquidacionId, etiqueta: 'Pago de la liquidación' });
-
-    // Setear el memo (el wizard no lo toma del create original)
-    try {
-      await odooCall('account.payment', 'write', [[pagoLiquidacionId], { memo: `Ingreso trsfr ${refCogayt}` }]);
-    } catch(eMemo) {
-      console.warn('No se pudo actualizar el memo del pago de liquidación:', eMemo.message);
+    } else {
+      console.warn('icProcesar: no se encontraron ambas líneas para reconciliar el pago de la liquidación.');
     }
 
-    await icConciliarPago(pagoLiquidacionId, liquidacionId);
+    const liqFinalCheck = await odooCall('account.move', 'read', [[liquidacionId], ['payment_state']]);
+    const estadoLiqFinal = liqFinalCheck[0]?.payment_state;
+    if (estadoLiqFinal !== 'paid' && estadoLiqFinal !== 'in_payment' && estadoLiqFinal !== 'partial') {
+      throw new Error(`La liquidación quedó en estado "${estadoLiqFinal}" tras intentar conciliar el pago — revisar manualmente.`);
+    }
     icSetPaso(5, 'ok', 'Liquidación pagada y conciliada');
 
     const fmt = n => '$' + parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:2});
