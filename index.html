@@ -2858,6 +2858,7 @@ tbody tr:hover td { background: #f8faf9; }
 // CONFIGURACIÓN CENTRAL — Railway Proxy
 // ═══════════════════════════════════════════════════════
 const PROXY_URL = 'https://argeninta-reportes-saldo-production.up.railway.app/proxy';
+const PDF_DOWNLOAD_URL = 'https://argeninta-reportes-saldo-production.up.railway.app/download-pdf';
 let _odooUid = null;
 
 async function odooPost(path, body) {
@@ -10988,12 +10989,17 @@ async function icProcesar() {
     icDocumentosCreados.push({ tipo:'account.move', id: liquidacionId, etiqueta: 'Liquidación (proveedor)' });
     await icPostearVerificado('account.move', liquidacionId, 'la liquidación');
 
-    // NOTA: la generación automática de PDF se omite — los métodos de reporte (render_qweb_pdf,
-    // _render_qweb_pdf) no son invocables vía RPC externo en esta instancia de Odoo.
-    // El PDF de la factura COGAYT se puede descargar e adjuntar manualmente a la liquidación
-    // desde la vista previa de la factura en Odoo (botón Imprimir → guardar → adjuntar).
-    console.info(`Recordatorio: adjuntar manualmente el PDF de la factura ${numeroFacCogayt} a la liquidación ${liquidacionId}.`);
-    icSetPaso(4, 'ok', `Liquidación creada con N° de documento ${numeroFacCogayt}`);
+    // Adjuntar automáticamente el PDF de la factura de COGAYT a la liquidación,
+    // descargándolo vía el proxy (evita el bloqueo de CORS del navegador).
+    let pdfAdjuntado = false;
+    try {
+      pdfAdjuntado = await icAdjuntarPdfFactura(facCogaytId, liquidacionId, numeroFacCogayt);
+    } catch(ePdf) {
+      console.warn('No se pudo adjuntar el PDF automáticamente:', ePdf.message);
+    }
+    icSetPaso(4, 'ok', pdfAdjuntado
+      ? `Liquidación creada con N° ${numeroFacCogayt} y PDF adjuntado`
+      : `Liquidación creada con N° ${numeroFacCogayt} (PDF no se pudo adjuntar — revisar manualmente)`);
 
     // ── PASO 6: Pago de la liquidación (OP-X) ──
     icSetPaso(5, 'cargando', 'Pagando la liquidación...');
@@ -11020,6 +11026,14 @@ async function icProcesar() {
     resEl.style.background = 'rgba(45,134,89,.08)';
     resEl.style.border = '1px solid rgba(45,134,89,.3)';
     resEl.style.color = 'var(--success)';
+    const pdfMsg = pdfAdjuntado
+      ? `<div style="margin-top:8px;padding:8px 12px;background:rgba(45,134,89,.08);border-radius:6px;font-size:11px;color:var(--success);">
+          <i class="ti ti-paperclip"></i> El PDF de la factura COGAYT se adjuntó automáticamente a la liquidación.
+        </div>`
+      : `<div style="margin-top:8px;padding:8px 12px;background:rgba(183,96,10,.08);border-radius:6px;font-size:11px;color:var(--warn);">
+          <i class="ti ti-info-circle"></i> No se pudo adjuntar el PDF automáticamente. Abrí la factura COGAYT (N° ${numeroFacCogayt}) en Odoo,
+          descargá el PDF desde "Imprimir" y adjuntalo a la liquidación (ID ${liquidacionId}).
+        </div>`;
     resEl.innerHTML = `
       <div style="font-weight:700;margin-bottom:6px;"><i class="ti ti-circle-check"></i> Todo cargado correctamente</div>
       <div>Ingreso de ${fmt(monto)} registrado al convenio "${icConvenioSel.name}".</div>
@@ -11027,10 +11041,7 @@ async function icProcesar() {
       <div style="margin-top:6px;font-size:11px;color:var(--muted);">
         Factura ingreso: ${facIngresoId} · Factura COGAYT: ${numeroFacCogayt} (ID ${facCogaytId}) · Liquidación: ${liquidacionId}
       </div>
-      <div style="margin-top:8px;padding:8px 12px;background:rgba(183,96,10,.08);border-radius:6px;font-size:11px;color:var(--warn);">
-        <i class="ti ti-info-circle"></i> Falta un paso manual: abrí la factura COGAYT (N° ${numeroFacCogayt}) en Odoo,
-        descargá el PDF desde "Imprimir" y adjuntalo a la liquidación (ID ${liquidacionId}).
-      </div>`;
+      ${pdfMsg}`;
     resEl.style.display = 'block';
     document.getElementById('ic-undo-container').style.display = 'block';
     document.getElementById('ic-btn-undo').innerHTML = '<i class="ti ti-arrow-back-up"></i> Deshacer todo lo creado';
@@ -11134,6 +11145,50 @@ async function icDeshacerTodo() {
 }
 
 // ── Conciliar un pago contra una factura ──
+// ── Descargar el PDF de una factura (vía proxy, sin bloqueo CORS) y adjuntarlo a otro move ──
+async function icAdjuntarPdfFactura(facturaId, moveDestinoId, nombreFactura) {
+  // 1. Obtener el access_token público de la factura
+  const facData = await odooCall('account.move', 'read', [[facturaId], ['access_token']]);
+  const token = facData[0]?.access_token;
+  if (!token) {
+    console.warn('icAdjuntarPdfFactura: la factura no tiene access_token disponible.');
+    return false;
+  }
+
+  // 2. Armar la URL del reporte (la misma que usa el botón "Vista previa / Descargar")
+  const cfg = getConfig();
+  const baseUrl = (cfg.url || 'https://argeninta.odoo.com').replace(/\/$/, '');
+  const pdfUrl = `${baseUrl}/report/pdf/account.report_invoice_with_payments/${facturaId}?access_token=${token}`;
+
+  // 3. Pedirle al proxy que la descargue del lado del servidor (sin CORS)
+  const portalPass = sessionStorage.getItem('portal_pass_session') || '';
+  const resp = await fetch(PDF_DOWNLOAD_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: pdfUrl, portal_password: portalPass })
+  });
+  const data = await resp.json();
+  if (data.error) {
+    throw new Error('Error descargando el PDF: ' + data.error);
+  }
+  if (!data.data) {
+    throw new Error('El proxy no devolvió contenido de PDF.');
+  }
+
+  // 4. Crear el ir.attachment en la liquidación con el PDF descargado
+  const nombreArchivo = `Liquidacion_${(nombreFactura||'').replace(/[\/\s]/g,'_')}.pdf`;
+  await odooCall('ir.attachment', 'create', [{
+    name: nombreArchivo,
+    datas: data.data,
+    res_model: 'account.move',
+    res_id: moveDestinoId,
+    mimetype: data.content_type || 'application/pdf'
+  }]);
+
+  console.info(`PDF adjuntado correctamente a la liquidación ${moveDestinoId} (${data.size} bytes).`);
+  return true;
+}
+
 async function icConciliarPago(paymentId, moveId) {
   // La línea de la factura y la del pago deben compartir la MISMA cuenta contable
   // (la cuenta por cobrar/pagar del partner). Además, la línea del pago puede haber
