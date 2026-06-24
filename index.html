@@ -11216,7 +11216,7 @@ async function icAdjuntarPdfFactura(facturaId, moveDestinoId, nombreFactura) {
   // 2. Armar la URL del reporte (la misma que usa el botón "Vista previa / Descargar")
   const cfg = getConfig();
   const baseUrl = (cfg.url || 'https://argeninta.odoo.com').replace(/\/$/, '');
-  const pdfUrl = `${baseUrl}/report/pdf/account.report_invoice_with_payments/${facturaId}?access_token=${token}`;
+  const pdfUrl = `${baseUrl}/my/invoices/${facturaId}?access_token=${token}&report_type=pdf&download=true`;
 
   // 3. Pedirle al proxy que la descargue del lado del servidor (sin CORS)
   const portalPass = sessionStorage.getItem('portal_pass_session') || '';
