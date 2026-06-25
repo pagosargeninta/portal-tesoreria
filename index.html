@@ -11412,12 +11412,33 @@ var _cogFiltrado = [];  // datos filtrados para mostrar
   if (hEl) hEl.value = fmtD(hoy);
 })();
 
-// % "redondos" esperados — cualquier % real que no esté cerca de uno de estos
-// es señal de que algo está mal (cobro parcial, cálculo erróneo, etc.)
-var COG_PORCENTAJES_REDONDOS = [3, 5, 6, 8, 10, 12];
+// % esperado según el tipo de convenio, identificado por palabras clave en el
+// nombre de la analítica. Reglas del negocio:
+//   - DEC, INTA, INTEA, MAGYP, INIDEP → 5%
+//   - Carta 27 de SENASA (CA27) → 5%
+//   - Convenios "Internacional" / "5.2" → no hay % fijo, no se compara
+//   - Todo el resto → 6%
+function cogDeterminarPctEsperado(nombreAnalitica) {
+  var n = (nombreAnalitica || '').toUpperCase();
 
-function cogEsRedondo(pct) {
-  return COG_PORCENTAJES_REDONDOS.some(function(p){ return Math.abs(pct - p) < 0.3; });
+  // Sin % fijo — convenios internacionales / 5.2: mostrar el real, no comparar
+  if (n.includes('INTERNACIONAL') || n.includes('5.2')) {
+    return null;
+  }
+
+  // Carta 27 de SENASA → 5% (excepción puntual antes de la regla general de SENASA)
+  if (n.includes('SENASA') && n.includes('CA27')) {
+    return 5;
+  }
+
+  // Organismos con 5% fijo
+  if (n.includes('DEC') || n.includes('INTA') || n.includes('INTEA') ||
+      n.includes('MAGYP') || n.includes('INIDEP')) {
+    return 5;
+  }
+
+  // Default para el resto (incluye SENASA en general salvo Carta 27)
+  return 6;
 }
 
 async function cogGenerar() {
@@ -11437,8 +11458,11 @@ async function cogGenerar() {
   try {
     // 1. Traer todos los INGRESOS — específicamente el producto
     //    "Ingresos por desembolsos a convenios", para no mezclar con otros
-    //    movimientos que también usan la cuenta 211401.
-    var ingresos = await odooCall('account.move.line', 'search_read', [[
+    //    movimientos que también usan la cuenta 211401. Traemos también el
+    //    payment_state para separar los efectivamente cobrados de los que
+    //    quedaron sin pagar (solo liquidación, sin cobro real) — estos últimos
+    //    no cuentan como ingreso real y además generan una alerta aparte.
+    var ingresosRaw = await odooCall('account.move.line', 'search_read', [[
       ['account_id','=', IC_CUENTA_211401],
       ['product_id','=', IC_PRODUCTO_DESEMBOLSO],
       ['move_id.company_id','=',1],
@@ -11449,6 +11473,27 @@ async function cogGenerar() {
       ['analytic_distribution','!=',false]
     ], ['id','balance','analytic_distribution','move_id','date']],
     { limit: 10000, order: 'date desc' });
+
+    // Traer el payment_state de cada factura involucrada
+    var moveIdsIngresos = [...new Set(ingresosRaw.map(function(l){ return l.move_id[0]; }))];
+    var paymentStateMap = {};
+    if (moveIdsIngresos.length > 0) {
+      for (var pi = 0; pi < moveIdsIngresos.length; pi += 500) {
+        var chunkIds = moveIdsIngresos.slice(pi, pi+500);
+        var movesData = await odooCall('account.move', 'read', [chunkIds, ['id','name','payment_state']]);
+        movesData.forEach(function(m){ paymentStateMap[m.id] = m; });
+      }
+    }
+
+    var ESTADOS_PAGADOS = ['paid', 'in_payment', 'partial'];
+    var ingresos = ingresosRaw.filter(function(l){
+      var m = paymentStateMap[l.move_id[0]];
+      return m && ESTADOS_PAGADOS.includes(m.payment_state);
+    });
+    var ingresosSinPagar = ingresosRaw.filter(function(l){
+      var m = paymentStateMap[l.move_id[0]];
+      return m && m.payment_state === 'not_paid';
+    });
 
     if (estado) estado.textContent = 'Buscando COGAYT cobrado...';
 
@@ -11471,7 +11516,7 @@ async function cogGenerar() {
     if (estado) estado.textContent = 'Procesando convenios...';
 
     // 3. Agrupar por analítica (convenio)
-    var convenios = {}; // analyticId -> { ingresos: total, cogayt: total }
+    var convenios = {}; // analyticId -> { ingresos: total, cogayt: total, sinPagar: total, sinPagarFacturas: [] }
 
     function _sumarPorAnalitica(lineas, campo) {
       lineas.forEach(function(l){
@@ -11479,13 +11524,29 @@ async function cogGenerar() {
         Object.keys(l.analytic_distribution).forEach(function(analyticIdStr){
           var analyticId = parseInt(analyticIdStr);
           var pct = l.analytic_distribution[analyticIdStr] / 100; // distribución parcial si aplica
-          if (!convenios[analyticId]) convenios[analyticId] = { ingresos: 0, cogayt: 0 };
+          if (!convenios[analyticId]) convenios[analyticId] = { ingresos: 0, cogayt: 0, sinPagar: 0, sinPagarFacturas: [] };
           convenios[analyticId][campo] += Math.abs(l.balance) * pct;
         });
       });
     }
     _sumarPorAnalitica(ingresos, 'ingresos');
     _sumarPorAnalitica(liquidaciones, 'cogayt');
+
+    // Acumular también los ingresos SIN PAGAR (alerta separada, no entran en el cálculo de %)
+    ingresosSinPagar.forEach(function(l){
+      if (!l.analytic_distribution) return;
+      Object.keys(l.analytic_distribution).forEach(function(analyticIdStr){
+        var analyticId = parseInt(analyticIdStr);
+        var pct = l.analytic_distribution[analyticIdStr] / 100;
+        if (!convenios[analyticId]) convenios[analyticId] = { ingresos: 0, cogayt: 0, sinPagar: 0, sinPagarFacturas: [] };
+        var monto = Math.abs(l.balance) * pct;
+        convenios[analyticId].sinPagar += monto;
+        var m = paymentStateMap[l.move_id[0]];
+        convenios[analyticId].sinPagarFacturas.push({
+          id: l.move_id[0], name: m?.name || l.move_id[1], monto: monto, date: l.date
+        });
+      });
+    });
 
     // 4. Traer nombres de las analíticas
     var analyticIds = Object.keys(convenios).map(Number);
@@ -11503,28 +11564,27 @@ async function cogGenerar() {
     _cogData = Object.keys(convenios).map(function(idStr){
       var id = parseInt(idStr);
       var c = convenios[id];
+      var nombre = nombresMap[id] || ('Convenio #'+id);
       var pctReal = c.ingresos > 0 ? (c.cogayt / c.ingresos * 100) : 0;
 
-      // Determinar el % esperado más cercano (el redondo más próximo, o 6% por defecto si no cobró nada)
-      var pctEsperado = 6;
-      if (c.cogayt > 0) {
-        // Buscar el % redondo más cercano al real
-        pctEsperado = COG_PORCENTAJES_REDONDOS.reduce(function(best, p){
-          return Math.abs(p - pctReal) < Math.abs(best - pctReal) ? p : best;
-        }, COG_PORCENTAJES_REDONDOS[0]);
-      }
+      // % esperado según el tipo de convenio (por nombre) — null = sin regla fija
+      var pctEsperado = cogDeterminarPctEsperado(nombre);
+      var sinReglaFija = pctEsperado === null;
 
-      var cogaytEsperado = c.ingresos * pctEsperado / 100;
-      var brecha = cogaytEsperado - c.cogayt;
+      var cogaytEsperado = sinReglaFija ? null : (c.ingresos * pctEsperado / 100);
+      var brecha = sinReglaFija ? 0 : (cogaytEsperado - c.cogayt);
 
-      var esRedondo = c.cogayt === 0 ? null : cogEsRedondo(pctReal);
       var estadoConv;
-      if (c.ingresos === 0) {
-        estadoConv = 'sin_ingreso'; // no debería pasar, pero por si acaso
+      if (c.ingresos === 0 && c.sinPagar === 0) {
+        estadoConv = 'sin_ingreso';
+      } else if (sinReglaFija) {
+        estadoConv = 'sin_regla'; // mostrar el % real, no comparar
+      } else if (c.ingresos === 0) {
+        estadoConv = 'sin_ingreso';
       } else if (c.cogayt === 0) {
         estadoConv = 'sin_cobrar'; // el caso más grave: nunca se cobró nada
-      } else if (esRedondo === false) {
-        estadoConv = 'pct_raro'; // cobró algo pero el % no es redondo — sospechoso
+      } else if (Math.abs(pctReal - pctEsperado) > 0.3) {
+        estadoConv = 'pct_raro'; // cobró algo pero el % no coincide con el esperado para este tipo
       } else if (brecha > c.ingresos * 0.005) {
         estadoConv = 'parcial'; // cobró pero falta una parte
       } else {
@@ -11533,24 +11593,29 @@ async function cogGenerar() {
 
       return {
         id: id,
-        nombre: nombresMap[id] || ('Convenio #'+id),
+        nombre: nombre,
         ingresos: c.ingresos,
         cogayt: c.cogayt,
+        sinPagar: c.sinPagar,
+        sinPagarFacturas: c.sinPagarFacturas,
         pctReal: pctReal,
         pctEsperado: pctEsperado,
+        sinReglaFija: sinReglaFija,
         cogaytEsperado: cogaytEsperado,
         brecha: brecha,
         estado: estadoConv
       };
-    }).filter(function(c){ return c.ingresos > 0; }) // ignorar analíticas sin ingresos en el período
-      .sort(function(a,b){ return b.brecha - a.brecha; }); // los de mayor brecha primero
+    }).filter(function(c){ return c.ingresos > 0 || c.sinPagar > 0; }) // ignorar analíticas sin movimientos
+      .sort(function(a,b){ return (b.brecha||0) - (a.brecha||0); }); // los de mayor brecha primero
 
     // 6. KPIs globales
     var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
     var totalIngresos = _cogData.reduce(function(s,c){ return s+c.ingresos; },0);
     var totalCogayt   = _cogData.reduce(function(s,c){ return s+c.cogayt; },0);
-    var totalBrecha   = _cogData.reduce(function(s,c){ return s + Math.max(c.brecha,0); },0);
-    var conBrecha     = _cogData.filter(function(c){ return c.estado !== 'ok'; }).length;
+    var totalBrecha   = _cogData.reduce(function(s,c){ return s + Math.max(c.brecha||0,0); },0);
+    var totalSinPagar = _cogData.reduce(function(s,c){ return s+(c.sinPagar||0); },0);
+    var conBrecha     = _cogData.filter(function(c){ return c.estado !== 'ok' && c.estado !== 'sin_regla'; }).length;
+    var conSinPagar   = _cogData.filter(function(c){ return c.sinPagar > 0; }).length;
 
     var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
     set('cog-k-ingresos',     fmt(totalIngresos));
@@ -11558,13 +11623,13 @@ async function cogGenerar() {
     set('cog-k-cobrado',      fmt(totalCogayt));
     set('cog-k-cobrado-sub',  totalIngresos>0 ? (totalCogayt/totalIngresos*100).toFixed(1)+'% efectivo' : '');
     set('cog-k-brecha',       fmt(totalBrecha));
-    set('cog-k-brecha-sub',   'pendiente de cobrar');
+    set('cog-k-brecha-sub',   conSinPagar>0 ? conSinPagar+' convenios con ingresos sin cobrar ('+fmt(totalSinPagar)+')' : 'pendiente de cobrar');
     set('cog-k-convenios',    conBrecha);
 
     document.getElementById('cog-kpis').style.display = 'block';
 
     // 7. Filtrar y renderizar
-    _cogFiltrado = soloBrecha ? _cogData.filter(function(c){ return c.estado !== 'ok'; }) : _cogData;
+    _cogFiltrado = soloBrecha ? _cogData.filter(function(c){ return c.estado !== 'ok' || c.sinPagar > 0; }) : _cogData;
     cogRenderTabla(_cogFiltrado);
 
     document.getElementById('cog-tabla-card').style.display = 'block';
@@ -11588,21 +11653,29 @@ function cogRenderTabla(data) {
     'pct_raro':   { badge: '<span class="badge badge-warn">⚠ % irregular</span>',     color: 'var(--warn)'   },
     'parcial':    { badge: '<span class="badge badge-warn">⚠ Parcial</span>',          color: 'var(--warn)'   },
     'ok':         { badge: '<span class="badge badge-ok">✅ OK</span>',                color: 'var(--success)'},
-    'sin_ingreso':{ badge: '<span class="badge badge-muted">—</span>',                 color: 'var(--muted)'  }
+    'sin_ingreso':{ badge: '<span class="badge badge-muted">—</span>',                 color: 'var(--muted)'  },
+    'sin_regla':  { badge: '<span class="badge badge-info">ℹ Sin % fijo</span>',       color: 'var(--info)'   }
   };
 
   tbody.innerHTML = data.map(function(c, idx){
     var info = ESTADO_INFO[c.estado] || ESTADO_INFO.ok;
     var pctColor = c.estado === 'pct_raro' ? 'var(--warn)' : (c.estado === 'ok' ? 'var(--success)' : 'var(--text)');
+    var pctTexto = c.cogayt > 0 ? c.pctReal.toFixed(1)+'%' : '0%';
+    if (c.sinReglaFija && c.cogayt > 0) pctTexto += ' <span style="font-size:9px;color:var(--muted);">(sin regla)</span>';
+
+    var alertaSinPagar = c.sinPagar > 0
+      ? '<div style="margin-top:3px;"><span class="badge badge-danger" style="font-size:9px;cursor:pointer;" onclick="event.stopPropagation();cogToggle('+idx+')">⚠ '+fmt(c.sinPagar)+' sin cobrar</span></div>'
+      : '';
+
     return '<tr id="cog-row-'+idx+'">' +
       '<td style="text-align:center;cursor:pointer;" onclick="cogToggle('+idx+')">' +
         '<i class="ti ti-chevron-right" id="cog-icon-'+idx+'" style="font-size:13px;color:var(--muted);transition:transform .2s;"></i>' +
       '</td>' +
-      '<td style="font-weight:500;max-width:280px;cursor:pointer;" onclick="cogToggle('+idx+')">'+c.nombre+'</td>' +
-      '<td class="mono" style="text-align:right;color:var(--success);">'+fmt(c.ingresos)+'</td>' +
+      '<td style="font-weight:500;max-width:280px;cursor:pointer;" onclick="cogToggle('+idx+')">'+c.nombre+alertaSinPagar+'</td>' +
+      '<td class="mono" style="text-align:right;color:var(--success);">'+(c.ingresos>0?fmt(c.ingresos):'—')+'</td>' +
       '<td class="mono" style="text-align:right;">'+(c.cogayt>0?fmt(c.cogayt):'—')+'</td>' +
-      '<td class="mono" style="text-align:right;font-weight:600;color:'+pctColor+';">'+(c.cogayt>0?c.pctReal.toFixed(1)+'%':'0%')+'</td>' +
-      '<td class="mono" style="text-align:right;font-weight:700;color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';">'+(c.brecha>0?fmt(c.brecha):'$0')+'</td>' +
+      '<td class="mono" style="text-align:right;font-weight:600;color:'+pctColor+';">'+pctTexto+'</td>' +
+      '<td class="mono" style="text-align:right;font-weight:700;color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';">'+(c.sinReglaFija?'—':(c.brecha>0?fmt(c.brecha):'$0'))+'</td>' +
       '<td style="text-align:center;">'+info.badge+'</td>' +
     '</tr>' +
     '<tr id="cog-detail-'+idx+'" style="display:none;background:var(--surface-alt,#f8faf9);">' +
@@ -11638,26 +11711,57 @@ function cogToggle(idx) {
     var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:0}); };
 
     var mensaje = '';
-    if (c.estado === 'sin_cobrar') {
+    if (c.estado === 'sin_regla') {
+      mensaje = `Este convenio no tiene un % de COGAYT fijo establecido (convenio internacional / 5.2). % real cobrado: <strong>${c.pctReal.toFixed(2)}%</strong> — se muestra informativamente, sin comparar contra ningún valor esperado.`;
+    } else if (c.estado === 'sin_cobrar') {
       mensaje = `Este convenio recibió ${fmt(c.ingresos)} en ingresos durante el período, pero <strong style="color:var(--danger);">nunca se le cobró COGAYT</strong>. Esperado (${c.pctEsperado}%): ${fmt(c.cogaytEsperado)}.`;
     } else if (c.estado === 'pct_raro') {
-      mensaje = `El % real cobrado (${c.pctReal.toFixed(2)}%) no coincide con ningún porcentaje habitual (3/5/6/8/10/12%). Puede haber un cálculo manual erróneo o un cobro parcial sin completar. Revisar las liquidaciones de este convenio en Odoo.`;
+      mensaje = `El % real cobrado (${c.pctReal.toFixed(2)}%) no coincide con el ${c.pctEsperado}% esperado para este tipo de convenio. Puede haber un cálculo manual erróneo o un cobro parcial sin completar. Revisar las liquidaciones de este convenio en Odoo.`;
     } else if (c.estado === 'parcial') {
       mensaje = `Se cobró ${fmt(c.cogayt)} de COGAYT (${c.pctReal.toFixed(1)}%), pero según el ${c.pctEsperado}% esperado debería ser ${fmt(c.cogaytEsperado)}. Falta cobrar ${fmt(c.brecha)}.`;
+    } else if (c.estado === 'ok') {
+      mensaje = `COGAYT cobrado correctamente: ${fmt(c.cogayt)} (${c.pctReal.toFixed(1)}%, dentro de lo esperado para el ${c.pctEsperado}%).`;
     } else {
-      mensaje = `COGAYT cobrado correctamente: ${fmt(c.cogayt)} (${c.pctReal.toFixed(1)}%, dentro de lo esperado).`;
+      mensaje = 'Sin ingresos cobrados en este período — solo hay facturas de ingreso pendientes de pago (ver abajo).';
+    }
+
+    var bloqueResumen = c.sinReglaFija
+      ? '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;font-size:11px;">' +
+          '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;color:var(--success);">'+fmt(c.ingresos)+'</div><div style="color:var(--muted);margin-top:2px;">Ingresos</div></div>' +
+          '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;">'+fmt(c.cogayt)+' ('+c.pctReal.toFixed(1)+'%)</div><div style="color:var(--muted);margin-top:2px;">COGAYT cobrado</div></div>' +
+        '</div>'
+      : '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;font-size:11px;">' +
+          '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;color:var(--success);">'+fmt(c.ingresos)+'</div><div style="color:var(--muted);margin-top:2px;">Ingresos</div></div>' +
+          '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;">'+fmt(c.cogayt)+'</div><div style="color:var(--muted);margin-top:2px;">COGAYT cobrado</div></div>' +
+          '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;">'+fmt(c.cogaytEsperado)+'</div><div style="color:var(--muted);margin-top:2px;">Esperado ('+c.pctEsperado+'%)</div></div>' +
+          '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;border-color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';"><div style="font-weight:700;color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';">'+fmt(c.brecha)+'</div><div style="color:var(--muted);margin-top:2px;">Brecha</div></div>' +
+        '</div>';
+
+    var bloqueSinPagar = '';
+    if (c.sinPagar > 0 && c.sinPagarFacturas && c.sinPagarFacturas.length) {
+      var filasSinPagar = c.sinPagarFacturas.map(function(f){
+        var fecha = (f.date||'').split('-').reverse().join('/');
+        return '<tr>'+
+          '<td style="white-space:nowrap;color:var(--muted);">'+fecha+'</td>'+
+          '<td style="font-size:11px;font-family:monospace;">'+f.name+'</td>'+
+          '<td class="mono" style="text-align:right;font-weight:600;color:var(--danger);">'+fmt(f.monto)+'</td>'+
+        '</tr>';
+      }).join('');
+      bloqueSinPagar =
+        '<div style="margin-top:12px;padding:10px 14px;background:rgba(192,57,43,.06);border:1px solid rgba(192,57,43,.25);border-left:3px solid var(--danger);border-radius:6px;">' +
+          '<div style="font-weight:700;color:var(--danger);font-size:12px;margin-bottom:6px;"><i class="ti ti-alert-triangle"></i> Ingresos por desembolsos SIN COBRAR — '+fmt(c.sinPagar)+'</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Estas facturas de ingreso fueron emitidas pero todavía no se cobraron (solo existe la factura, sin el recibo conciliado). No se cuentan en el cálculo de % porque el ingreso real todavía no entró.</div>' +
+          '<table style="font-size:11px;width:100%;"><thead><tr><th>Fecha</th><th>Factura</th><th style="text-align:right;">Monto</th></tr></thead>' +
+          '<tbody>'+filasSinPagar+'</tbody></table>' +
+        '</div>';
     }
 
     content.innerHTML =
-      '<div style="padding:10px 14px;border-radius:6px;border-left:3px solid '+(c.brecha>0?'var(--danger)':'var(--success)')+';background:var(--surface);font-size:12px;margin-bottom:10px;">' +
+      '<div style="padding:10px 14px;border-radius:6px;border-left:3px solid '+(c.sinReglaFija?'var(--info)':(c.brecha>0?'var(--danger)':'var(--success)'))+';background:var(--surface);font-size:12px;margin-bottom:10px;">' +
         mensaje +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;font-size:11px;">' +
-        '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;color:var(--success);">'+fmt(c.ingresos)+'</div><div style="color:var(--muted);margin-top:2px;">Ingresos</div></div>' +
-        '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;">'+fmt(c.cogayt)+'</div><div style="color:var(--muted);margin-top:2px;">COGAYT cobrado</div></div>' +
-        '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;"><div style="font-weight:700;">'+fmt(c.cogaytEsperado)+'</div><div style="color:var(--muted);margin-top:2px;">Esperado ('+c.pctEsperado+'%)</div></div>' +
-        '<div style="text-align:center;padding:8px;border:1px solid var(--border);border-radius:6px;border-color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';"><div style="font-weight:700;color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';">'+fmt(c.brecha)+'</div><div style="color:var(--muted);margin-top:2px;">Brecha</div></div>' +
-      '</div>' +
+      bloqueResumen +
+      bloqueSinPagar +
       '<button class="btn" style="margin-top:10px;padding:5px 12px;font-size:11px;" onclick="cogVerEnConvenios('+c.id+')">Ver detalle completo en Convenios →</button>';
   }
 }
@@ -11665,7 +11769,7 @@ function cogToggle(idx) {
 function cogFiltrar(q) {
   if (!q) {
     _cogFiltrado = document.getElementById('cog-solo-brecha')?.checked
-      ? _cogData.filter(function(c){ return c.estado !== 'ok'; })
+      ? _cogData.filter(function(c){ return c.estado !== 'ok' || c.sinPagar > 0; })
       : _cogData;
   } else {
     _cogFiltrado = _cogData.filter(function(c){ return c.nombre.toLowerCase().includes(q.toLowerCase()); });
