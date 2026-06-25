@@ -11435,9 +11435,13 @@ async function cogGenerar() {
   document.getElementById('cog-tabla-card').style.display = 'none';
 
   try {
-    // 1. Traer todos los INGRESOS (out_invoice, cuenta 211401) del período
+    // 1. Traer todos los INGRESOS — específicamente el producto
+    //    "Ingresos por desembolsos a convenios", para no mezclar con otros
+    //    movimientos que también usan la cuenta 211401.
     var ingresos = await odooCall('account.move.line', 'search_read', [[
       ['account_id','=', IC_CUENTA_211401],
+      ['product_id','=', IC_PRODUCTO_DESEMBOLSO],
+      ['move_id.company_id','=',1],
       ['move_id.move_type','=','out_invoice'],
       ['move_id.state','=','posted'],
       ['date','>=',desde],
@@ -11448,9 +11452,14 @@ async function cogGenerar() {
 
     if (estado) estado.textContent = 'Buscando COGAYT cobrado...';
 
-    // 2. Traer todas las LIQUIDACIONES de COGAYT (in_invoice, cuenta 211401) del período
+    // 2. Traer todas las LIQUIDACIONES de COGAYT — específicamente el producto
+    //    "G3-Gastos Administrativos" (el único que es COGAYT real; la cuenta
+    //    211401 también se usa para Consultores, Otros Servicios Técnicos, etc.
+    //    que NO son COGAYT y no deben mezclarse en este cálculo).
     var liquidaciones = await odooCall('account.move.line', 'search_read', [[
       ['account_id','=', IC_CUENTA_211401],
+      ['product_id','=', IC_PRODUCTO_GASTOS_ADM],
+      ['move_id.company_id','=',1],
       ['move_id.move_type','=','in_invoice'],
       ['move_id.state','=','posted'],
       ['date','>=',desde],
