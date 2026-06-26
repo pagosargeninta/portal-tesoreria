@@ -2735,6 +2735,7 @@ tbody tr:hover td { background: #f8faf9; }
               <th style="text-align:right;">% real</th>
               <th style="text-align:right;">Brecha</th>
               <th style="text-align:center;">Estado</th>
+              <th style="text-align:center;">Acción</th>
             </tr></thead>
             <tbody id="cog-tbody"></tbody>
           </table>
@@ -2743,6 +2744,74 @@ tbody tr:hover td { background: #f8faf9; }
 
     </div>
     <!-- ══════════ FIN CONTROL DE COGAYT ══════════ -->
+
+    <!-- ══════════ COBRAR COGAYT PENDIENTE ══════════ -->
+    <div id="page-cobrarcogayt" class="page">
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-receipt-2"></i> Cobrar COGAYT pendiente</div>
+        </div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5;">
+            Cargá uno o varios COGAYT atrasados para este convenio. Por cada línea se crea la factura de cliente
+            a Fundación, su cobro, la liquidación al convenio y su pago — todo conectado, igual que en la carga normal.
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Convenio</label>
+            <div style="position:relative;">
+              <input type="text" id="cc-convenio-input" placeholder="Buscar convenio por nombre..."
+                style="width:100%;max-width:480px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+                oninput="ccBuscarConvenio(this.value)" autocomplete="off">
+              <div id="cc-convenio-resultados" style="display:none;position:absolute;top:100%;left:0;max-width:480px;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
+            </div>
+            <div id="cc-convenio-elegido" style="display:none;margin-top:6px;padding:7px 12px;background:rgba(45,134,89,.08);border-radius:6px;font-size:12px;color:var(--success);font-weight:600;max-width:480px;">
+              <i class="ti ti-check"></i> <span id="cc-convenio-elegido-nombre"></span>
+              <button onclick="ccLimpiarConvenio()" style="background:none;border:none;color:var(--muted);cursor:pointer;float:right;font-size:13px;"><i class="ti ti-x"></i></button>
+            </div>
+          </div>
+
+          <div style="margin-bottom:8px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿A qué cuenta bancaria entra y sale el COGAYT?</label>
+            <select id="cc-banco" style="width:100%;max-width:480px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+              <option value="">Cargando bancos...</option>
+            </select>
+          </div>
+
+          <div style="margin:16px 0 8px;display:flex;align-items:center;justify-content:space-between;">
+            <label style="font-size:12px;font-weight:600;color:var(--text);">COGAYTs a cobrar</label>
+            <button class="btn" onclick="ccAgregarLinea()" style="padding:5px 12px;font-size:11px;">
+              <i class="ti ti-plus"></i> Agregar línea
+            </button>
+          </div>
+
+          <div id="cc-lineas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;"></div>
+
+          <div id="cc-total-preview" style="display:none;margin-bottom:16px;padding:10px 16px;background:var(--surface-alt,#f8faf9);border-radius:8px;border:1px solid var(--border);font-size:13px;">
+            Total a cobrar: <strong id="cc-total-monto" style="color:var(--success);"></strong>
+            &nbsp;·&nbsp; <span id="cc-total-cantidad"></span>
+          </div>
+
+          <button class="btn btn-primary" id="cc-btn-procesar" onclick="ccProcesar()" style="padding:10px 24px;font-size:13px;">
+            <i class="ti ti-player-play"></i> Cobrar todos los COGAYT
+          </button>
+          <span id="cc-estado-validacion" style="margin-left:12px;font-size:12px;color:var(--danger);"></span>
+        </div>
+      </div>
+
+      <!-- Progreso -->
+      <div id="cc-progreso-card" class="card" style="display:none;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-list-check"></i> Progreso</div>
+        </div>
+        <div class="card-body">
+          <div id="cc-pasos" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+      </div>
+
+    </div>
+    <!-- ══════════ FIN COBRAR COGAYT PENDIENTE ══════════ -->
 
     <!-- ══════════ INGRESO + COGAYT ══════════ -->
     <div id="page-ingresocogayt" class="page">
@@ -3186,6 +3255,8 @@ const pageTitles = {
   config: ['Configuración', 'Conexión Odoo, IA y notificaciones'],
   fondos: ['Fondos Propios FA', 'FUNCIONAMIENTO FA · Recursos Propios · 2026'],
   notasmiami: ['Notas Miami', 'Transferencias al exterior — Banco Nación Agencia Miami'],
+  cogayt: ['Control COGAYT', 'Brecha entre ingresos y COGAYT cobrado por convenio'],
+  cobrarcogayt: ['Cobrar COGAYT pendiente', 'Regularización de COGAYT atrasado'],
 };
 
 function showHonTab(id, el) {
@@ -11677,16 +11748,17 @@ function cogRenderTabla(data) {
       '<td class="mono" style="text-align:right;font-weight:600;color:'+pctColor+';">'+pctTexto+'</td>' +
       '<td class="mono" style="text-align:right;font-weight:700;color:'+(c.brecha>0?'var(--danger)':'var(--success)')+';">'+(c.sinReglaFija?'—':(c.brecha>0?fmt(c.brecha):'$0'))+'</td>' +
       '<td style="text-align:center;">'+info.badge+'</td>' +
+      '<td style="text-align:center;"><button class="btn btn-primary" style="padding:4px 10px;font-size:11px;" onclick="event.stopPropagation();cogIrACobrar('+idx+')"><i class="ti ti-receipt-2"></i> Cobrar COGAYT</button></td>' +
     '</tr>' +
     '<tr id="cog-detail-'+idx+'" style="display:none;background:var(--surface-alt,#f8faf9);">' +
-      '<td colspan="7" style="padding:0;">' +
+      '<td colspan="8" style="padding:0;">' +
         '<div id="cog-detail-content-'+idx+'" style="padding:14px 20px 14px 32px;"></div>' +
       '</td>' +
     '</tr>';
   }).join('');
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--success);"><i class="ti ti-circle-check"></i> Sin brechas detectadas en el período</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--success);"><i class="ti ti-circle-check"></i> Sin brechas detectadas en el período</td></tr>';
   }
 }
 
@@ -11783,6 +11855,306 @@ function cogVerEnConvenios(analyticId) {
   // El módulo de Convenios ya tiene buscador propio; el usuario puede buscar
   // por nombre desde ahí. Si existiera una función de selección directa por ID
   // se podría invocar aquí.
+}
+
+// Ir directo al módulo "Cobrar COGAYT pendiente" con el convenio preseleccionado
+function cogIrACobrar(idx) {
+  var c = _cogFiltrado[idx];
+  if (!c) return;
+  var navEl = document.querySelector('.nav-item[onclick*="cobrarcogayt"]');
+  showPage('cobrarcogayt', navEl);
+  setTimeout(function(){
+    ccElegirConvenio(c.id, c.nombre);
+    ccCargarBancos();
+  }, 150);
+}
+
+// ═══════════════════════════════════════════════════════
+// COBRAR COGAYT PENDIENTE — múltiples líneas, mismo mecanismo
+// que Ingreso + COGAYT pero solo la parte de COGAYT (sin ingreso)
+// ═══════════════════════════════════════════════════════
+
+var ccConvenioSel = null; // {id, name}
+var ccBancosCache = null;
+var ccTimerConvenio = null;
+var ccLineaCounter = 0;
+
+async function ccCargarBancos() {
+  if (ccBancosCache) return ccBancosCache;
+  try {
+    var bancos = await odooCall('account.journal', 'search_read',
+      [[['type','in',['bank','cash']],['company_id','=',1]]],
+      { fields: ['id','name','code'], order: 'name asc', limit: 200 });
+    ccBancosCache = bancos;
+    var opciones = '<option value="">Seleccionar...</option>' +
+      bancos.map(function(b){ return '<option value="'+b.id+'">'+b.name+'</option>'; }).join('');
+    var sel = document.getElementById('cc-banco');
+    if (sel) sel.innerHTML = opciones;
+  } catch(e) {
+    console.error('ccCargarBancos error:', e);
+  }
+  return ccBancosCache;
+}
+
+function ccBuscarConvenio(q) {
+  clearTimeout(ccTimerConvenio);
+  var cont = document.getElementById('cc-convenio-resultados');
+  if (!q || q.length < 3) { if (cont) cont.style.display = 'none'; return; }
+  ccTimerConvenio = setTimeout(async function(){
+    try {
+      var res = await odooCall('account.analytic.account', 'search_read',
+        [[['active','=',true],['name','ilike', q]]],
+        { fields: ['id','name'], limit: 15, order: 'name asc' });
+      if (!cont) return;
+      if (!res.length) { cont.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">Sin resultados</div>'; cont.style.display='block'; return; }
+      cont.innerHTML = res.map(function(a){
+        return '<div onclick="ccElegirConvenioPorId('+a.id+')" style="padding:9px 14px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background=\'var(--surface-alt,#f4f6f5)\'" onmouseout="this.style.background=\'\'">'+a.name+'</div>';
+      }).join('');
+      cont.style.display = 'block';
+      // Guardar mapa temporal para resolver el click sin pasar el nombre con comillas
+      window._ccBusquedaTemp = {};
+      res.forEach(function(a){ window._ccBusquedaTemp[a.id] = a.name; });
+    } catch(e) { console.error('ccBuscarConvenio error:', e); }
+  }, 300);
+}
+function ccElegirConvenioPorId(id) {
+  var nombre = (window._ccBusquedaTemp && window._ccBusquedaTemp[id]) || ('Convenio #'+id);
+  ccElegirConvenio(id, nombre);
+}
+function ccElegirConvenio(id, nombre) {
+  ccConvenioSel = { id: id, name: nombre };
+  var cont = document.getElementById('cc-convenio-resultados');
+  if (cont) cont.style.display = 'none';
+  document.getElementById('cc-convenio-input').value = '';
+  document.getElementById('cc-convenio-elegido-nombre').textContent = nombre;
+  document.getElementById('cc-convenio-elegido').style.display = 'block';
+}
+function ccLimpiarConvenio() {
+  ccConvenioSel = null;
+  document.getElementById('cc-convenio-elegido').style.display = 'none';
+}
+
+function ccAgregarLinea() {
+  ccLineaCounter++;
+  var id = ccLineaCounter;
+  var cont = document.getElementById('cc-lineas');
+  var div = document.createElement('div');
+  div.id = 'cc-linea-'+id;
+  div.style = 'display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt,#f8faf9);';
+  div.innerHTML =
+    '<div>'+
+      '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Monto del COGAYT</label>'+
+      '<input type="text" id="cc-monto-'+id+'" placeholder="Ej: 300000" oninput="ccActualizarTotal()" '+
+        'style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);box-sizing:border-box;">'+
+    '</div>'+
+    '<div>'+
+      '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Referencia (a qué ingreso corresponde)</label>'+
+      '<input type="text" id="cc-ref-'+id+'" placeholder="Ej: Ingreso Enero 1690000" '+
+        'style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);box-sizing:border-box;">'+
+    '</div>'+
+    '<button onclick="ccQuitarLinea('+id+')" style="background:none;border:none;color:var(--danger);cursor:pointer;padding:6px;" title="Quitar línea">'+
+      '<i class="ti ti-trash" style="font-size:16px;"></i>'+
+    '</button>';
+  cont.appendChild(div);
+  ccActualizarTotal();
+}
+
+function ccQuitarLinea(id) {
+  var el = document.getElementById('cc-linea-'+id);
+  if (el) el.remove();
+  ccActualizarTotal();
+}
+
+function ccObtenerLineas() {
+  var cont = document.getElementById('cc-lineas');
+  var lineas = [];
+  Array.from(cont.children).forEach(function(div){
+    var idMatch = div.id.match(/cc-linea-(\d+)/);
+    if (!idMatch) return;
+    var id = idMatch[1];
+    var montoEl = document.getElementById('cc-monto-'+id);
+    var refEl = document.getElementById('cc-ref-'+id);
+    var monto = parseFloat((montoEl?.value||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+    var ref = (refEl?.value||'').trim();
+    if (monto > 0) lineas.push({ monto: monto, ref: ref });
+  });
+  return lineas;
+}
+
+function ccActualizarTotal() {
+  var lineas = ccObtenerLineas();
+  var preview = document.getElementById('cc-total-preview');
+  if (!lineas.length) { if (preview) preview.style.display = 'none'; return; }
+  var total = lineas.reduce(function(s,l){ return s+l.monto; }, 0);
+  var fmt = function(n){ return '$'+n.toLocaleString('es-AR',{maximumFractionDigits:2}); };
+  document.getElementById('cc-total-monto').textContent = fmt(total);
+  document.getElementById('cc-total-cantidad').textContent = lineas.length + ' COGAYT' + (lineas.length!==1?'s':'') + ' a cobrar';
+  if (preview) preview.style.display = 'block';
+}
+
+function ccInicializarPasos(cantidadLineas) {
+  var cont = document.getElementById('cc-pasos');
+  var html = '';
+  for (var i = 0; i < cantidadLineas; i++) {
+    html += '<div id="cc-paso-'+i+'" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:6px;background:var(--surface-alt,#f8faf9);opacity:0.5;">'+
+      '<span class="cc-paso-icono" style="font-size:16px;"><i class="ti ti-circle" style="color:var(--muted);"></i></span>'+
+      '<span class="cc-paso-texto" style="font-size:12px;">COGAYT '+(i+1)+' pendiente...</span>'+
+    '</div>';
+  }
+  cont.innerHTML = html;
+  document.getElementById('cc-progreso-card').style.display = 'block';
+}
+
+function ccSetPaso(idx, estado, texto) {
+  var el = document.getElementById('cc-paso-'+idx);
+  if (!el) return;
+  var iconos = {
+    pendiente: '<i class="ti ti-circle" style="color:var(--muted);"></i>',
+    cargando:  '<i class="ti ti-loader" style="color:var(--info);"></i>',
+    ok:        '<i class="ti ti-circle-check" style="color:var(--success);"></i>',
+    error:     '<i class="ti ti-circle-x" style="color:var(--danger);"></i>'
+  };
+  el.querySelector('.cc-paso-icono').innerHTML = iconos[estado] || iconos.pendiente;
+  el.querySelector('.cc-paso-texto').innerHTML = texto;
+  el.style.opacity = estado === 'pendiente' ? '0.5' : '1';
+}
+
+function ccValidar() {
+  var errores = [];
+  if (!ccConvenioSel) errores.push('Elegí el convenio');
+  if (!document.getElementById('cc-banco').value) errores.push('Elegí el banco');
+  var lineas = ccObtenerLineas();
+  if (!lineas.length) errores.push('Agregá al menos un COGAYT con monto');
+  lineas.forEach(function(l, i){
+    if (!l.ref) errores.push('Falta la referencia del COGAYT #'+(i+1));
+  });
+  return errores;
+}
+
+// Procesa cada línea con el mismo mecanismo que Ingreso + COGAYT, pero
+// arrancando directo en el paso de "factura COGAYT a Fundación" (sin el
+// ingreso al convenio, que ya existe de antes).
+async function ccProcesar() {
+  var errores = ccValidar();
+  var msgEl = document.getElementById('cc-estado-validacion');
+  if (errores.length) { msgEl.textContent = errores[0]; return; }
+  msgEl.textContent = '';
+
+  var btn = document.getElementById('cc-btn-procesar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Procesando...';
+
+  var lineas = ccObtenerLineas();
+  ccInicializarPasos(lineas.length);
+
+  var _ahora = new Date();
+  var hoy = `${_ahora.getFullYear()}-${String(_ahora.getMonth()+1).padStart(2,'0')}-${String(_ahora.getDate()).padStart(2,'0')}`;
+  var bancoId = parseInt(document.getElementById('cc-banco').value);
+
+  var resultados = [];
+
+  for (var i = 0; i < lineas.length; i++) {
+    var linea = lineas[i];
+    try {
+      ccSetPaso(i, 'cargando', 'Creando factura de COGAYT a Fundación...');
+
+      // 1. Factura de cliente (FA-C) — COGAYT a Fundación
+      var facCogaytId = await odooCall('account.move', 'create', [{
+        move_type: 'out_invoice',
+        partner_id: IC_PARTNER_FUNDACION,
+        journal_id: IC_JOURNAL_COGAYT_VTA,
+        invoice_date: hoy,
+        date: hoy,
+        invoice_line_ids: [[0, 0, {
+          product_id: IC_PRODUCTO_COGAYT,
+          name: 'Ingreso Prestaciones de Servicios — ' + linea.ref,
+          quantity: 1,
+          price_unit: linea.monto,
+          account_id: IC_CUENTA_411000,
+          analytic_distribution: { [IC_ANALITICA_FUNC_FA]: 100 }
+        }]]
+      }]);
+      await icPostearVerificado('account.move', facCogaytId, 'la factura de COGAYT #'+(i+1));
+      var facCogaytData = await odooCall('account.move', 'read', [[facCogaytId], ['name']]);
+      var numeroFacCogayt = facCogaytData[0].name;
+
+      // 2. Cobro de esa factura (RE-X)
+      ccSetPaso(i, 'cargando', 'Cobrando la factura de COGAYT...');
+      var pagoCogaytInId = await odooCall('account.payment', 'create', [{
+        payment_type: 'inbound',
+        partner_id: IC_PARTNER_FUNDACION,
+        partner_type: 'customer',
+        amount: linea.monto,
+        journal_id: bancoId,
+        date: hoy,
+        memo: `INGRESO CH ${linea.ref} COGAYT`,
+        destination_account_id: 2323
+      }]);
+      await icPostearVerificado('account.payment', pagoCogaytInId, 'el cobro de COGAYT #'+(i+1));
+      await icConciliarPago(pagoCogaytInId, facCogaytId);
+
+      // 3. Liquidación (LU-C) — salida del convenio
+      ccSetPaso(i, 'cargando', 'Creando la liquidación al convenio...');
+      var soloNumero = numeroFacCogayt.replace(/^[A-Z\-]+\s+/i, '').trim();
+      var liquidacionId = await odooCall('account.move', 'create', [{
+        move_type: 'in_invoice',
+        partner_id: IC_PARTNER_FUNDACION,
+        journal_id: IC_JOURNAL_PROV_FAR,
+        l10n_latam_document_type_id: 87, // LU-C (29)
+        invoice_date: hoy,
+        date: hoy,
+        ref: numeroFacCogayt,
+        invoice_line_ids: [[0, 0, {
+          product_id: IC_PRODUCTO_GASTOS_ADM,
+          name: 'G3-Gastos Administrativos — ' + linea.ref,
+          quantity: 1,
+          price_unit: linea.monto,
+          account_id: IC_CUENTA_211401,
+          analytic_distribution: { [ccConvenioSel.id]: 100 }
+        }]]
+      }]);
+      try {
+        await odooCall('account.move', 'write', [[liquidacionId], { l10n_latam_document_number: soloNumero }]);
+      } catch(eDoc) {
+        console.warn('No se pudo setear l10n_latam_document_number:', eDoc.message);
+      }
+      await icPostearVerificado('account.move', liquidacionId, 'la liquidación #'+(i+1));
+
+      // Adjuntar PDF de la factura COGAYT a la liquidación
+      var pdfOk = false;
+      try {
+        pdfOk = await icAdjuntarPdfFactura(facCogaytId, liquidacionId, numeroFacCogayt);
+      } catch(ePdf) {
+        console.warn('No se pudo adjuntar el PDF:', ePdf.message);
+      }
+
+      var fmt = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:2}); };
+      var cfgPago = getConfig();
+      var baseUrlPago = (cfgPago.url || 'https://argeninta.odoo.com').replace(/\/$/, '');
+      var liqUrlPago = baseUrlPago + '/odoo/account.move/' + liquidacionId;
+
+      ccSetPaso(i, 'ok',
+        `${fmt(linea.monto)} (${linea.ref}) — Liquidación N° ${numeroFacCogayt} creada${pdfOk?' con PDF adjuntado':''}. `+
+        `<a href="${liqUrlPago}" target="_blank" style="color:var(--info);font-weight:600;">Falta pagarla →</a>`
+      );
+
+      resultados.push({ ok:true, ref: linea.ref, monto: linea.monto, liquidacionId, numeroFacCogayt });
+
+    } catch(e) {
+      console.error('ccProcesar línea '+(i+1)+' error:', e);
+      ccSetPaso(i, 'error', `Error en COGAYT "${linea.ref}": ${e.message}`);
+      resultados.push({ ok:false, ref: linea.ref, monto: linea.monto, error: e.message });
+      // Seguimos con las demás líneas aunque una falle
+    }
+  }
+
+  var okCount = resultados.filter(function(r){ return r.ok; }).length;
+  var errCount = resultados.length - okCount;
+  msgEl.style.color = errCount > 0 ? 'var(--warn)' : 'var(--success)';
+  msgEl.textContent = okCount + ' de ' + resultados.length + ' COGAYT cargados correctamente' + (errCount>0 ? ' · '+errCount+' con error' : '') + '. Cada liquidación queda pendiente de pago (link arriba).';
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-player-play"></i> Cobrar todos los COGAYT';
 }
 
 </script>
