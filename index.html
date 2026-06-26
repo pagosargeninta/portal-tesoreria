@@ -2691,6 +2691,18 @@ tbody tr:hover td { background: #f8faf9; }
 
       <!-- KPIs globales -->
       <div id="cog-kpis" style="display:none;margin-bottom:16px;">
+
+        <!-- % de avance global, destacado arriba de todo -->
+        <div class="card" style="margin-bottom:12px;border-left:4px solid var(--success);">
+          <div class="card-body" style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+            <div>
+              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">COGAYT cobrado / Ingresos (excluye Internacional 5.2)</div>
+              <div style="font-size:28px;font-weight:800;color:var(--success);" id="cog-k-avance">—</div>
+            </div>
+            <div id="cog-k-avance-sub" style="font-size:12px;color:var(--muted);text-align:right;"></div>
+          </div>
+        </div>
+
         <div class="metrics-grid">
           <div class="metric-card success">
             <div class="metric-label">Total ingresos</div>
@@ -2711,6 +2723,25 @@ tbody tr:hover td { background: #f8faf9; }
             <div class="metric-label">Convenios con brecha</div>
             <div class="metric-value" id="cog-k-convenios">—</div>
             <div class="metric-sub">de los analizados</div>
+          </div>
+        </div>
+
+        <!-- Desagregado por organismo -->
+        <div class="card" style="margin-top:12px;">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-building"></i> Avance por organismo</div>
+          </div>
+          <div class="table-wrap" style="border:none;border-radius:0;">
+            <table style="font-size:12px;">
+              <thead><tr>
+                <th>Organismo</th>
+                <th style="text-align:right;">Ingresos</th>
+                <th style="text-align:right;">COGAYT cobrado</th>
+                <th style="text-align:right;">% efectivo</th>
+                <th style="text-align:right;">Brecha</th>
+              </tr></thead>
+              <tbody id="cog-org-tbody"></tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -11487,6 +11518,18 @@ var _cogFiltrado = [];  // datos filtrados para mostrar
   if (hEl) hEl.value = fmtD(hoy);
 })();
 
+// Extraer organismo del nombre de la analítica — misma lógica que Fondos
+// Propios (fpDesmOrgKey), reutilizada aquí para agrupar el avance de COGAYT
+// por organismo (SENASA, INTA, MAGYP, DEC, etc.)
+function cogExtraerOrganismo(nombre) {
+  if (!nombre) return 'OTRO';
+  var m = nombre.match(/^10\.([A-Z]+)\./);
+  if (m) return m[1];
+  if (nombre.indexOf('14.INTA.DEC') >= 0) return 'DEC';
+  if (nombre.indexOf('5.2.') >= 0) return 'INT';
+  return 'OTRO';
+}
+
 // % esperado según el tipo de convenio, identificado por palabras clave en el
 // nombre de la analítica. Reglas del negocio:
 //   - DEC, INTA, INTEA, MAGYP, INIDEP → 5%
@@ -11681,6 +11724,7 @@ async function cogGenerar() {
         estado: estadoConv
       };
     }).filter(function(c){ return c.ingresos > 0 || c.sinPagar > 0; }) // ignorar analíticas sin movimientos
+      .filter(function(c){ return !c.nombre.includes('11.2') && !c.nombre.toUpperCase().includes('DELEGACIONES'); }) // no nos pertenece, corrompe el informe
       .sort(function(a,b){ return (b.brecha||0) - (a.brecha||0); }); // los de mayor brecha primero
 
     // 6. KPIs globales
@@ -11700,6 +11744,46 @@ async function cogGenerar() {
     set('cog-k-brecha',       fmt(totalBrecha));
     set('cog-k-brecha-sub',   conSinPagar>0 ? conSinPagar+' convenios con ingresos sin cobrar ('+fmt(totalSinPagar)+')' : 'pendiente de cobrar');
     set('cog-k-convenios',    conBrecha);
+
+    // % de avance global excluyendo convenios sin regla fija (Internacional/5.2)
+    var conveniosConRegla = _cogData.filter(function(c){ return !c.sinReglaFija; });
+    var ingresosConRegla  = conveniosConRegla.reduce(function(s,c){ return s+c.ingresos; },0);
+    var cogaytConRegla    = conveniosConRegla.reduce(function(s,c){ return s+c.cogayt; },0);
+    var avancePct         = ingresosConRegla > 0 ? (cogaytConRegla / ingresosConRegla * 100) : 0;
+    set('cog-k-avance', avancePct.toFixed(1)+'%');
+    set('cog-k-avance-sub', fmt(cogaytConRegla)+' cobrado de '+fmt(ingresosConRegla)+' en ingresos · '+conveniosConRegla.length+' convenios (excl. Internacional)');
+
+    // Desagregado por organismo (SENASA, INTA, MAGYP, DEC, etc.)
+    var porOrganismo = {}; // organismo -> { ingresos, cogayt, brecha }
+    _cogData.forEach(function(c){
+      var org = cogExtraerOrganismo(c.nombre);
+      if (!porOrganismo[org]) porOrganismo[org] = { ingresos:0, cogayt:0, brecha:0 };
+      porOrganismo[org].ingresos += c.ingresos;
+      porOrganismo[org].cogayt   += c.cogayt;
+      if (!c.sinReglaFija) porOrganismo[org].brecha += Math.max(c.brecha||0, 0);
+    });
+    var orgRows = Object.keys(porOrganismo)
+      .map(function(org){
+        var o = porOrganismo[org];
+        var pctOrg = o.ingresos > 0 ? (o.cogayt / o.ingresos * 100) : 0;
+        return { org: org, ingresos: o.ingresos, cogayt: o.cogayt, pct: pctOrg, brecha: o.brecha };
+      })
+      .sort(function(a,b){ return b.ingresos - a.ingresos; });
+
+    var orgTbody = document.getElementById('cog-org-tbody');
+    if (orgTbody) {
+      orgTbody.innerHTML = orgRows.map(function(o){
+        var nombreOrg = o.org === 'INT' ? 'Internacional (5.2)' : o.org;
+        var pctColor = o.brecha > 0 ? 'var(--warn)' : 'var(--success)';
+        return '<tr>'+
+          '<td style="font-weight:600;">'+nombreOrg+'</td>'+
+          '<td class="mono" style="text-align:right;color:var(--success);">'+fmt(o.ingresos)+'</td>'+
+          '<td class="mono" style="text-align:right;">'+fmt(o.cogayt)+'</td>'+
+          '<td class="mono" style="text-align:right;font-weight:600;color:'+pctColor+';">'+o.pct.toFixed(1)+'%</td>'+
+          '<td class="mono" style="text-align:right;font-weight:700;color:'+(o.brecha>0?'var(--danger)':'var(--success)')+';">'+(o.brecha>0?fmt(o.brecha):'$0')+'</td>'+
+        '</tr>';
+      }).join('') || '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted);">Sin datos</td></tr>';
+    }
 
     document.getElementById('cog-kpis').style.display = 'block';
 
@@ -11944,12 +12028,22 @@ function ccAgregarLinea() {
   var cont = document.getElementById('cc-lineas');
   var div = document.createElement('div');
   div.id = 'cc-linea-'+id;
-  div.style = 'display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt,#f8faf9);';
+  div.style = 'display:grid;grid-template-columns:1fr 90px 1fr 1fr auto;gap:10px;align-items:end;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt,#f8faf9);';
   div.innerHTML =
     '<div>'+
-      '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Monto del COGAYT</label>'+
-      '<input type="text" id="cc-monto-'+id+'" placeholder="Ej: 300000" oninput="ccActualizarTotal()" '+
+      '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Monto del ingreso</label>'+
+      '<input type="text" id="cc-ingreso-'+id+'" placeholder="Ej: 5000000" oninput="ccCalcularLinea('+id+')" '+
         'style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);box-sizing:border-box;">'+
+    '</div>'+
+    '<div>'+
+      '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">% COGAYT</label>'+
+      '<input type="text" id="cc-pct-'+id+'" placeholder="6" value="6" oninput="ccCalcularLinea('+id+')" '+
+        'style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);box-sizing:border-box;">'+
+    '</div>'+
+    '<div>'+
+      '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Monto del COGAYT</label>'+
+      '<input type="text" id="cc-monto-'+id+'" placeholder="Se calcula solo" readonly '+
+        'style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:rgba(45,134,89,.06);color:var(--success);font-weight:600;box-sizing:border-box;">'+
     '</div>'+
     '<div>'+
       '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Referencia (a qué ingreso corresponde)</label>'+
@@ -11978,11 +12072,29 @@ function ccObtenerLineas() {
     var id = idMatch[1];
     var montoEl = document.getElementById('cc-monto-'+id);
     var refEl = document.getElementById('cc-ref-'+id);
-    var monto = parseFloat((montoEl?.value||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+    // Preferir el valor numérico crudo guardado por ccCalcularLinea (sin
+    // ambigüedad de separador de miles/decimales regional)
+    var monto = parseFloat(montoEl?.dataset?.raw) || 0;
     var ref = (refEl?.value||'').trim();
     if (monto > 0) lineas.push({ monto: monto, ref: ref });
   });
   return lineas;
+}
+
+// Calcula el monto del COGAYT en vivo a partir de Monto del Ingreso × % COGAYT
+function ccCalcularLinea(id) {
+  var ingresoEl = document.getElementById('cc-ingreso-'+id);
+  var pctEl     = document.getElementById('cc-pct-'+id);
+  var montoEl   = document.getElementById('cc-monto-'+id);
+  if (!ingresoEl || !pctEl || !montoEl) return;
+
+  var ingreso = parseFloat((ingresoEl.value||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+  var pct     = parseFloat((pctEl.value||'').replace(',','.')) || 0;
+  var cogayt  = Math.round(ingreso * pct / 100 * 100) / 100;
+
+  montoEl.value = cogayt > 0 ? cogayt.toLocaleString('es-AR',{maximumFractionDigits:2}) : '';
+  montoEl.dataset.raw = cogayt; // valor numérico crudo, sin problemas de formato regional
+  ccActualizarTotal();
 }
 
 function ccActualizarTotal() {
