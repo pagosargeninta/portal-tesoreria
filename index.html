@@ -2773,7 +2773,7 @@ tbody tr:hover td { background: #f8faf9; }
           </div>
 
           <div style="margin-bottom:8px;">
-            <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿A qué cuenta bancaria entra y sale el COGAYT?</label>
+            <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿A qué cuenta bancaria entra el cobro del COGAYT?</label>
             <select id="cc-banco" style="width:100%;max-width:480px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
               <option value="">Cargando bancos...</option>
             </select>
@@ -2807,6 +2807,10 @@ tbody tr:hover td { background: #f8faf9; }
         </div>
         <div class="card-body">
           <div id="cc-pasos" style="display:flex;flex-direction:column;gap:10px;"></div>
+          <div id="cc-resumen-final" style="display:none;margin-top:16px;padding:14px 18px;border-radius:8px;background:rgba(183,96,10,.08);border:1px solid rgba(183,96,10,.3);">
+            <div style="font-weight:700;color:var(--warn);margin-bottom:8px;"><i class="ti ti-alert-triangle"></i> Falta pagar estas liquidaciones</div>
+            <div id="cc-resumen-links" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
         </div>
       </div>
 
@@ -12003,6 +12007,8 @@ function ccInicializarPasos(cantidadLineas) {
   }
   cont.innerHTML = html;
   document.getElementById('cc-progreso-card').style.display = 'block';
+  document.getElementById('cc-resumen-final').style.display = 'none';
+  document.getElementById('cc-resumen-links').innerHTML = '';
 }
 
 function ccSetPaso(idx, estado, texto) {
@@ -12138,7 +12144,7 @@ async function ccProcesar() {
         `<a href="${liqUrlPago}" target="_blank" style="color:var(--info);font-weight:600;">Falta pagarla →</a>`
       );
 
-      resultados.push({ ok:true, ref: linea.ref, monto: linea.monto, liquidacionId, numeroFacCogayt });
+      resultados.push({ ok:true, ref: linea.ref, monto: linea.monto, liquidacionId, numeroFacCogayt, liqUrlPago });
 
     } catch(e) {
       console.error('ccProcesar línea '+(i+1)+' error:', e);
@@ -12151,7 +12157,20 @@ async function ccProcesar() {
   var okCount = resultados.filter(function(r){ return r.ok; }).length;
   var errCount = resultados.length - okCount;
   msgEl.style.color = errCount > 0 ? 'var(--warn)' : 'var(--success)';
-  msgEl.textContent = okCount + ' de ' + resultados.length + ' COGAYT cargados correctamente' + (errCount>0 ? ' · '+errCount+' con error' : '') + '. Cada liquidación queda pendiente de pago (link arriba).';
+  msgEl.textContent = okCount + ' de ' + resultados.length + ' COGAYT cargados correctamente' + (errCount>0 ? ' · '+errCount+' con error' : '') + '.';
+
+  // Resumen final con todos los links de pago juntos, bien visibles
+  var exitosos = resultados.filter(function(r){ return r.ok; });
+  if (exitosos.length > 0) {
+    var fmtFinal = function(n){ return '$'+parseFloat(n||0).toLocaleString('es-AR',{maximumFractionDigits:2}); };
+    document.getElementById('cc-resumen-links').innerHTML = exitosos.map(function(r){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:var(--surface);border-radius:6px;font-size:12px;">'+
+        '<span>'+r.ref+' — '+fmtFinal(r.monto)+' (N° '+r.numeroFacCogayt+')</span>'+
+        '<a href="'+r.liqUrlPago+'" target="_blank" class="btn btn-primary" style="padding:4px 12px;font-size:11px;">Pagar →</a>'+
+      '</div>';
+    }).join('');
+    document.getElementById('cc-resumen-final').style.display = 'block';
+  }
 
   btn.disabled = false;
   btn.innerHTML = '<i class="ti ti-player-play"></i> Cobrar todos los COGAYT';
