@@ -476,6 +476,386 @@ tbody tr:hover td{background:#F5F8FC}
 /* Typography refinements globales */
 .content { font-size: 13px; line-height: 1.55; }
 .content b, .content strong { font-weight: 700; }
+
+/* ═══════════════════════════════════════════════════════════════
+   v6 — INSTITUTIONAL DEPTH
+   ArgenINTA brand: rojo #C41E1C + celeste bandera #74ACDF + navy
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --celeste:    #5B9BD5;   /* Azul bandera argentina — acento secundario */
+  --celeste-gl: rgba(91,155,213,.12);
+  --navy:       #0B1220;
+  --red:        #C41E1C;
+  --red-dk:     #9E1816;
+  --red-gl:     rgba(196,30,28,.15);
+  --gold:       #8B6914;   /* Sello/certificado */
+}
+
+/* ── BODY + APP CHROME ────────────────────────────────────── */
+body { background: #E6EBF4; }
+
+/* ── TOPBAR — franja institucional con celeste en bottom ─── */
+.topbar {
+  background: #0B1220 !important;
+  border-bottom: 2px solid var(--celeste) !important;
+  height: 52px !important;
+}
+
+/* ── PAGE HERO — más presencia institucional ─────────────── */
+.page-hero {
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding: 22px 26px 20px !important;
+  position: relative;
+  overflow: hidden;
+}
+.page-hero::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--red) 0%, var(--celeste) 100%);
+}
+.ph-title { font-size: 19px !important; font-weight: 800 !important; letter-spacing: -.6px !important; }
+.ph-sub   { font-size: 12px !important; margin-top: 3px !important; }
+
+/* ── SIDEBAR — refinamiento ──────────────────────────────── */
+.sidebar { background: #0A1120 !important; box-shadow: 3px 0 24px rgba(0,0,0,.35) !important; }
+.sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 2px; height: 100%;
+  background: linear-gradient(180deg,
+    var(--red) 0%, var(--red) 40%,
+    var(--celeste) 60%, var(--celeste) 100%);
+  opacity: .55;
+}
+.brand-A { color: #FFFFFF !important; }
+.brand-I { color: #C41E1C !important; }
+.nav-item.active {
+  background: rgba(196,30,28,.13) !important;
+  border-left-color: #C41E1C !important;
+}
+.nav-item.active i { color: #C41E1C !important; }
+
+/* ── CARD — línea superior institucional ─────────────────── */
+.card {
+  border: 1px solid #D4DCE8 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 3px rgba(11,18,32,.05), 0 0 0 0 transparent !important;
+}
+.card-header {
+  background: #F7F9FC !important;
+  border-bottom: 1px solid #DDE4EE !important;
+  padding: 12px 18px !important;
+}
+.card-title { font-size: 12px !important; font-weight: 700 !important; color: #1A2840 !important; text-transform: uppercase; letter-spacing: .05em; }
+.card-title i { color: var(--red) !important; font-size: 13px !important; }
+
+/* ── METRIC CARDS — estilo financial terminal ──────────────── */
+.metric-card {
+  background: var(--surface) !important;
+  border: 1px solid #D4DCE8 !important;
+  border-radius: 6px !important;
+  border-top: none !important;
+  padding: 16px 18px 14px !important;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(11,18,32,.04) !important;
+}
+.metric-card::before {
+  content: '' !important;
+  display: block !important;
+  height: 3px !important;
+  border-radius: 6px 6px 0 0 !important;
+  position: absolute;
+  top: 0; left: 0; right: 0;
+}
+/* Colores de accent line por tipo */
+.metric-card.success::before { background: #15803D !important; }
+.metric-card.danger::before  { background: #C41E1C !important; }
+.metric-card.warn::before    { background: #A16207 !important; }
+.metric-card.info::before    { background: #1E40AF !important; }
+/* Cards sin clase: usar celeste como default institucional */
+.metric-card:not(.success):not(.danger):not(.warn):not(.info)::before { background: var(--celeste) !important; }
+
+.metric-label {
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .1em !important;
+  text-transform: uppercase !important;
+  color: #6B7C94 !important;
+  margin-bottom: 10px !important;
+}
+.metric-value {
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  font-size: 28px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  letter-spacing: -1px !important;
+  color: #0D1826 !important;
+  margin-bottom: 6px !important;
+}
+.metric-sub {
+  font-size: 10px !important;
+  color: #7A8FA6 !important;
+}
+
+/* ── TABLES — institucional pesado ────────────────────────── */
+table { width: 100%; border-collapse: collapse; }
+
+thead tr {
+  border-bottom: 2px solid #0B1220 !important;
+}
+thead th {
+  background: #1A2840 !important;
+  color: rgba(255,255,255,.75) !important;
+  padding: 9px 14px !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: .1em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+  border: none !important;
+}
+thead th:first-child { border-left: 3px solid var(--celeste) !important; }
+
+tbody td {
+  padding: 9px 14px !important;
+  font-size: 12.5px !important;
+  color: #1E2D40 !important;
+  border-bottom: 1px solid #EBF0F8 !important;
+  vertical-align: middle !important;
+}
+tbody tr:nth-child(even) td { background: #F8FAFD !important; }
+tbody tr:hover td { background: #EEF4FC !important; transition: background .1s; }
+
+/* monospace para columnas numéricas */
+td[style*="text-align:right"],
+td[style*="text-align: right"] {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 12px !important;
+  letter-spacing: -.3px;
+}
+
+/* ── ALERT SECTION HEADERS (inline rgba amarillo/rojo) ───── */
+/* Override the amber section headers */
+[style*="background:rgba(183"],
+[style*="background:rgba(192"],
+[style*="background:rgba(210"],
+[style*="background:rgba(130"] {
+  background: #F0F4FA !important;
+  border-color: #D4DCE8 !important;
+  border-left: 3px solid var(--warn) !important;
+  padding-left: 15px !important;
+}
+
+/* Make warn section headers have amber left border */
+[style*="color:var(--warn)"] [style*="background:rgba"],
+.card-header + div[style*="background:rgba(183"] {
+  border-left-color: var(--warn) !important;
+}
+
+/* ── TABS ─────────────────────────────────────────────────── */
+.tab-row {
+  border-bottom: 2px solid #D4DCE8 !important;
+  background: transparent !important;
+  margin-bottom: 20px !important;
+  gap: 2px !important;
+}
+.tab-btn {
+  padding: 9px 18px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border-radius: 4px 4px 0 0 !important;
+  color: #546478 !important;
+  border-bottom: 2px solid transparent !important;
+  margin-bottom: -2px !important;
+  transition: all .12s !important;
+}
+.tab-btn:hover {
+  background: #F0F4FA !important;
+  color: #1A2840 !important;
+}
+.tab-btn.active {
+  color: var(--red) !important;
+  font-weight: 700 !important;
+  border-bottom-color: var(--red) !important;
+  background: white !important;
+}
+
+/* ── BUTTONS ─────────────────────────────────────────────── */
+.btn {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border-radius: 5px !important;
+  letter-spacing: .01em !important;
+  padding: 6px 14px !important;
+}
+.btn-primary {
+  background: var(--red) !important;
+  border-color: var(--red-dk) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 4px rgba(196,30,28,.25) !important;
+}
+.btn-primary:hover { background: var(--red-dk) !important; }
+
+/* ── KPI STRIP (c29-kpi) ────────────────────────────────── */
+.c29-kpi {
+  background: var(--surface) !important;
+  border: 1px solid #D4DCE8 !important;
+  border-radius: 6px !important;
+  border-top: 3px solid var(--celeste) !important;
+  padding: 12px 14px !important;
+  transition: box-shadow .12s !important;
+}
+.c29-kpi:hover { box-shadow: 0 3px 10px rgba(11,18,32,.08) !important; }
+.c29-kpi-ok    { border-top-color: #15803D !important; }
+.c29-kpi-warn  { border-top-color: #A16207 !important; }
+.c29-kpi-danger{ border-top-color: var(--red) !important; }
+.c29-kpi-info  { border-top-color: #1E40AF !important; }
+
+.c29-kpi-val {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.5px !important;
+  color: #0D1826 !important;
+  line-height: 1.2 !important;
+  margin-bottom: 5px !important;
+}
+.c29-kpi-lbl {
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .1em !important;
+  color: #7A8FA6 !important;
+}
+.c29-kpi-ok    .c29-kpi-val { color: #15803D !important; }
+.c29-kpi-warn  .c29-kpi-val { color: #A16207 !important; }
+.c29-kpi-danger .c29-kpi-val{ color: var(--red) !important; }
+.c29-kpi-info  .c29-kpi-val { color: #1E40AF !important; }
+
+/* ── FORM INPUTS ─────────────────────────────────────────── */
+.content input, .content select, .content textarea {
+  border: 1px solid #CDD7E6 !important;
+  border-radius: 5px !important;
+  font-size: 12.5px !important;
+  padding: 7px 11px !important;
+  background: #fff !important;
+  color: #0D1826 !important;
+  font-family: 'Inter', sans-serif !important;
+  transition: border-color .12s, box-shadow .12s !important;
+}
+.content input:focus, .content select:focus, .content textarea:focus {
+  border-color: var(--celeste) !important;
+  box-shadow: 0 0 0 3px rgba(91,155,213,.15) !important;
+  outline: none !important;
+}
+
+/* ── SUBCONV ROWS ────────────────────────────────────────── */
+.subconv-row {
+  border-radius: 5px !important;
+  border: 1px solid #D4DCE8 !important;
+  border-left: 3px solid #B8C8DE !important;
+  background: #fff !important;
+  padding: 14px 16px !important;
+  margin-bottom: 8px !important;
+}
+.subconv-row.ok     { border-left-color: #15803D !important; }
+.subconv-row.warn   { border-left-color: #A16207 !important; }
+.subconv-row.danger { border-left-color: var(--red) !important; }
+.subconv-row:hover  { box-shadow: 0 3px 10px rgba(11,18,32,.07) !important; }
+.subconv-name { font-weight: 700 !important; font-size: 13px !important; color: #0D1826 !important; }
+
+/* ── BADGES ──────────────────────────────────────────────── */
+.badge {
+  border-radius: 3px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  padding: 2px 7px !important;
+  letter-spacing: .03em !important;
+}
+
+/* ── SECTION TITLE ────────────────────────────────────────── */
+.section-title {
+  font-size: 9px !important;
+  letter-spacing: .18em !important;
+  color: #9BAFC6 !important;
+  margin: 22px 0 12px !important;
+  font-weight: 800 !important;
+}
+
+/* ── PROGRESS ─────────────────────────────────────────────── */
+.progress { background: #E0E8F4 !important; height: 5px !important; }
+.progress-fill { border-radius: 99px !important; }
+
+/* ── IFRAME WRAP ──────────────────────────────────────────── */
+.tool-iframe-wrap {
+  border: 1px solid #D4DCE8 !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 8px rgba(11,18,32,.06) !important;
+}
+
+/* ── DROPZONE ─────────────────────────────────────────────── */
+.dropzone {
+  border: 1.5px dashed #B8C8DE !important;
+  border-radius: 6px !important;
+  background: #F7F9FC !important;
+  transition: all .15s !important;
+}
+.dropzone:hover, .dropzone.drag-over {
+  border-color: var(--red) !important;
+  background: rgba(196,30,28,.02) !important;
+}
+.dropzone i { color: #A8BED4 !important; }
+
+/* ── CONTENT AREA GLOBAL ──────────────────────────────────── */
+.content { padding: 22px 26px !important; }
+
+/* ── NUMBERS EVERYWHERE ───────────────────────────────────── */
+.num-value {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.3px !important;
+}
+
+/* ── TOAST ────────────────────────────────────────────────── */
+#toast { border-radius: 5px !important; font-size: 12.5px !important; }
+
+/* ── FOCUS VISIBLE ────────────────────────────────────────── */
+:focus-visible { outline-color: var(--celeste) !important; }
+
+/* ── SCROLLBAR ────────────────────────────────────────────── */
+::-webkit-scrollbar-thumb { background: #C0D0E0 !important; }
+
+/* ── FOOTER BADGE ─────────────────────────────────────────── */
+.sf-badge {
+  background: rgba(91,155,213,.1) !important;
+  color: rgba(91,155,213,.5) !important;
+  border-color: rgba(91,155,213,.15) !important;
+}
+
+/* ── COMMAND BAR OVERRIDE (inline flex toolbars) ─────────── */
+.content > div[style*="display:flex"][style*="margin-bottom"] {
+  background: #F4F7FB !important;
+  border: 1px solid #D4DCE8 !important;
+  border-radius: 6px !important;
+  padding: 10px 14px !important;
+  margin-bottom: 18px !important;
+}
+
+/* ── ODOO PILL ────────────────────────────────────────────── */
+.odoo-pill {
+  background: rgba(21,128,61,.08) !important;
+  border: 1px solid rgba(21,128,61,.12) !important;
+  color: rgba(74,222,128,.75) !important;
+  font-size: 10px !important;
+}
 </style>
 </head>
 <body>
