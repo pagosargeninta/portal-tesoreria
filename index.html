@@ -8211,13 +8211,11 @@ async function fpDesmCargar() {
       off += 500;
     }
 
-    // 3. COGAYT — UNIFICADO con la misma lógica que usa "Control COGAYT":
-    //    se mide por las LIQUIDACIONES (in_invoice, cuenta 211401, producto
-    //    "G3-Gastos Administrativos", con analítica del convenio), no por el
-    //    estado de pago de la factura de cliente. Esto refleja mejor la
-    //    realidad porque la liquidación es el documento que efectivamente
-    //    "sale" del convenio, y es el método con el que ya se está
-    //    regularizando todo el COGAYT histórico atrasado.
+    // 3. COGAYT — usa el mismo método que "Control COGAYT" (cuenta 211401 +
+    //    producto "G3-Gastos Administrativos"), pero mantiene la distinción
+    //    entre LIQUIDADO (todas las liquidaciones posteadas) y COBRADO
+    //    (solo las que están conciliadas/pagadas) — son dos métricas
+    //    distintas y complementarias, no el mismo número.
     if (loading) loading.querySelector('#fp-desm-loading-msg').textContent='Cargando COGAYT...';
 
     var cogaytLiqLineasRaw = await odooCall('account.move.line','search_read',
@@ -8230,10 +8228,20 @@ async function fpDesmCargar() {
         ['analytic_distribution','!=',false]]],
       {fields:['analytic_distribution','balance','move_id','date'],limit:10000});
 
+    // Traer el payment_state de cada liquidación para distinguir cobrado de liquidado
+    var liqMoveIds = [...new Set(cogaytLiqLineasRaw.map(function(l){ return l.move_id[0]; }))];
+    var liqPaymentStateMap = {};
+    for (var lpi = 0; lpi < liqMoveIds.length; lpi += 500) {
+      var chunkLiqIds = liqMoveIds.slice(lpi, lpi+500);
+      var liqMovesData = await odooCall('account.move','read',[chunkLiqIds, ['id','payment_state']]);
+      liqMovesData.forEach(function(m){ liqPaymentStateMap[m.id] = m.payment_state; });
+    }
+    var ESTADOS_COGAYT_COBRADO = ['paid','in_payment','partial'];
+
     var totalCogaytLiq = cogaytLiqLineasRaw.reduce(function(s,l){ return s+Math.abs(l.balance||0); }, 0);
-    // En este método unificado no hay un concepto separado de "cobrado vs
-    // liquidado" — la liquidación posteada YA es el COGAYT regularizado.
-    var totalCogaytCobrado = totalCogaytLiq;
+    var totalCogaytCobrado = cogaytLiqLineasRaw
+      .filter(function(l){ return ESTADOS_COGAYT_COBRADO.includes(liqPaymentStateMap[l.move_id[0]]); })
+      .reduce(function(s,l){ return s+Math.abs(l.balance||0); }, 0);
     var cogaytLiqLineas    = [];  // compatibilidad con código siguiente
     var totalCogaytLiqOld  = totalCogaytLiq;  // alias
 
@@ -8268,20 +8276,22 @@ async function fpDesmCargar() {
     //    unificadas (cuenta 211401 + producto Gastos Administrativos)
     var cogaytPorCarta    = {};
     var totalCogaytCobros = 0;
-    cogaytLiqLineasRaw.forEach(function(l){
-      if (!l.analytic_distribution) return;
-      Object.keys(l.analytic_distribution).forEach(function(cidStr){
-        var cid   = parseInt(cidStr);
-        var nom   = cartaById[cid] || String(cid);
-        var pct   = parseFloat(l.analytic_distribution[cidStr]||100)/100;
-        var monto = Math.abs(l.balance||0) * pct;
-        if (monto <= 0) return;
-        if (!cogaytPorCarta[cid]) cogaytPorCarta[cid] = {nombre:nom, total:0};
-        cogaytPorCarta[cid].total += monto;
-        totalCogaytCobros += monto;
+    cogaytLiqLineasRaw
+      .filter(function(l){ return ESTADOS_COGAYT_COBRADO.includes(liqPaymentStateMap[l.move_id[0]]); })
+      .forEach(function(l){
+        if (!l.analytic_distribution) return;
+        Object.keys(l.analytic_distribution).forEach(function(cidStr){
+          var cid   = parseInt(cidStr);
+          var nom   = cartaById[cid] || String(cid);
+          var pct   = parseFloat(l.analytic_distribution[cidStr]||100)/100;
+          var monto = Math.abs(l.balance||0) * pct;
+          if (monto <= 0) return;
+          if (!cogaytPorCarta[cid]) cogaytPorCarta[cid] = {nombre:nom, total:0};
+          cogaytPorCarta[cid].total += monto;
+          totalCogaytCobros += monto;
+        });
       });
-    });
-    var totalCogayt = totalCogaytLiq;  // KPI principal = liquidaciones (método unificado)
+    var totalCogayt = totalCogaytLiq;  // KPI principal = total liquidado
 
     _fpDesmData = {porOrg:porOrg, porCarta:porCarta,
                   cogaytPorCarta:cogaytPorCarta,
@@ -11767,16 +11777,19 @@ async function cogGenerar() {
 
     if (estado) estado.textContent = 'Buscando COGAYT cobrado...';
 
-    // 2. Traer todas las LIQUIDACIONES de COGAYT — específicamente el producto
-    //    "G3-Gastos Administrativos" (el único que es COGAYT real; la cuenta
-    //    211401 también se usa para Consultores, Otros Servicios Técnicos, etc.
-    //    que NO son COGAYT y no deben mezclarse en este cálculo).
+    // 2. Traer las LIQUIDACIONES de COGAYT efectivamente COBRADAS — específicamente
+    //    el producto "G3-Gastos Administrativos" (el único que es COGAYT real; la
+    //    cuenta 211401 también se usa para Consultores, Otros Servicios Técnicos,
+    //    etc. que NO son COGAYT y no deben mezclarse en este cálculo), y solo las
+    //    que están efectivamente conciliadas/pagadas (no basta con que la
+    //    liquidación exista — tiene que estar cobrada de verdad).
     var liquidaciones = await odooCall('account.move.line', 'search_read', [[
       ['account_id','=', IC_CUENTA_211401],
       ['product_id','=', IC_PRODUCTO_GASTOS_ADM],
       ['move_id.company_id','=',1],
       ['move_id.move_type','=','in_invoice'],
       ['move_id.state','=','posted'],
+      ['move_id.payment_state','in',['paid','in_payment','partial']],
       ['date','>=',desde],
       ['date','<=',hasta],
       ['analytic_distribution','!=',false]
