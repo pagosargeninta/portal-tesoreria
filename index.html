@@ -11888,7 +11888,7 @@ async function cogGenerar() {
         brecha: brecha,
         estado: estadoConv
       };
-    }).filter(function(c){ return c.ingresos > 0 || c.sinPagar > 0; }) // ignorar analíticas sin movimientos
+    }).filter(function(c){ return c.ingresos > 0 || c.sinPagar > 0 || c.cogayt > 0; }) // no descartar convenios con COGAYT cobrado aunque el ingreso haya quedado fuera del rango de fechas
       .filter(function(c){ return c.id !== 7174; }) // excluir SOLO "11.2 - Delegaciones" (no nos pertenece) — antes el filtro por texto excluía de más (MINCYT, OTRAS, etc. que también contienen "11.2")
       .sort(function(a,b){ return (b.brecha||0) - (a.brecha||0); }); // los de mayor brecha primero
 
