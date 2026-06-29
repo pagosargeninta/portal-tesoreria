@@ -11876,7 +11876,7 @@ async function cogGenerar() {
         estado: estadoConv
       };
     }).filter(function(c){ return c.ingresos > 0 || c.sinPagar > 0; }) // ignorar analíticas sin movimientos
-      .filter(function(c){ return !c.nombre.includes('11.2') && !c.nombre.toUpperCase().includes('DELEGACIONES'); }) // no nos pertenece, corrompe el informe
+      .filter(function(c){ return c.id !== 7174; }) // excluir SOLO "11.2 - Delegaciones" (no nos pertenece) — antes el filtro por texto excluía de más (MINCYT, OTRAS, etc. que también contienen "11.2")
       .sort(function(a,b){ return (b.brecha||0) - (a.brecha||0); }); // los de mayor brecha primero
 
     // 6. KPIs globales
