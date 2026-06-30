@@ -612,6 +612,7 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
   padding:10px 14px !important;
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -3045,18 +3046,27 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
 
         <div class="card">
           <div class="card-header">
-            <div class="card-title"><i class="ti ti-upload"></i> Paso 2 — Subir el TXT roto</div>
+            <div class="card-title"><i class="ti ti-upload"></i> Paso 2 — Subir los archivos</div>
           </div>
           <div class="card-body">
             <div class="dropzone" id="cg-dropZone" onclick="document.getElementById('cg-fileInput').click()">
               <i class="ti ti-file-text"></i>
-              <p>Arrastrá el .txt que exportó Odoo o hacé <span>clic</span></p>
+              <p>1) Arrastrá el .txt que exportó Odoo o hacé <span>clic</span></p>
               <p style="font-size:11px;margin-top:4px;" id="cg-fileName">ningún archivo cargado</p>
             </div>
             <input type="file" id="cg-fileInput" accept=".txt" style="display:none">
+
+            <div class="dropzone" id="cg-dropZoneXlsx" onclick="document.getElementById('cg-fileInputXlsx').click()" style="margin-top:10px;">
+              <i class="ti ti-file-spreadsheet"></i>
+              <p>2) (Opcional pero recomendado) Excel de Odoo — Pagos → exportar <span>CUIT del destinatario + Cuenta bancaria receptora</span></p>
+              <p style="font-size:11px;margin-top:4px;" id="cg-fileNameXlsx">ningún archivo cargado</p>
+            </div>
+            <input type="file" id="cg-fileInputXlsx" accept=".xlsx,.xls" style="display:none">
+
             <button class="btn btn-primary" id="cg-btn-procesar" onclick="cgProcesar()" style="width:100%;justify-content:center;margin-top:12px;" disabled>
-              <i class="ti ti-wand"></i> Corregir contra Odoo
+              <i class="ti ti-wand"></i> Corregir
             </button>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px;">Si subís el Excel, se usa ese (más confiable). Si no lo subís, intenta buscar cada CUIT en Odoo en vivo.</div>
           </div>
         </div>
       </div>
@@ -3082,6 +3092,11 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
           <div class="metric-value" id="cg-stat-invalid" style="color:var(--danger);">0</div>
           <div class="metric-sub">no pasa dígito verificador</div>
         </div>
+        <div class="metric-card warn">
+          <div class="metric-label">No confiables</div>
+          <div class="metric-value" id="cg-stat-noconfiable" style="color:var(--warn);">0</div>
+          <div class="metric-sub">CBU no confirma titularidad CUIT (Odoo)</div>
+        </div>
       </div>
 
       <div class="card" id="cg-resultCard" style="display:none;">
@@ -3098,6 +3113,7 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
                 <th style="text-align:left;padding:8px 12px;">Beneficiario</th>
                 <th style="text-align:left;padding:8px 12px;">CUIT</th>
                 <th style="text-align:left;padding:8px 12px;">CBU nuevo</th>
+                <th style="text-align:left;padding:8px 12px;">Confiable</th>
                 <th style="text-align:left;padding:8px 12px;">Estado</th>
               </tr>
             </thead>
@@ -3472,6 +3488,7 @@ function filterCarta() {}
 var _cgFileText = null;
 var _cgFileName = '';
 var _cgResultLines = null; // array de lineas ya corregidas, listas para descargar
+var _cgExcelMap = null;    // { cuit: {nombre, cbu, confiable} } sacado del xlsx, si se cargo
 
 // --- helpers de posiciones fijas (1-indexado, igual al manual de Galicia) ---
 function cgField(s, a, b) {
@@ -3552,11 +3569,13 @@ function cgGuardarConvenio() {
   showToast('Convenio ' + code + ' guardado ✓', 'ok');
 }
 
-// --- carga de archivo ---
+// --- carga de archivos (TXT + opcional XLSX) ---
 (function cgInitFileInput() {
   document.addEventListener('DOMContentLoaded', function() {
     var input = document.getElementById('cg-fileInput');
     var zone = document.getElementById('cg-dropZone');
+    var inputXlsx = document.getElementById('cg-fileInputXlsx');
+    var zoneXlsx = document.getElementById('cg-dropZoneXlsx');
     if (!input) return;
     input.addEventListener('change', function(e) { cgLoadFile(e.target.files[0]); });
     if (zone) {
@@ -3565,6 +3584,17 @@ function cgGuardarConvenio() {
       zone.addEventListener('drop', function(e) {
         e.preventDefault(); zone.classList.remove('drag-over');
         if (e.dataTransfer.files.length) cgLoadFile(e.dataTransfer.files[0]);
+      });
+    }
+    if (inputXlsx) {
+      inputXlsx.addEventListener('change', function(e) { cgLoadXlsx(e.target.files[0]); });
+    }
+    if (zoneXlsx) {
+      zoneXlsx.addEventListener('dragover', function(e) { e.preventDefault(); zoneXlsx.classList.add('drag-over'); });
+      zoneXlsx.addEventListener('dragleave', function() { zoneXlsx.classList.remove('drag-over'); });
+      zoneXlsx.addEventListener('drop', function(e) {
+        e.preventDefault(); zoneXlsx.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) cgLoadXlsx(e.dataTransfer.files[0]);
       });
     }
     cgRenderConvenioSelect();
@@ -3582,9 +3612,59 @@ function cgLoadFile(file) {
   reader.readAsText(file, 'utf-8');
 }
 
+// Extrae los primeros digitos de una celda tipo:
+// "0070133020000000288468 - Banco Santander Rio S.A. (confiable)"
+// "0140056403517359305292 (no confiable)"
+function cgParseCelda(cuentaStr) {
+  cuentaStr = String(cuentaStr || '');
+  var m = cuentaStr.match(/\s*(\d+)/);
+  var cbu = m ? m[1] : '';
+  var confiable = cuentaStr.toLowerCase().indexOf('no confiable') === -1;
+  return { cbu: cbu, confiable: confiable };
+}
+function cgLoadXlsx(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+      // detectar columnas por encabezado (case-insensitive, tolerante)
+      var header = rows[0].map(function(h) { return String(h).toLowerCase(); });
+      var idxNombre = header.findIndex(function(h) { return h.indexOf('cliente') >= 0 || h.indexOf('proveedor') >= 0; });
+      var idxCuit = header.findIndex(function(h) { return h.indexOf('cuit') >= 0; });
+      var idxCuenta = header.findIndex(function(h) { return h.indexOf('cuenta') >= 0 && h.indexOf('bancaria') >= 0; });
+      if (idxCuit === -1 || idxCuenta === -1) {
+        showToast('No encontré las columnas CUIT / Cuenta bancaria en el Excel', 'err');
+        return;
+      }
+      var map = {};
+      for (var i = 1; i < rows.length; i++) {
+        var row = rows[i];
+        if (!row || !row[idxCuit]) continue;
+        var cuit = String(row[idxCuit]).replace(/\D/g, '');
+        if (!cuit) continue;
+        var parsed = cgParseCelda(row[idxCuenta]);
+        map[cuit] = {
+          nombre: idxNombre >= 0 ? row[idxNombre] : '',
+          cbu: parsed.cbu,
+          confiable: parsed.confiable
+        };
+      }
+      _cgExcelMap = map;
+      document.getElementById('cg-fileNameXlsx').textContent = file.name + ' ✓ cargado (' + Object.keys(map).length + ' beneficiarios)';
+      showToast('Excel cargado: ' + Object.keys(map).length + ' beneficiarios', 'ok');
+    } catch (err) {
+      showToast('No pude leer el Excel: ' + err.message, 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 // --- proceso principal ---
 async function cgProcesar() {
-  if (!_cgFileText) { showToast('Subí el archivo primero', 'err'); return; }
+  if (!_cgFileText) { showToast('Subí el archivo TXT primero', 'err'); return; }
   var sel = document.getElementById('cg-convenio');
   var list = cgGetConvenios();
   var conv = list[parseInt(sel.value, 10)];
@@ -3595,7 +3675,6 @@ async function cgProcesar() {
 
   try {
     var lines = _cgFileText.replace(/\r\n/g, '\n').split('\n');
-    // sacar lineas vacias al final
     while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
     if (lines.length < 3) throw new Error('El archivo no tiene el formato esperado (header + detalle + pie)');
 
@@ -3621,50 +3700,67 @@ async function cgProcesar() {
       if (c && cuits.indexOf(c) < 0) cuits.push(c);
     });
 
-    // --- buscar CBU real en Odoo por CUIT (vat, con y sin guiones) ---
-    var cbuPorCuit = {};
-    for (var i = 0; i < cuits.length; i++) {
-      var cuit = cuits[i];
-      var formateado = cuit.length === 11 ? (cuit.slice(0,2) + '-' + cuit.slice(2,10) + '-' + cuit.slice(10)) : cuit;
-      try {
-        var partners = await odooCall('res.partner', 'search_read',
-          [[['vat', 'in', [cuit, formateado]]]],
-          { fields: ['id', 'name', 'bank_ids'], limit: 5 });
-        if (partners.length && partners[0].bank_ids && partners[0].bank_ids.length) {
-          var bankRecs = await odooCall('res.partner.bank', 'read',
-            [partners[0].bank_ids], ['acc_number']);
-          if (bankRecs.length) {
-            cbuPorCuit[cuit] = String(bankRecs[0].acc_number || '').replace(/\D/g, '');
+    // --- mapa CUIT -> {cbu, confiable}: del Excel si se cargo, si no, en vivo contra Odoo ---
+    var infoPorCuit = {};
+    if (_cgExcelMap) {
+      cuits.forEach(function(cuit) {
+        if (_cgExcelMap[cuit]) infoPorCuit[cuit] = _cgExcelMap[cuit];
+      });
+    } else {
+      for (var i = 0; i < cuits.length; i++) {
+        var cuit = cuits[i];
+        var formateado = cuit.length === 11 ? (cuit.slice(0,2) + '-' + cuit.slice(2,10) + '-' + cuit.slice(10)) : cuit;
+        try {
+          var partners = await odooCall('res.partner', 'search_read',
+            [[['vat', 'in', [cuit, formateado]]]],
+            { fields: ['id', 'name', 'bank_ids'], limit: 5 });
+          if (partners.length && partners[0].bank_ids && partners[0].bank_ids.length) {
+            var bankRecs = await odooCall('res.partner.bank', 'read',
+              [partners[0].bank_ids], ['acc_number']);
+            if (bankRecs.length) {
+              infoPorCuit[cuit] = { cbu: String(bankRecs[0].acc_number || '').replace(/\D/g, ''), confiable: null };
+            }
           }
+        } catch (e) {
+          console.warn('Error buscando CUIT ' + cuit + ':', e.message);
         }
-      } catch (e) {
-        console.warn('Error buscando CUIT ' + cuit + ':', e.message);
       }
     }
 
     // --- reconstruir cada linea de detalle ---
     var tbody = document.getElementById('cg-tbody');
     tbody.innerHTML = '';
-    var okCount = 0, noMatchCount = 0, invalidCount = 0;
+    var okCount = 0, noMatchCount = 0, invalidCount = 0, noConfiableCount = 0;
     var resultLines = [header];
 
     detalle.forEach(function(line) {
       var nombre = cgField(line, 1, 16).trim();
       var cuit = cgField(line, 17, 27).trim();
-      var cbuReal = cbuPorCuit[cuit];
-      var estado, estadoClass, cbuMostrar;
+      var info = infoPorCuit[cuit];
+      var cbuReal = info ? info.cbu : null;
+      var estado, estadoClass, cbuMostrar, confiableTxt, confiableStyle;
 
       if (!cbuReal) {
-        estado = 'Sin match en Odoo'; estadoClass = 'color:var(--warn);font-weight:600;'; cbuMostrar = '—';
+        estado = 'Sin match'; estadoClass = 'color:var(--warn);font-weight:600;'; cbuMostrar = '—';
+        confiableTxt = '—'; confiableStyle = '';
         noMatchCount++;
       } else if (cbuReal.length !== 22 || !cgCbuValido(cbuReal)) {
-        estado = 'CBU inválido en Odoo'; estadoClass = 'color:var(--danger);font-weight:600;'; cbuMostrar = cbuReal || '—';
+        estado = 'CBU inválido'; estadoClass = 'color:var(--danger);font-weight:600;'; cbuMostrar = cbuReal || '—';
+        confiableTxt = '—'; confiableStyle = '';
         invalidCount++;
       } else {
         line = cgReplaceField(line, 38, 49, '0'.repeat(12));
         line = cgReplaceField(line, 50, 75, cbuReal.padStart(26, '0'));
         estado = 'Corregido ✓'; estadoClass = 'color:var(--verde);font-weight:600;'; cbuMostrar = cbuReal;
         okCount++;
+        if (info.confiable === false) {
+          confiableTxt = 'No confiable'; confiableStyle = 'color:var(--warn);font-weight:600;';
+          noConfiableCount++;
+        } else if (info.confiable === true) {
+          confiableTxt = 'Sí'; confiableStyle = 'color:var(--verde);';
+        } else {
+          confiableTxt = 's/d'; confiableStyle = 'color:var(--muted);';
+        }
       }
 
       resultLines.push(line);
@@ -3672,6 +3768,7 @@ async function cgProcesar() {
       tr.innerHTML = '<td style="padding:7px 12px;border-top:1px solid var(--border);">' + nombre + '</td>' +
         '<td style="padding:7px 12px;border-top:1px solid var(--border);font-family:JetBrains Mono,monospace;">' + cuit + '</td>' +
         '<td style="padding:7px 12px;border-top:1px solid var(--border);font-family:JetBrains Mono,monospace;font-size:11px;">' + cbuMostrar + '</td>' +
+        '<td style="padding:7px 12px;border-top:1px solid var(--border);' + confiableStyle + '">' + confiableTxt + '</td>' +
         '<td style="padding:7px 12px;border-top:1px solid var(--border);' + estadoClass + '">' + estado + '</td>';
       tbody.appendChild(tr);
     });
@@ -3684,15 +3781,16 @@ async function cgProcesar() {
     document.getElementById('cg-stat-ok').textContent = okCount;
     document.getElementById('cg-stat-nomatch').textContent = noMatchCount;
     document.getElementById('cg-stat-invalid').textContent = invalidCount;
+    document.getElementById('cg-stat-noconfiable').textContent = noConfiableCount;
     document.getElementById('cg-resultCard').style.display = '';
     document.getElementById('cg-blockWarning').style.display = (noMatchCount + invalidCount) > 0 ? '' : 'none';
     document.getElementById('cg-btn-download').disabled = false;
 
-    showToast('Procesado: ' + okCount + ' corregidos, ' + noMatchCount + ' sin match, ' + invalidCount + ' inválidos', okCount > 0 ? 'ok' : 'err');
+    showToast('Procesado: ' + okCount + ' corregidos, ' + noMatchCount + ' sin match, ' + invalidCount + ' inválidos, ' + noConfiableCount + ' no confiables', okCount > 0 ? 'ok' : 'err');
   } catch (e) {
     showToast('Error: ' + e.message, 'err');
   }
-  btn.disabled = false; btn.innerHTML = '<i class="ti ti-wand"></i> Corregir contra Odoo';
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-wand"></i> Corregir';
 }
 
 function cgDescargar() {
