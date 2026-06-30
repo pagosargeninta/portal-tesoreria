@@ -701,6 +701,7 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
     <div class="nav-item" onclick="showPage('cogayt',this)"><i class="ti ti-percentage"></i> Control COGAYT</div>
 
     <div class="sidebar-section">Config</div>
+    <div class="nav-item" onclick="showPage('corrgalicia',this)"><i class="ti ti-tool"></i> Corrector Galicia</div>
     <div class="nav-item" onclick="showPage('config',this)"><i class="ti ti-settings"></i> Configuración</div>
   </div>
 
@@ -3011,6 +3012,108 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
     </div>
     <!-- ══════════ FIN INGRESO + COGAYT ══════════ -->
 
+    <!-- ══════════ CORRECTOR GALICIA ══════════ -->
+    <div id="page-corrgalicia" class="page">
+
+      <div class="alert info" style="margin-bottom:16px;">
+        <i class="ti ti-info-circle"></i>
+        <div>Esta herramienta NO modifica montos, beneficiarios ni fechas. Solo corrige tres campos del archivo que Odoo arma mal: el código de convenio (header y pie), la cuenta débito de ArgenINTA y el CBU de cada beneficiario (tomado en vivo desde Odoo por CUIT). Es un parche temporal hasta que los partners arreglen el script generador.</div>
+      </div>
+
+      <div class="grid2" style="margin-bottom:16px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-file-invoice"></i> Paso 1 — Convenio de la cuenta débito</div>
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <label>¿Con qué convenio sale este lote?</label>
+              <select id="cg-convenio" onchange="cgSelectConvenio()"></select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px;">
+              <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px;">Código convenio</label><input type="text" id="cg-cv-code" maxlength="6" style="text-transform:uppercase;font-family:'JetBrains Mono',monospace;"></div>
+              <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px;">Etiqueta / cuenta</label><input type="text" id="cg-cv-label" placeholder="CC ARS 00002884-133-6"></div>
+              <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px;">CBU real (22 dígitos)</label><input type="text" id="cg-cv-cbu" maxlength="22" style="font-family:'JetBrains Mono',monospace;"></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button class="btn btn-primary" onclick="cgGuardarConvenio()" style="font-size:12px;"><i class="ti ti-device-floppy"></i> Guardar este convenio</button>
+              <button class="btn" onclick="cgNuevoConvenio()" style="font-size:12px;"><i class="ti ti-plus"></i> Nuevo</button>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px;">Se guarda en este navegador. Cargá cada convenio una sola vez (Gestionar convenios en Galicia → CBU real de la cuenta).</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-upload"></i> Paso 2 — Subir el TXT roto</div>
+          </div>
+          <div class="card-body">
+            <div class="dropzone" id="cg-dropZone" onclick="document.getElementById('cg-fileInput').click()">
+              <i class="ti ti-file-text"></i>
+              <p>Arrastrá el .txt que exportó Odoo o hacé <span>clic</span></p>
+              <p style="font-size:11px;margin-top:4px;" id="cg-fileName">ningún archivo cargado</p>
+            </div>
+            <input type="file" id="cg-fileInput" accept=".txt" style="display:none">
+            <button class="btn btn-primary" id="cg-btn-procesar" onclick="cgProcesar()" style="width:100%;justify-content:center;margin-top:12px;" disabled>
+              <i class="ti ti-wand"></i> Corregir contra Odoo
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics-grid" id="cg-metrics" style="display:none;margin-bottom:16px;">
+        <div class="metric-card info">
+          <div class="metric-label">Líneas procesadas</div>
+          <div class="metric-value" id="cg-stat-total">0</div>
+          <div class="metric-sub">pagos en el archivo</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">CBU corregidos</div>
+          <div class="metric-value" id="cg-stat-ok" style="color:var(--verde);">0</div>
+          <div class="metric-sub">encontrados y válidos en Odoo</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Sin match en Odoo</div>
+          <div class="metric-value" id="cg-stat-nomatch" style="color:var(--warn);">0</div>
+          <div class="metric-sub">CUIT no encontrado</div>
+        </div>
+        <div class="metric-card danger">
+          <div class="metric-label">CBU inválido</div>
+          <div class="metric-value" id="cg-stat-invalid" style="color:var(--danger);">0</div>
+          <div class="metric-sub">no pasa dígito verificador</div>
+        </div>
+      </div>
+
+      <div class="card" id="cg-resultCard" style="display:none;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-list-check"></i> Detalle por beneficiario</div>
+          <button class="btn btn-primary" id="cg-btn-download" onclick="cgDescargar()" disabled>
+            <i class="ti ti-download"></i> Descargar TXT corregido
+          </button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <table class="data-table" style="width:100%;font-size:12px;">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:8px 12px;">Beneficiario</th>
+                <th style="text-align:left;padding:8px 12px;">CUIT</th>
+                <th style="text-align:left;padding:8px 12px;">CBU nuevo</th>
+                <th style="text-align:left;padding:8px 12px;">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="cg-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="alert warn" id="cg-blockWarning" style="display:none;margin-top:14px;">
+        <i class="ti ti-alert-triangle"></i>
+        <div>Hay líneas <strong>sin match en Odoo</strong> o con <strong>CBU inválido</strong>. Esas quedaron tal cual estaban en el archivo original (sin tocar) — revisalas a mano antes de subir, o el banco te las va a volver a rechazar.</div>
+      </div>
+
+    </div>
+    <!-- ══════════ FIN CORRECTOR GALICIA ══════════ -->
+
     <!-- ══════════ CONFIG ══════════ -->
     <div id="page-config" class="page">
       <div class="grid2">
@@ -3341,6 +3444,7 @@ const pageTitles = {
   buscador:     ['Buscador Contable',      'Consulta de movimientos y asientos'],
   convenios:    ['Convenios',              'Estado y seguimiento de convenios vigentes'],
   ingresocogayt:['Ingreso + COGAYT',       'Registro de ingresos y liquidación COGAYT'],
+  corrgalicia:  ['Corrector Galicia',      'Arregla convenio y CBU de archivos de Pagos Masivos antes de subir'],
 };
 
 function showHonTab(id, el) {
@@ -3358,6 +3462,254 @@ function showHonTab(id, el) {
 }
 
 function filterCarta() {}
+
+// ═══════════════════════════════════════════════════════
+// CORRECTOR GALICIA — parche temporal mientras se arregla
+// el script generador del TXT de Pagos Masivos (bug: convenio
+// mal escrito en header/trailer + CBU de beneficiarios corrompido).
+// No modifica montos, fechas ni beneficiarios, solo esos 3 campos.
+// ═══════════════════════════════════════════════════════
+var _cgFileText = null;
+var _cgFileName = '';
+var _cgResultLines = null; // array de lineas ya corregidas, listas para descargar
+
+// --- helpers de posiciones fijas (1-indexado, igual al manual de Galicia) ---
+function cgField(s, a, b) {
+  if (s.length < b) s = s.padEnd(b, ' ');
+  return s.slice(a - 1, b);
+}
+function cgReplaceField(s, a, b, val) {
+  var width = b - a + 1;
+  val = String(val == null ? '' : val);
+  if (val.length > width) val = val.slice(0, width);
+  else val = val.padEnd(width, ' ');
+  if (s.length < b) s = s.padEnd(b, ' ');
+  return s.slice(0, a - 1) + val + s.slice(b);
+}
+function cgCbuValido(cbu) {
+  if (!/^\d{22}$/.test(cbu)) return false;
+  var b1 = cbu.slice(0, 8), b2 = cbu.slice(8, 22);
+  function v(bloque, pesos) {
+    var t = 0;
+    for (var i = 0; i < pesos.length; i++) t += parseInt(bloque[i], 10) * pesos[i];
+    return (10 - (t % 10)) % 10;
+  }
+  var dv1ok = v(b1.slice(0, 7), [7,1,3,9,7,1,3]) === parseInt(b1[7], 10);
+  var dv2ok = v(b2.slice(0, 13), [3,9,7,1,3,9,7,1,3,9,7,1,3]) === parseInt(b2[13], 10);
+  return dv1ok && dv2ok;
+}
+
+// --- configuración de convenios (persistida en localStorage) ---
+function cgGetConvenios() {
+  try {
+    var raw = localStorage.getItem('cg_convenios');
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return [{ code: 'AAG248', label: 'CC ARS 00002884-133-6 (SNP3)', cbu: '0070133020000000288468' }];
+}
+function cgSaveConvenios(list) {
+  localStorage.setItem('cg_convenios', JSON.stringify(list));
+}
+function cgRenderConvenioSelect() {
+  var list = cgGetConvenios();
+  var sel = document.getElementById('cg-convenio');
+  sel.innerHTML = list.map(function(c, i) {
+    return '<option value="' + i + '">' + c.code + ' — ' + (c.label || '') + '</option>';
+  }).join('') + '<option value="__new__">+ Nuevo convenio…</option>';
+  if (list.length) { sel.value = '0'; cgSelectConvenio(); }
+}
+function cgSelectConvenio() {
+  var sel = document.getElementById('cg-convenio');
+  if (sel.value === '__new__') { cgNuevoConvenio(); return; }
+  var list = cgGetConvenios();
+  var c = list[parseInt(sel.value, 10)];
+  if (!c) return;
+  document.getElementById('cg-cv-code').value = c.code || '';
+  document.getElementById('cg-cv-label').value = c.label || '';
+  document.getElementById('cg-cv-cbu').value = c.cbu || '';
+}
+function cgNuevoConvenio() {
+  document.getElementById('cg-cv-code').value = '';
+  document.getElementById('cg-cv-label').value = '';
+  document.getElementById('cg-cv-cbu').value = '';
+}
+function cgGuardarConvenio() {
+  var code = document.getElementById('cg-cv-code').value.trim().toUpperCase();
+  var label = document.getElementById('cg-cv-label').value.trim();
+  var cbu = document.getElementById('cg-cv-cbu').value.replace(/\D/g, '');
+  if (!code || code.length !== 6) { showToast('El código de convenio tiene que tener 6 caracteres (ej: AAG248)', 'err'); return; }
+  if (cbu.length !== 22) { showToast('El CBU tiene que tener 22 dígitos', 'err'); return; }
+  if (!cgCbuValido(cbu)) { showToast('Ese CBU no pasa el dígito verificador — revisalo', 'err'); return; }
+  var list = cgGetConvenios();
+  var idx = list.findIndex(function(c) { return c.code === code; });
+  var entry = { code: code, label: label, cbu: cbu };
+  if (idx >= 0) list[idx] = entry; else list.push(entry);
+  cgSaveConvenios(list);
+  cgRenderConvenioSelect();
+  var sel = document.getElementById('cg-convenio');
+  var newIdx = list.findIndex(function(c) { return c.code === code; });
+  sel.value = String(newIdx);
+  showToast('Convenio ' + code + ' guardado ✓', 'ok');
+}
+
+// --- carga de archivo ---
+(function cgInitFileInput() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var input = document.getElementById('cg-fileInput');
+    var zone = document.getElementById('cg-dropZone');
+    if (!input) return;
+    input.addEventListener('change', function(e) { cgLoadFile(e.target.files[0]); });
+    if (zone) {
+      zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('drag-over'); });
+      zone.addEventListener('dragleave', function() { zone.classList.remove('drag-over'); });
+      zone.addEventListener('drop', function(e) {
+        e.preventDefault(); zone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) cgLoadFile(e.dataTransfer.files[0]);
+      });
+    }
+    cgRenderConvenioSelect();
+  });
+})();
+function cgLoadFile(file) {
+  if (!file) return;
+  _cgFileName = file.name;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    _cgFileText = e.target.result;
+    document.getElementById('cg-fileName').textContent = file.name + ' ✓ cargado';
+    document.getElementById('cg-btn-procesar').disabled = false;
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// --- proceso principal ---
+async function cgProcesar() {
+  if (!_cgFileText) { showToast('Subí el archivo primero', 'err'); return; }
+  var sel = document.getElementById('cg-convenio');
+  var list = cgGetConvenios();
+  var conv = list[parseInt(sel.value, 10)];
+  if (!conv || !conv.cbu) { showToast('Elegí o guardá un convenio con CBU primero', 'err'); return; }
+
+  var btn = document.getElementById('cg-btn-procesar');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Procesando…';
+
+  try {
+    var lines = _cgFileText.replace(/\r\n/g, '\n').split('\n');
+    // sacar lineas vacias al final
+    while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+    if (lines.length < 3) throw new Error('El archivo no tiene el formato esperado (header + detalle + pie)');
+
+    var header = lines[0];
+    var trailerIdx = lines.length - 1;
+    var trailer = lines[trailerIdx];
+    var detalle = lines.slice(1, trailerIdx);
+
+    // --- header: convenio + cuenta debito + CBU debito ---
+    header = cgReplaceField(header, 4, 9, conv.code);
+    header = cgReplaceField(header, 23, 34, '0'.repeat(12));
+    header = cgReplaceField(header, 35, 60, conv.cbu.padStart(26, '0'));
+
+    // --- trailer: tipo registro + convenio + cantidad ---
+    trailer = cgReplaceField(trailer, 1, 2, '*F');
+    trailer = cgReplaceField(trailer, 3, 8, conv.code);
+    trailer = cgReplaceField(trailer, 9, 15, String(detalle.length).padStart(7, '0'));
+
+    // --- CUITs unicos del detalle ---
+    var cuits = [];
+    detalle.forEach(function(l) {
+      var c = cgField(l, 17, 27).trim();
+      if (c && cuits.indexOf(c) < 0) cuits.push(c);
+    });
+
+    // --- buscar CBU real en Odoo por CUIT (vat, con y sin guiones) ---
+    var cbuPorCuit = {};
+    for (var i = 0; i < cuits.length; i++) {
+      var cuit = cuits[i];
+      var formateado = cuit.length === 11 ? (cuit.slice(0,2) + '-' + cuit.slice(2,10) + '-' + cuit.slice(10)) : cuit;
+      try {
+        var partners = await odooCall('res.partner', 'search_read',
+          [[['vat', 'in', [cuit, formateado]]]],
+          { fields: ['id', 'name', 'bank_ids'], limit: 5 });
+        if (partners.length && partners[0].bank_ids && partners[0].bank_ids.length) {
+          var bankRecs = await odooCall('res.partner.bank', 'read',
+            [partners[0].bank_ids], ['acc_number']);
+          if (bankRecs.length) {
+            cbuPorCuit[cuit] = String(bankRecs[0].acc_number || '').replace(/\D/g, '');
+          }
+        }
+      } catch (e) {
+        console.warn('Error buscando CUIT ' + cuit + ':', e.message);
+      }
+    }
+
+    // --- reconstruir cada linea de detalle ---
+    var tbody = document.getElementById('cg-tbody');
+    tbody.innerHTML = '';
+    var okCount = 0, noMatchCount = 0, invalidCount = 0;
+    var resultLines = [header];
+
+    detalle.forEach(function(line) {
+      var nombre = cgField(line, 1, 16).trim();
+      var cuit = cgField(line, 17, 27).trim();
+      var cbuReal = cbuPorCuit[cuit];
+      var estado, estadoClass, cbuMostrar;
+
+      if (!cbuReal) {
+        estado = 'Sin match en Odoo'; estadoClass = 'color:var(--warn);font-weight:600;'; cbuMostrar = '—';
+        noMatchCount++;
+      } else if (cbuReal.length !== 22 || !cgCbuValido(cbuReal)) {
+        estado = 'CBU inválido en Odoo'; estadoClass = 'color:var(--danger);font-weight:600;'; cbuMostrar = cbuReal || '—';
+        invalidCount++;
+      } else {
+        line = cgReplaceField(line, 38, 49, '0'.repeat(12));
+        line = cgReplaceField(line, 50, 75, cbuReal.padStart(26, '0'));
+        estado = 'Corregido ✓'; estadoClass = 'color:var(--verde);font-weight:600;'; cbuMostrar = cbuReal;
+        okCount++;
+      }
+
+      resultLines.push(line);
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td style="padding:7px 12px;border-top:1px solid var(--border);">' + nombre + '</td>' +
+        '<td style="padding:7px 12px;border-top:1px solid var(--border);font-family:JetBrains Mono,monospace;">' + cuit + '</td>' +
+        '<td style="padding:7px 12px;border-top:1px solid var(--border);font-family:JetBrains Mono,monospace;font-size:11px;">' + cbuMostrar + '</td>' +
+        '<td style="padding:7px 12px;border-top:1px solid var(--border);' + estadoClass + '">' + estado + '</td>';
+      tbody.appendChild(tr);
+    });
+
+    resultLines.push(trailer);
+    _cgResultLines = resultLines;
+
+    document.getElementById('cg-metrics').style.display = '';
+    document.getElementById('cg-stat-total').textContent = detalle.length;
+    document.getElementById('cg-stat-ok').textContent = okCount;
+    document.getElementById('cg-stat-nomatch').textContent = noMatchCount;
+    document.getElementById('cg-stat-invalid').textContent = invalidCount;
+    document.getElementById('cg-resultCard').style.display = '';
+    document.getElementById('cg-blockWarning').style.display = (noMatchCount + invalidCount) > 0 ? '' : 'none';
+    document.getElementById('cg-btn-download').disabled = false;
+
+    showToast('Procesado: ' + okCount + ' corregidos, ' + noMatchCount + ' sin match, ' + invalidCount + ' inválidos', okCount > 0 ? 'ok' : 'err');
+  } catch (e) {
+    showToast('Error: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-wand"></i> Corregir contra Odoo';
+}
+
+function cgDescargar() {
+  if (!_cgResultLines) return;
+  var content = _cgResultLines.join('\n') + '\n';
+  var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var base = _cgFileName.replace(/\.txt$/i, '');
+  a.href = url;
+  a.download = base + '_CORREGIDO.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Descargado ✓', 'ok');
+}
 
 function showPage(id, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
