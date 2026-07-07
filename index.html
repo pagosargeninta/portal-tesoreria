@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sistema de Control y Operaciones  — Fundación ArgenINTA</title>
+<title>Portal de Tesorería — Fundación ArgenINTA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
@@ -6781,10 +6781,29 @@ async function procesarGaliciaZip(modo) {
     const nombresBuscar = Object.keys(mapaFilenames);
 
     pt.textContent = 'Buscando pagos en Odoo...'; pf.style.width = '10%';
+    // Traer más campos para poder renombrar (CUIT + monto + fecha)
     const pagosOdoo = await odooCall('account.payment', 'search_read',
       [[['name','in',nombresBuscar], ['payment_type','=','outbound']]],
-      { fields: ['id','name','x_comprobante_enviado','x_estado_comprobante'], limit: nombresBuscar.length + 10 }
+      { fields: ['id','name','x_comprobante_enviado','x_estado_comprobante',
+                 'amount','date','partner_id','x_studio_colaborador'],
+        limit: nombresBuscar.length + 10 }
     );
+
+    // Para PAGOS necesitamos el CUIT (vat). Traerlo en batch de todos los partners únicos
+    let mapaPartnerVat = {};
+    if (modo === 'pagos') {
+      const partnerIds = new Set();
+      pagosOdoo.forEach(p => {
+        if (p.partner_id) partnerIds.add(p.partner_id[0]);
+        if (p.x_studio_colaborador) partnerIds.add(p.x_studio_colaborador[0]);
+      });
+      if (partnerIds.size) {
+        const partners = await odooCall('res.partner', 'read',
+          [[...partnerIds], ['id','vat']]);
+        partners.forEach(pt => { mapaPartnerVat[pt.id] = (pt.vat || '').replace(/[^0-9]/g,''); });
+      }
+    }
+
     const mapaPagos = {};
     pagosOdoo.forEach(p => { mapaPagos[p.name] = p; });
 
@@ -6813,9 +6832,40 @@ async function procesarGaliciaZip(modo) {
         const pdfBytes = await entry.async('uint8array');
         const b64 = compSafeBase64(pdfBytes);
 
+        // Determinar nombre del adjunto
+        // HONORARIOS: nombre original (no importa, no dispara regla)
+        // PAGOS: renombrar a CUIT__MONTO__FECHA.pdf para que la regla 3 lo reconozca
+        let filenameFinal = filenameOriginal;
+        if (modo === 'pagos') {
+          // Obtener CUIT del partner (partner_id preferido, x_studio_colaborador como fallback)
+          let cuit = '';
+          if (pago.partner_id && mapaPartnerVat[pago.partner_id[0]]) cuit = mapaPartnerVat[pago.partner_id[0]];
+          else if (pago.x_studio_colaborador && mapaPartnerVat[pago.x_studio_colaborador[0]]) cuit = mapaPartnerVat[pago.x_studio_colaborador[0]];
+          
+          if (!cuit) {
+            results.push({filename: filenameOriginal, status: 'error', razon: `Partner sin CUIT. No puedo renombrar para que la regla 3 lo procese.`, nombrePago});
+            continue;
+          }
+          
+          // Formato monto: "12345.67" (2 decimales, punto)
+          const montoStr = Number(pago.amount).toFixed(2);
+          
+          // Formato fecha: "YY-MM-DD" (2 dígitos año)
+          let fechaStr = '';
+          if (pago.date) {
+            const [y, m, d] = pago.date.split('-');
+            fechaStr = `${y.slice(-2)}-${m}-${d}`;
+          } else {
+            const today = new Date();
+            fechaStr = `${String(today.getFullYear()).slice(-2)}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+          }
+          
+          filenameFinal = `${cuit}__${montoStr}__${fechaStr}.pdf`;
+        }
+
         // Subir como ir.attachment vinculado al account.payment
         const adjId = await odooCall('ir.attachment', 'create', [{
-          name: filenameOriginal,
+          name: filenameFinal,
           datas: b64,
           mimetype: 'application/pdf',
           type: 'binary',
@@ -6824,8 +6874,6 @@ async function procesarGaliciaZip(modo) {
         }]);
 
         // Setear estado según modo
-        // - honorarios: 'honorario' + x_comprobante_enviado=True (bloquea regla 3)
-        // - pagos: 'listo_para_enviar' (regla 3 lo procesará)
         const estadoNuevo = modo === 'honorarios' ? 'honorario' : 'listo_para_enviar';
         const patch = { x_estado_comprobante: estadoNuevo };
         if (modo === 'honorarios') patch.x_comprobante_enviado = true;
@@ -6834,7 +6882,7 @@ async function procesarGaliciaZip(modo) {
         // Postear nota en el chatter
         const mensaje = modo === 'honorarios'
           ? `📎 Comprobante Galicia adjuntado (honorarios) — <b>no se envía por mail</b>. Archivo: ${filenameOriginal}`
-          : `📎 Comprobante Galicia adjuntado — listo para envío. Archivo: ${filenameOriginal}`;
+          : `📎 Comprobante Galicia adjuntado — listo para envío. Archivo original: ${filenameOriginal} → guardado como: ${filenameFinal}`;
         try {
           await odooCall('account.payment', 'message_post', [[pago.id]], {
             body: mensaje,
@@ -6842,9 +6890,9 @@ async function procesarGaliciaZip(modo) {
           });
         } catch(e) { /* si falla el chatter, no rompas el flujo */ }
 
-        results.push({filename: filenameOriginal, status: 'ok', nombrePago, pagoId: pago.id, adjId});
+        results.push({filename: filenameOriginal, status: 'ok', nombrePago, pagoId: pago.id, adjId, filenameFinal});
       } catch(e) {
-        results.push({filename: filenameOriginal, status: 'error', razon: e.message, nombrePago});
+        results.push({filename: filenameOriginal, status: 'error', razon: e.message || String(e), nombrePago});
       }
 
       await new Promise(r => setTimeout(r, 100));
