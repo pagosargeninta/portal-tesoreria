@@ -12480,7 +12480,7 @@ async function cogGenerar() {
     if (moveIdsIngresos.length > 0) {
       for (var pi = 0; pi < moveIdsIngresos.length; pi += 500) {
         var chunkIds = moveIdsIngresos.slice(pi, pi+500);
-        var movesData = await odooCall('account.move', 'read', [chunkIds, ['id','name','payment_state']]);
+        var movesData = await odooCall('account.move', 'read', [chunkIds, ['id','name','payment_state','amount_total','amount_residual']]);
         movesData.forEach(function(m){ paymentStateMap[m.id] = m; });
       }
     }
@@ -12494,6 +12494,19 @@ async function cogGenerar() {
       var m = paymentStateMap[l.move_id[0]];
       return m && m.payment_state === 'not_paid';
     });
+
+    // Para facturas "partial": el ingreso real es solo la parte efectivamente cobrada
+    // (amount_total - amount_residual), no el total completo de la factura.
+    // El factor de ajuste es (cobrado_real / amount_total) aplicado al balance de la línea.
+    function _factorPago(moveId) {
+      var m = paymentStateMap[moveId];
+      if (!m) return 1;
+      if (m.payment_state === 'partial' && m.amount_total > 0) {
+        var cobrado = m.amount_total - m.amount_residual;
+        return cobrado / m.amount_total;  // ej: cobró $600 de $1000 → factor 0.6
+      }
+      return 1; // paid / in_payment → cobrado completo
+    }
 
     if (estado) estado.textContent = 'Buscando COGAYT cobrado...';
 
@@ -12524,11 +12537,12 @@ async function cogGenerar() {
     function _sumarPorAnalitica(lineas, campo) {
       lineas.forEach(function(l){
         if (!l.analytic_distribution) return;
+        var factor = (campo === 'ingresos') ? _factorPago(l.move_id[0]) : 1;
         Object.keys(l.analytic_distribution).forEach(function(analyticIdStr){
           var analyticId = parseInt(analyticIdStr);
-          var pct = l.analytic_distribution[analyticIdStr] / 100; // distribución parcial si aplica
+          var pct = l.analytic_distribution[analyticIdStr] / 100;
           if (!convenios[analyticId]) convenios[analyticId] = { ingresos: 0, cogayt: 0, sinPagar: 0, sinPagarFacturas: [] };
-          convenios[analyticId][campo] += Math.abs(l.balance) * pct;
+          convenios[analyticId][campo] += Math.abs(l.balance) * pct * factor;
         });
       });
     }
