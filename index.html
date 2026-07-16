@@ -13198,7 +13198,7 @@ async function cargarSaldosFA() {
     progreso.innerHTML = '<i class="ti ti-alert-circle" style="color:var(--danger);"></i> El proxy no responde (más de 60s). Puede estar caído — revisá el servicio en Railway.';
     btn.disabled = false;
     btn.innerHTML = '<i class="ti ti-refresh"></i> Actualizar';
-  }, 60000);
+  }, 90000);
 
   try {
     // 1. Diarios de la company con su moneda
@@ -13211,39 +13211,54 @@ async function cargarSaldosFA() {
       monedaPorDiario[d.name] = d.currency_id ? d.currency_id[1] : 'ARS';
     });
 
-    // 2. Paginar account.move.line
-    var pageSize = 5000, offset = 0, filtradas = [];
-    while (true) {
-      progreso.innerHTML = '<i class="ti ti-loader"></i> Cargando líneas contables... offset ' + offset;
-      var pagina = await odooCall('account.move.line', 'search_read',
-        [[
-          ['move_id.company_id', '=', FA_COMPANY_ID],
-          ['move_id.state', '=', 'posted'],
-          ['analytic_distribution', '!=', false]
-        ]],
-        { fields: ['journal_id', 'credit', 'debit', 'amount_currency', 'currency_id', 'analytic_distribution'],
-          limit: pageSize, offset: offset });
+    // 2. Contar y traer account.move.line en paralelo (mismo patrón search_count + paginado
+    //    que usan los demás módulos del portal, pero disparando las páginas a la vez en vez
+    //    de una por una, que es lo que hacía lenta la carga)
+    var domainML = [
+      ['move_id.company_id', '=', FA_COMPANY_ID],
+      ['move_id.state', '=', 'posted'],
+      ['analytic_distribution', '!=', false]
+    ];
+    var camposML = ['journal_id', 'credit', 'debit', 'amount_currency', 'currency_id', 'analytic_distribution'];
 
-      var match = pagina.filter(function(l) {
-        return l.analytic_distribution && Object.keys(l.analytic_distribution).includes(String(FA_ANALYTIC_ID));
+    var totalML = await odooCall('account.move.line', 'search_count', [domainML]);
+    var pageSize = 8000;
+    var offsets = [];
+    for (var o = 0; o < totalML; o += pageSize) offsets.push(o);
+
+    progreso.innerHTML = '<i class="ti ti-loader"></i> Trayendo ' + totalML + ' líneas contables (' + offsets.length + ' lotes en paralelo)...';
+
+    var paginas = await Promise.all(offsets.map(function(off) {
+      return odooCall('account.move.line', 'search_read',
+        [domainML], { fields: camposML, limit: pageSize, offset: off });
+    }));
+
+    var filtradas = [];
+    paginas.forEach(function(pagina) {
+      pagina.forEach(function(l) {
+        if (l.analytic_distribution && Object.keys(l.analytic_distribution).includes(String(FA_ANALYTIC_ID))) {
+          filtradas.push(l);
+        }
       });
-      filtradas = filtradas.concat(match);
-
-      if (pagina.length < pageSize) break;
-      offset += pageSize;
-    }
+    });
 
     progreso.textContent = 'Líneas con FUNCIONAMIENTO FA: ' + filtradas.length;
 
-    // 3. Agrupar por diario, prorrateando por % de distribución
-    //    y usando amount_currency si el diario es de moneda extranjera
+    // 3. Agrupar por diario, prorrateando por % de distribución.
+    //    La moneda se decide por el DIARIO (account.journal.currency_id), no por la línea:
+    //    muchas líneas no traen currency_id propio seteado aunque pertenezcan a un diario
+    //    en USD/EUR, y eso hacía que se contaran como ARS por error.
+    //    Para diarios en moneda extranjera usamos amount_currency (el monto real en esa
+    //    moneda) en vez de credit/debit (que ya viene convertido a pesos por Odoo).
+    //    Signo: amount_currency sigue la convención debit-credit; credit-debit (ARS) es
+    //    la convención opuesta, por eso se invierte con "-" para que ambas queden consistentes.
     var porDiario = {};
     filtradas.forEach(function(l) {
       var pct = l.analytic_distribution[String(FA_ANALYTIC_ID)] / 100;
       var j = l.journal_id[1];
       var moneda = monedaPorDiario[j] || 'ARS';
-      var esExtranjera = l.currency_id && l.currency_id[1] !== 'ARS';
-      var valor = esExtranjera ? (l.amount_currency * pct) : ((l.credit - l.debit) * pct);
+      var esExtranjera = moneda !== 'ARS';
+      var valor = esExtranjera ? (-l.amount_currency * pct) : ((l.credit - l.debit) * pct);
 
       if (!porDiario[j]) porDiario[j] = { moneda: moneda, saldo: 0 };
       porDiario[j].saldo += valor;
