@@ -2101,13 +2101,58 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
       <div class="card" style="margin-bottom:16px;">
         <div class="card-header">
           <div class="card-title"><i class="ti ti-building-bank"></i> Saldo Funcionamiento FA por diario</div>
-          <button class="btn" id="fa-refresh-btn" onclick="cargarSaldosFA()" style="padding:5px 12px;font-size:12px;">
-            <i class="ti ti-refresh"></i> Actualizar
-          </button>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="fa-last-update" style="font-size:10.5px;color:var(--muted);"></span>
+            <button class="btn" id="fa-refresh-btn" onclick="cargarSaldosFA()" style="padding:5px 12px;font-size:12px;">
+              <i class="ti ti-refresh"></i> Actualizar
+            </button>
+          </div>
         </div>
-        <div class="card-body">
-          <div id="fa-progress" style="font-size:11px;color:var(--muted);margin-bottom:10px;">Sin cargar aún — presioná Actualizar.</div>
-          <div id="fa-resultado" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;"></div>
+
+        <div class="card-body" style="padding-top:14px;">
+
+          <!-- Barra de progreso / estado -->
+          <div id="fa-progress" style="font-size:11px;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <i class="ti ti-info-circle"></i> Sin cargar aún — presioná Actualizar.
+          </div>
+
+          <!-- Resumen por moneda (chips) -->
+          <div id="fa-resumen-monedas" style="display:none;gap:10px;margin-bottom:16px;flex-wrap:wrap;"></div>
+
+          <!-- Buscador + filtro moneda -->
+          <div id="fa-toolbar" style="display:none;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+            <div style="position:relative;flex:1;min-width:220px;max-width:360px;">
+              <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none;"></i>
+              <input type="text" id="fa-search-input" placeholder="Buscar diario..."
+                style="width:100%;padding:7px 10px 7px 30px;border:1px solid var(--border);border-radius:7px;font-size:12.5px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+                oninput="faRenderTabla()" autocomplete="off">
+            </div>
+            <div id="fa-moneda-filtros" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);margin-left:auto;cursor:pointer;user-select:none;">
+              <input type="checkbox" id="fa-hide-zero" onchange="faRenderTabla()" style="cursor:pointer;">
+              Ocultar saldos en $0
+            </label>
+          </div>
+
+          <!-- Tabla -->
+          <div id="fa-tabla-wrap" class="table-wrap" style="border:none;border-radius:0;display:none;">
+            <table style="font-size:12.5px;">
+              <thead>
+                <tr>
+                  <th>Diario</th>
+                  <th style="text-align:center;width:70px;">Moneda</th>
+                  <th style="text-align:right;">Saldo</th>
+                </tr>
+              </thead>
+              <tbody id="fa-tbody"></tbody>
+            </table>
+          </div>
+
+          <div id="fa-empty" style="display:none;text-align:center;padding:32px 16px;color:var(--muted);font-size:12.5px;">
+            <i class="ti ti-mood-empty" style="font-size:26px;display:block;margin-bottom:6px;"></i>
+            Sin resultados para esa búsqueda
+          </div>
+
         </div>
       </div>
 
@@ -13270,44 +13315,113 @@ async function cargarSaldosFA() {
       porMoneda[info.moneda].push({ diario: diario, saldo: info.saldo });
     });
 
-    // 5. Render — una card por moneda, mismo estilo que el resto del portal
+    // 5. Guardar en estado global (moneda base ARS primero, resto alfabético)
     var monedasOrdenadas = Object.keys(porMoneda).sort(function(a, b) {
-      return a === 'ARS' ? -1 : a.localeCompare(b);
+      if (a === 'ARS') return -1;
+      if (b === 'ARS') return 1;
+      return a.localeCompare(b);
     });
 
-    var fmt = function(n) { return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
-    var html = '';
-
+    var filasFlat = [];
     monedasOrdenadas.forEach(function(moneda) {
-      var filas = porMoneda[moneda].sort(function(a, b) { return b.saldo - a.saldo; });
-      var total = filas.reduce(function(s, f) { return s + f.saldo; }, 0);
-
-      html += '<div class="card" style="margin:0;">';
-      html += '<div class="card-header"><div class="card-title">' + moneda + '</div></div>';
-      html += '<div class="table-wrap" style="border:none;border-radius:0;">';
-      html += '<table style="font-size:12px;"><tbody>';
-      filas.forEach(function(f) {
-        var color = f.saldo < 0 ? 'var(--danger)' : 'var(--text)';
-        html += '<tr><td>' + f.diario + '</td>' +
-          '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:' + color + ';">' + fmt(f.saldo) + '</td></tr>';
-      });
-      html += '<tr style="border-top:2px solid var(--border);font-weight:700;">' +
-        '<td>TOTAL ' + moneda + '</td>' +
-        '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmt(total) + '</td></tr>';
-      html += '</tbody></table></div></div>';
+      porMoneda[moneda].forEach(function(f) { filasFlat.push({ diario: f.diario, moneda: moneda, saldo: f.saldo }); });
     });
 
-    resultado.innerHTML = html;
-    progreso.textContent = 'Actualizado — ' + filtradas.length + ' líneas procesadas.';
+    window.__faData = { filas: filasFlat, monedas: monedasOrdenadas, filtroMoneda: null, actualizado: new Date() };
+
+    faRenderResumen();
+    faRenderTabla();
+
+    document.getElementById('fa-toolbar').style.display = 'flex';
+    document.getElementById('fa-resumen-monedas').style.display = 'flex';
+    document.getElementById('fa-tabla-wrap').style.display = 'block';
+    document.getElementById('fa-last-update').textContent = 'Actualizado ' + window.__faData.actualizado.toLocaleTimeString('es-AR');
+    progreso.innerHTML = '<i class="ti ti-check" style="color:var(--success);"></i> ' + filtradas.length + ' líneas procesadas · ' + filasFlat.length + ' diarios con movimiento.';
 
   } catch (err) {
-    progreso.textContent = '';
-    resultado.innerHTML = '<div style="color:var(--danger);font-size:12px;grid-column:1/-1;">Error cargando saldos: ' + (err.message || err) + '</div>';
+    progreso.innerHTML = '<i class="ti ti-alert-circle" style="color:var(--danger);"></i> Error cargando saldos: ' + (err.message || err);
     console.error(err);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="ti ti-refresh"></i> Actualizar';
   }
+}
+
+function faFmt(n, moneda) {
+  var num = n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var simbolo = moneda === 'ARS' ? '$' : (moneda === 'USD' ? 'US$' : (moneda === 'EUR' ? '€' : moneda + ' '));
+  return simbolo + num;
+}
+
+// Chips de resumen por moneda (clickeables para filtrar)
+function faRenderResumen() {
+  var data = window.__faData;
+  var cont = document.getElementById('fa-resumen-monedas');
+  var coloresChip = { ARS: 'var(--info)', USD: 'var(--success)', EUR: 'var(--warn)' };
+
+  var html = data.monedas.map(function(moneda) {
+    var filas = data.filas.filter(function(f) { return f.moneda === moneda; });
+    var total = filas.reduce(function(s, f) { return s + f.saldo; }, 0);
+    var activo = data.filtroMoneda === moneda;
+    var color = coloresChip[moneda] || 'var(--muted)';
+    return '<div onclick="faToggleFiltroMoneda(\'' + moneda + '\')" style="cursor:pointer;padding:10px 16px;border-radius:10px;border:1.5px solid ' +
+      (activo ? color : 'var(--border)') + ';background:' + (activo ? 'var(--surface)' : 'var(--surface-alt)') + ';box-shadow:' + (activo ? '0 0 0 1px ' + color : 'none') + ';min-width:150px;transition:all .12s;">' +
+      '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:' + color + ';margin-bottom:3px;">' + moneda + (activo ? ' <i class="ti ti-filter-filled" style="font-size:10px;"></i>' : '') + '</div>' +
+      '<div style="font-family:\'JetBrains Mono\',monospace;font-size:15px;font-weight:700;color:' + (total < 0 ? 'var(--danger)' : 'var(--text)') + ';">' + faFmt(total, moneda) + '</div>' +
+      '<div style="font-size:10px;color:var(--muted);margin-top:2px;">' + filas.length + ' diario' + (filas.length !== 1 ? 's' : '') + '</div>' +
+    '</div>';
+  }).join('');
+
+  html += '<div onclick="faToggleFiltroMoneda(null)" style="cursor:pointer;display:flex;align-items:center;gap:5px;padding:10px 14px;border-radius:10px;border:1.5px dashed var(--border);color:var(--muted);font-size:11.5px;' +
+    (data.filtroMoneda === null ? 'display:none;' : '') + '"><i class="ti ti-x" style="font-size:13px;"></i> Ver todas</div>';
+
+  cont.innerHTML = html;
+}
+
+function faToggleFiltroMoneda(moneda) {
+  window.__faData.filtroMoneda = (window.__faData.filtroMoneda === moneda) ? null : moneda;
+  faRenderResumen();
+  faRenderTabla();
+}
+
+// Tabla con buscador + filtro moneda + ocultar $0
+function faRenderTabla() {
+  var data = window.__faData;
+  if (!data) return;
+
+  var q = (document.getElementById('fa-search-input').value || '').toLowerCase().trim();
+  var ocultarCero = document.getElementById('fa-hide-zero').checked;
+
+  var filas = data.filas.filter(function(f) {
+    if (data.filtroMoneda && f.moneda !== data.filtroMoneda) return false;
+    if (q && f.diario.toLowerCase().indexOf(q) === -1) return false;
+    if (ocultarCero && Math.abs(f.saldo) < 0.005) return false;
+    return true;
+  }).sort(function(a, b) {
+    if (a.moneda !== b.moneda) return data.monedas.indexOf(a.moneda) - data.monedas.indexOf(b.moneda);
+    return Math.abs(b.saldo) - Math.abs(a.saldo);
+  });
+
+  var badgeColores = { ARS: 'badge-info', USD: 'badge-ok', EUR: 'badge-warn' };
+
+  var tbody = document.getElementById('fa-tbody');
+  if (!filas.length) {
+    document.getElementById('fa-tabla-wrap').style.display = 'none';
+    document.getElementById('fa-empty').style.display = 'block';
+    return;
+  }
+  document.getElementById('fa-tabla-wrap').style.display = 'block';
+  document.getElementById('fa-empty').style.display = 'none';
+
+  tbody.innerHTML = filas.map(function(f) {
+    var color = f.saldo < 0 ? 'var(--danger)' : 'var(--text)';
+    var badgeClass = badgeColores[f.moneda] || 'badge-info';
+    return '<tr>' +
+      '<td>' + f.diario + '</td>' +
+      '<td style="text-align:center;"><span class="badge ' + badgeClass + '" style="font-size:9.5px;">' + f.moneda + '</span></td>' +
+      '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:' + color + ';font-weight:600;">' + faFmt(f.saldo, f.moneda) + '</td>' +
+    '</tr>';
+  }).join('');
 }
 </script>
 </body>
