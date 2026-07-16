@@ -2097,6 +2097,20 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
         <button class="btn btn-primary"><i class="ti ti-mail"></i> Enviar reporte por mail</button>
       </div>
 
+      <!-- ══════════ SALDO FUNCIONAMIENTO FA POR DIARIO ══════════ -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-building-bank"></i> Saldo Funcionamiento FA por diario</div>
+          <button class="btn" id="fa-refresh-btn" onclick="cargarSaldosFA()" style="padding:5px 12px;font-size:12px;">
+            <i class="ti ti-refresh"></i> Actualizar
+          </button>
+        </div>
+        <div class="card-body">
+          <div id="fa-progress" style="font-size:11px;color:var(--muted);margin-bottom:10px;">Sin cargar aún — presioná Actualizar.</div>
+          <div id="fa-resultado" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;"></div>
+        </div>
+      </div>
+
       <div class="metrics-grid" style="margin-bottom:16px;">
         <div class="metric-card">
           <div class="metric-label">Total honorarios</div>
@@ -13187,6 +13201,114 @@ async function ccProcesar() {
   btn.innerHTML = '<i class="ti ti-player-play"></i> Cobrar todos los COGAYT';
 }
 
+// ══════════ SALDO FUNCIONAMIENTO FA POR DIARIO (Saldos) ══════════
+const FA_ANALYTIC_ID = 116; // FUNCIONAMIENTO FA
+const FA_COMPANY_ID  = 1;   // Fundación ArgenINTA
+
+async function cargarSaldosFA() {
+  var btn = document.getElementById('fa-refresh-btn');
+  var progreso = document.getElementById('fa-progress');
+  var resultado = document.getElementById('fa-resultado');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Cargando...';
+  resultado.innerHTML = '';
+
+  try {
+    // 1. Diarios de la company con su moneda
+    var diarios = await odooCall('account.journal', 'search_read',
+      [[['company_id', '=', FA_COMPANY_ID]]],
+      { fields: ['id', 'name', 'currency_id'] });
+
+    var monedaPorDiario = {};
+    diarios.forEach(function(d) {
+      monedaPorDiario[d.name] = d.currency_id ? d.currency_id[1] : 'ARS';
+    });
+
+    // 2. Paginar account.move.line
+    var pageSize = 5000, offset = 0, filtradas = [];
+    while (true) {
+      progreso.textContent = 'Cargando líneas contables... offset ' + offset;
+      var pagina = await odooCall('account.move.line', 'search_read',
+        [[
+          ['move_id.company_id', '=', FA_COMPANY_ID],
+          ['move_id.state', '=', 'posted'],
+          ['analytic_distribution', '!=', false]
+        ]],
+        { fields: ['journal_id', 'credit', 'debit', 'amount_currency', 'currency_id', 'analytic_distribution'],
+          limit: pageSize, offset: offset });
+
+      var match = pagina.filter(function(l) {
+        return l.analytic_distribution && Object.keys(l.analytic_distribution).includes(String(FA_ANALYTIC_ID));
+      });
+      filtradas = filtradas.concat(match);
+
+      if (pagina.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    progreso.textContent = 'Líneas con FUNCIONAMIENTO FA: ' + filtradas.length;
+
+    // 3. Agrupar por diario, prorrateando por % de distribución
+    //    y usando amount_currency si el diario es de moneda extranjera
+    var porDiario = {};
+    filtradas.forEach(function(l) {
+      var pct = l.analytic_distribution[String(FA_ANALYTIC_ID)] / 100;
+      var j = l.journal_id[1];
+      var moneda = monedaPorDiario[j] || 'ARS';
+      var esExtranjera = l.currency_id && l.currency_id[1] !== 'ARS';
+      var valor = esExtranjera ? (l.amount_currency * pct) : ((l.credit - l.debit) * pct);
+
+      if (!porDiario[j]) porDiario[j] = { moneda: moneda, saldo: 0 };
+      porDiario[j].saldo += valor;
+    });
+
+    // 4. Separar por moneda
+    var porMoneda = {};
+    Object.entries(porDiario).forEach(function(entry) {
+      var diario = entry[0], info = entry[1];
+      if (!porMoneda[info.moneda]) porMoneda[info.moneda] = [];
+      porMoneda[info.moneda].push({ diario: diario, saldo: info.saldo });
+    });
+
+    // 5. Render — una card por moneda, mismo estilo que el resto del portal
+    var monedasOrdenadas = Object.keys(porMoneda).sort(function(a, b) {
+      return a === 'ARS' ? -1 : a.localeCompare(b);
+    });
+
+    var fmt = function(n) { return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    var html = '';
+
+    monedasOrdenadas.forEach(function(moneda) {
+      var filas = porMoneda[moneda].sort(function(a, b) { return b.saldo - a.saldo; });
+      var total = filas.reduce(function(s, f) { return s + f.saldo; }, 0);
+
+      html += '<div class="card" style="margin:0;">';
+      html += '<div class="card-header"><div class="card-title">' + moneda + '</div></div>';
+      html += '<div class="table-wrap" style="border:none;border-radius:0;">';
+      html += '<table style="font-size:12px;"><tbody>';
+      filas.forEach(function(f) {
+        var color = f.saldo < 0 ? 'var(--danger)' : 'var(--text)';
+        html += '<tr><td>' + f.diario + '</td>' +
+          '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:' + color + ';">' + fmt(f.saldo) + '</td></tr>';
+      });
+      html += '<tr style="border-top:2px solid var(--border);font-weight:700;">' +
+        '<td>TOTAL ' + moneda + '</td>' +
+        '<td style="text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmt(total) + '</td></tr>';
+      html += '</tbody></table></div></div>';
+    });
+
+    resultado.innerHTML = html;
+    progreso.textContent = 'Actualizado — ' + filtradas.length + ' líneas procesadas.';
+
+  } catch (err) {
+    progreso.textContent = '';
+    resultado.innerHTML = '<div style="color:var(--danger);font-size:12px;grid-column:1/-1;">Error cargando saldos: ' + (err.message || err) + '</div>';
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-refresh"></i> Actualizar';
+  }
+}
 </script>
 </body>
 </html>
