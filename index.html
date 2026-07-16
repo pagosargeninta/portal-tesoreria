@@ -13206,9 +13206,15 @@ async function cargarSaldosFA() {
       [[['company_id', '=', FA_COMPANY_ID]]],
       { fields: ['id', 'name', 'currency_id'] });
 
+    var faNormalizar = function(s) {
+      return (s || '').trim().toUpperCase().replace(/^[0-9.\-]+\s+/, '').replace(/\s+/g, ' ');
+    };
+
     var monedaPorDiario = {};
+    var nombreNormADiario = {}; // nombre de cuenta normalizado -> nombre real del diario
     diarios.forEach(function(d) {
       monedaPorDiario[d.name] = d.currency_id ? d.currency_id[1] : 'ARS';
+      nombreNormADiario[faNormalizar(d.name)] = d.name;
     });
 
     // 2. Contar y traer account.move.line en paralelo (mismo patrón search_count + paginado
@@ -13219,7 +13225,7 @@ async function cargarSaldosFA() {
       ['move_id.state', '=', 'posted'],
       ['analytic_distribution', '!=', false]
     ];
-    var camposML = ['journal_id', 'credit', 'debit', 'amount_currency', 'currency_id', 'analytic_distribution'];
+    var camposML = ['journal_id', 'account_id', 'credit', 'debit', 'amount_currency', 'currency_id', 'analytic_distribution'];
 
     var totalML = await odooCall('account.move.line', 'search_count', [domainML]);
     var pageSize = 8000;
@@ -13245,6 +13251,13 @@ async function cargarSaldosFA() {
     progreso.textContent = 'Líneas con FUNCIONAMIENTO FA: ' + filtradas.length;
 
     // 3. Agrupar por diario, prorrateando por % de distribución.
+    //    Las líneas del diario "Saldos Iniciales" no son un diario real — son saldos de
+    //    apertura de cuentas de banco, cargadas con cuentas que se llaman EXACTAMENTE
+    //    igual que el diario correspondiente (ej: cuenta "BANCO $ NACIÓN - 001607400203-38"
+    //    dentro de Saldos Iniciales == diario "BANCO $ NACIÓN - 001607400203-38"). Se
+    //    redirigen por nombre para que el saldo inicial se sume al saldo del diario en
+    //    vez de figurar aparte.
+    //
     //    La moneda se decide por el DIARIO (account.journal.currency_id), no por la línea:
     //    muchas líneas no traen currency_id propio seteado aunque pertenezcan a un diario
     //    en USD/EUR, y eso hacía que se contaran como ARS por error.
@@ -13253,9 +13266,21 @@ async function cargarSaldosFA() {
     //    Signo: amount_currency sigue la convención debit-credit; credit-debit (ARS) es
     //    la convención opuesta, por eso se invierte con "-" para que ambas queden consistentes.
     var porDiario = {};
+    var sinIdentificar = 0;
     filtradas.forEach(function(l) {
       var pct = l.analytic_distribution[String(FA_ANALYTIC_ID)] / 100;
       var j = l.journal_id[1];
+
+      if (j.toLowerCase().indexOf('saldos iniciales') !== -1) {
+        var nombreCuenta = l.account_id && l.account_id[1];
+        var diarioDestino = nombreCuenta ? nombreNormADiario[faNormalizar(nombreCuenta)] : null;
+        if (diarioDestino) {
+          j = diarioDestino;
+        } else {
+          sinIdentificar++; // cuenta de Saldos Iniciales que no matchea ningún diario por nombre
+        }
+      }
+
       var moneda = monedaPorDiario[j] || 'ARS';
       var esExtranjera = moneda !== 'ARS';
       var valor = esExtranjera ? (-l.amount_currency * pct) : ((l.credit - l.debit) * pct);
@@ -13263,6 +13288,10 @@ async function cargarSaldosFA() {
       if (!porDiario[j]) porDiario[j] = { moneda: moneda, saldo: 0 };
       porDiario[j].saldo += valor;
     });
+
+    if (sinIdentificar > 0) {
+      console.warn('Saldos Iniciales: ' + sinIdentificar + ' líneas no se pudieron asociar a ningún diario por nombre de cuenta (quedaron en "Saldos Iniciales").');
+    }
 
     // 4. Separar por moneda
     var porMoneda = {};
