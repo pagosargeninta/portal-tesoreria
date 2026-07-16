@@ -13267,11 +13267,15 @@ async function cargarSaldosFA() {
     //    la convención opuesta, por eso se invierte con "-" para que ambas queden consistentes.
     var porDiario = {};
     var sinIdentificar = 0;
+    var debugPropio = {};      // suma de líneas cuyo journal_id YA era ese diario
+    var debugRedirigido = {};  // suma de líneas redirigidas desde "Saldos Iniciales"
+
     filtradas.forEach(function(l) {
       var pct = l.analytic_distribution[String(FA_ANALYTIC_ID)] / 100;
       var j = l.journal_id[1];
+      var esSaldoInicial = j.toLowerCase().indexOf('saldos iniciales') !== -1;
 
-      if (j.toLowerCase().indexOf('saldos iniciales') !== -1) {
+      if (esSaldoInicial) {
         var nombreCuenta = l.account_id && l.account_id[1];
         var diarioDestino = nombreCuenta ? nombreNormADiario[faNormalizar(nombreCuenta)] : null;
         if (diarioDestino) {
@@ -13287,11 +13291,28 @@ async function cargarSaldosFA() {
 
       if (!porDiario[j]) porDiario[j] = { moneda: moneda, saldo: 0 };
       porDiario[j].saldo += valor;
+
+      // Debug: acumular por separado según origen de la línea
+      if (esSaldoInicial) {
+        debugRedirigido[j] = (debugRedirigido[j] || 0) + valor;
+      } else {
+        debugPropio[j] = (debugPropio[j] || 0) + valor;
+      }
     });
 
     if (sinIdentificar > 0) {
       console.warn('Saldos Iniciales: ' + sinIdentificar + ' líneas no se pudieron asociar a ningún diario por nombre de cuenta (quedaron en "Saldos Iniciales").');
     }
+
+    console.log('=== FA — Desglose por diario (propio vs redirigido de Saldos Iniciales) ===');
+    console.table(Object.keys(porDiario).map(function(j) {
+      return {
+        diario: j,
+        propio: (debugPropio[j] || 0).toFixed(2),
+        saldos_iniciales: (debugRedirigido[j] || 0).toFixed(2),
+        TOTAL: porDiario[j].saldo.toFixed(2)
+      };
+    }));
 
     // 4. Separar por moneda
     var porMoneda = {};
