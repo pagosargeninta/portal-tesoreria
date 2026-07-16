@@ -2087,14 +2087,9 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
     <!-- ══════════ REPORTES ══════════ -->
     <div id="page-reportes" class="page">
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-        <div class="tab-row" style="margin-bottom:0;">
-          <button class="tab-btn active">Mayo 2026</button>
-          <button class="tab-btn">Abril 2026</button>
-          <button class="tab-btn">Marzo 2026</button>
-          <button class="tab-btn">Febrero 2026</button>
-        </div>
-        <button class="btn btn-primary"><i class="ti ti-mail"></i> Enviar reporte por mail</button>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:16px;font-weight:700;color:var(--text);">Saldos</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">Saldo de la analítica Funcionamiento FA por diario, discriminado por moneda.</div>
       </div>
 
       <!-- ══════════ SALDO FUNCIONAMIENTO FA POR DIARIO ══════════ -->
@@ -2153,76 +2148,6 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
             Sin resultados para esa búsqueda
           </div>
 
-        </div>
-      </div>
-
-      <div class="metrics-grid" style="margin-bottom:16px;">
-        <div class="metric-card">
-          <div class="metric-label">Total honorarios</div>
-          <div class="metric-value">$284M</div>
-          <div class="metric-sub" style="color:var(--warn);">↑ 8% vs abril</div>
-        </div>
-        <div class="metric-card success">
-          <div class="metric-label">Cartas al día</div>
-          <div class="metric-value">3/7</div>
-          <div class="metric-sub">4 con faltantes</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Proveedores pagados</div>
-          <div class="metric-value">—</div>
-          <div class="metric-sub">sin datos aún</div>
-        </div>
-        <div class="metric-card info">
-          <div class="metric-label">Ingresos Carta 29</div>
-          <div class="metric-value">$142M</div>
-          <div class="metric-sub">neto post-COGAYT</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="ti ti-table"></i> Detalle por carta — Mayo 2026</div>
-        </div>
-        <div class="card-body" style="padding:0;">
-          <div class="table-wrap" style="border:none;border-radius:0;">
-            <table>
-              <thead><tr><th>Carta</th><th>Organismo</th><th>Facturas</th><th>Monto</th><th>Var. mes ant.</th><th>Saldo disp.</th><th>Estado</th></tr></thead>
-              <tbody>
-                <tr>
-                  <td><strong>SENASA.28.1</strong></td><td>SENASA</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">46/50</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">$89.2M</td>
-                  <td style="color:var(--warn);font-size:11px;">↑ 12%</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">$12.4M</td>
-                  <td><span class="badge badge-ok">Completa</span></td>
-                </tr>
-                <tr>
-                  <td><strong>INIDEP.28</strong></td><td>INIDEP</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">38/72</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">$74.1M</td>
-                  <td style="color:var(--success);font-size:11px;">↓ 3%</td>
-                  <td style="font-family:'JetBrains Mono',monospace;color:var(--warn);">$1.2M</td>
-                  <td><span class="badge badge-warn">Faltantes</span></td>
-                </tr>
-                <tr>
-                  <td><strong>MAGyP.14</strong></td><td>MAGyP</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">28/28</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">$42.8M</td>
-                  <td style="color:var(--warn);font-size:11px;">↑ 5%</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">$8.7M</td>
-                  <td><span class="badge badge-ok">Completa</span></td>
-                </tr>
-                <tr>
-                  <td><strong>CONICET.7</strong></td><td>CONICET</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">40/60</td>
-                  <td style="font-family:'JetBrains Mono',monospace;">$78.0M</td>
-                  <td style="color:var(--success);font-size:11px;">↓ 1%</td>
-                  <td style="font-family:'JetBrains Mono',monospace;color:var(--danger);">$0.3M</td>
-                  <td><span class="badge badge-danger">Saldo crítico</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
     </div>
@@ -13253,10 +13178,27 @@ const FA_COMPANY_ID  = 1;   // Fundación ArgenINTA
 async function cargarSaldosFA() {
   var btn = document.getElementById('fa-refresh-btn');
   var progreso = document.getElementById('fa-progress');
-  var resultado = document.getElementById('fa-resultado');
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader"></i> Cargando...';
-  resultado.innerHTML = '';
+  progreso.innerHTML = '<i class="ti ti-loader"></i> Conectando con Odoo...';
+  document.getElementById('fa-toolbar').style.display = 'none';
+  document.getElementById('fa-resumen-monedas').style.display = 'none';
+  document.getElementById('fa-tabla-wrap').style.display = 'none';
+  document.getElementById('fa-empty').style.display = 'none';
+
+  if (typeof odooCall !== 'function') {
+    progreso.innerHTML = '<i class="ti ti-alert-circle" style="color:var(--danger);"></i> odooCall no está disponible en esta página — revisá la conexión con el proxy.';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-refresh"></i> Actualizar';
+    return;
+  }
+
+  // Timeout de seguridad: si el proxy no responde en 60s, avisamos en vez de colgar el botón
+  var timeoutId = setTimeout(function() {
+    progreso.innerHTML = '<i class="ti ti-alert-circle" style="color:var(--danger);"></i> El proxy no responde (más de 60s). Puede estar caído — revisá el servicio en Railway.';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-refresh"></i> Actualizar';
+  }, 60000);
 
   try {
     // 1. Diarios de la company con su moneda
@@ -13272,7 +13214,7 @@ async function cargarSaldosFA() {
     // 2. Paginar account.move.line
     var pageSize = 5000, offset = 0, filtradas = [];
     while (true) {
-      progreso.textContent = 'Cargando líneas contables... offset ' + offset;
+      progreso.innerHTML = '<i class="ti ti-loader"></i> Cargando líneas contables... offset ' + offset;
       var pagina = await odooCall('account.move.line', 'search_read',
         [[
           ['move_id.company_id', '=', FA_COMPANY_ID],
@@ -13342,6 +13284,7 @@ async function cargarSaldosFA() {
     progreso.innerHTML = '<i class="ti ti-alert-circle" style="color:var(--danger);"></i> Error cargando saldos: ' + (err.message || err);
     console.error(err);
   } finally {
+    clearTimeout(timeoutId);
     btn.disabled = false;
     btn.innerHTML = '<i class="ti ti-refresh"></i> Actualizar';
   }
