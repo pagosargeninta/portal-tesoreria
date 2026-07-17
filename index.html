@@ -3145,6 +3145,11 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
               <input type="number" id="pc-tol" value="3" min="0" max="10">
             </div>
           </div>
+          <div class="field" style="margin-top:12px;">
+            <label>Excluir movimientos cuya descripción contenga (separado por comas)</label>
+            <input type="text" id="pc-excluir" value="COGAYT, LS" style="width:100%;">
+            <div style="font-size:11px;color:var(--muted);margin-top:4px;">Estos movimientos ya se registran en Odoo por factura/cobro, no como pase manual — se descartan antes de cruzar.</div>
+          </div>
         </div>
       </div>
 
@@ -3628,6 +3633,16 @@ function pcParseFecha(v) {
   return null;
 }
 
+function pcGetExcludeKeywords() {
+  const raw = document.getElementById('pc-excluir')?.value || '';
+  return raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+}
+
+function pcEsCogayt(m) {
+  const desc = (m.descripcion || '').toString().toUpperCase();
+  return pcGetExcludeKeywords().some(kw => desc.includes(kw));
+}
+
 // Busca en una fila (array) índices de columnas reconocibles. Devuelve null si no parece un header válido.
 function pcTryHeader(row) {
   if (!row || !row.length) return null;
@@ -3775,6 +3790,10 @@ async function pcFetchRegistrados(desde, hasta) {
   ]);
 }
 
+function pcEsCogayt(mov) {
+  return (mov.descripcion || '').toString().toUpperCase().includes('COGAYT');
+}
+
 async function pcProcesar() {
   const btn = document.getElementById('pc-btn-procesar');
   btn.disabled = true;
@@ -3799,14 +3818,18 @@ async function pcProcesar() {
       cuenta: l.account_id[0],
     }));
 
+    const excludeKw = pcGetExcludeKeywords();
+    const totalExtractos = Object.values(pcExtractos).reduce((a,arr) => a + arr.length, 0);
+    const excluidos = Object.values(pcExtractos).reduce((a,arr) => a + arr.filter(pcEsCogayt).length, 0);
+    pcLog(`Excluyendo por descripción (${excludeKw.join(', ') || 'ninguna palabra'}): ${excluidos} de ${totalExtractos} movimientos.`);
     pcLog('Cruzando extractos entre sí para armar candidatos de pase...');
     pcCandidatos = [];
     for (const cOrigen of PC_CUENTAS) {
-      const salidas = (pcExtractos[cOrigen.apodo] || []).filter(m => m.tipo === 'debe');
+      const salidas = (pcExtractos[cOrigen.apodo] || []).filter(m => m.tipo === 'debe' && !pcEsCogayt(m));
       for (const salida of salidas) {
         for (const cDestino of PC_CUENTAS) {
           if (cDestino.apodo === cOrigen.apodo) continue;
-          const entradas = (pcExtractos[cDestino.apodo] || []).filter(m => m.tipo === 'haber');
+          const entradas = (pcExtractos[cDestino.apodo] || []).filter(m => m.tipo === 'haber' && !pcEsCogayt(m));
           const match = entradas.find(e => {
             const montoOk = Math.abs(e.monto - salida.monto) < 0.5;
             const diffDias = Math.abs((new Date(e.fecha) - new Date(salida.fecha)) / 86400000);
