@@ -13301,9 +13301,9 @@ async function cargarSaldosFA() {
 
     var faValor = function(l, moneda, pct) {
       var esExtranjera = moneda !== 'ARS';
-      // amount_currency sigue la convención debit-credit; credit-debit (ARS) es la opuesta,
-      // por eso se invierte con "-" para que ambas queden consistentes
-      return esExtranjera ? (-l.amount_currency * pct) : ((l.credit - l.debit) * pct);
+      // Confirmado contra Odoo: el saldo real usa la convención "debit - credit" (balance).
+      // amount_currency ya sigue esa misma convención, por eso no se invierte.
+      return esExtranjera ? (l.amount_currency * pct) : ((l.debit - l.credit) * pct);
     };
 
     // 4. Combinar ambas fuentes por nombre normalizado de diario
