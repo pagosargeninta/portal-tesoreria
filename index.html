@@ -3145,11 +3145,17 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
               <input type="number" id="pc-tol" value="3" min="0" max="10">
             </div>
           </div>
-          <div class="field" style="margin-top:12px;">
-            <label>Excluir movimientos cuya descripción contenga (separado por comas)</label>
-            <input type="text" id="pc-excluir" value="COGAYT, LS" style="width:100%;">
-            <div style="font-size:11px;color:var(--muted);margin-top:4px;">Estos movimientos ya se registran en Odoo por factura/cobro, no como pase manual — se descartan antes de cruzar.</div>
+          <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-top:12px;">
+            <div class="field">
+              <label>Monto mínimo a considerar</label>
+              <input type="number" id="pc-monto-min" value="50000" min="0" step="1000">
+            </div>
+            <div class="field">
+              <label>Excluir movimientos cuya descripción contenga (separado por comas)</label>
+              <input type="text" id="pc-excluir" value="COGAYT, LS" style="width:100%;">
+            </div>
           </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">El monto mínimo descarta comisiones, intereses y cargos chicos que por azar coinciden en fecha/monto entre dos cuentas. Los excluidos por descripción ya se registran en Odoo por factura/cobro, no como pase manual.</div>
         </div>
       </div>
 
@@ -3803,11 +3809,23 @@ async function pcProcesar() {
   const desde = document.getElementById('pc-desde').value;
   const hasta = document.getElementById('pc-hasta').value;
   const tolDays = parseInt(document.getElementById('pc-tol').value) || 3;
+  const montoMin = parseFloat(document.getElementById('pc-monto-min').value) || 0;
 
   try {
     pcLog('Consultando pases ya registrados en Odoo (cuenta puente 922)...');
     const registrados = await pcFetchRegistrados(desde, hasta);
     pcLog(`→ ${registrados.length} líneas encontradas (~${Math.round(registrados.length/2)} pases).`);
+
+    // Agrupamos por asiento: un pase manual real SIEMPRE tiene una línea en la
+    // cuenta puente 922, además de la de 910/909. Una factura/cobro (COGAYT, etc.)
+    // toca 910/909 pero NUNCA 922. Por eso no alcanza con mirar la cuenta de la
+    // línea que matcheó — hay que ver si ESE asiento completo incluye 922.
+    const cuentasPorMove = {};
+    registrados.forEach(l => {
+      const mid = l.move_id[0];
+      if (!cuentasPorMove[mid]) cuentasPorMove[mid] = new Set();
+      cuentasPorMove[mid].add(l.account_id[0]);
+    });
 
     const registradosIdx = registrados.map(l => ({
       journalId: l.journal_id[0],
@@ -3816,20 +3834,21 @@ async function pcProcesar() {
       moveId: l.move_id[0],
       moveName: l.move_id[1],
       cuenta: l.account_id[0],
+      esPaseManual: cuentasPorMove[l.move_id[0]].has(PC_CUENTAS_PUENTE.liquidityTransfer),
     }));
 
     const excludeKw = pcGetExcludeKeywords();
     const totalExtractos = Object.values(pcExtractos).reduce((a,arr) => a + arr.length, 0);
-    const excluidos = Object.values(pcExtractos).reduce((a,arr) => a + arr.filter(pcEsCogayt).length, 0);
-    pcLog(`Excluyendo por descripción (${excludeKw.join(', ') || 'ninguna palabra'}): ${excluidos} de ${totalExtractos} movimientos.`);
+    const excluidos = Object.values(pcExtractos).reduce((a,arr) => a + arr.filter(m => pcEsCogayt(m) || m.monto < montoMin).length, 0);
+    pcLog(`Excluyendo por descripción (${excludeKw.join(', ') || 'ninguna palabra'}) y monto < $${montoMin.toLocaleString('es-AR')}: ${excluidos} de ${totalExtractos} movimientos.`);
     pcLog('Cruzando extractos entre sí para armar candidatos de pase...');
     pcCandidatos = [];
     for (const cOrigen of PC_CUENTAS) {
-      const salidas = (pcExtractos[cOrigen.apodo] || []).filter(m => m.tipo === 'debe' && !pcEsCogayt(m));
+      const salidas = (pcExtractos[cOrigen.apodo] || []).filter(m => m.tipo === 'debe' && !pcEsCogayt(m) && m.monto >= montoMin);
       for (const salida of salidas) {
         for (const cDestino of PC_CUENTAS) {
           if (cDestino.apodo === cOrigen.apodo) continue;
-          const entradas = (pcExtractos[cDestino.apodo] || []).filter(m => m.tipo === 'haber' && !pcEsCogayt(m));
+          const entradas = (pcExtractos[cDestino.apodo] || []).filter(m => m.tipo === 'haber' && !pcEsCogayt(m) && m.monto >= montoMin);
           const match = entradas.find(e => {
             const montoOk = Math.abs(e.monto - salida.monto) < 0.5;
             const diffDias = Math.abs((new Date(e.fecha) - new Date(salida.fecha)) / 86400000);
@@ -3863,7 +3882,7 @@ async function pcProcesar() {
       c.registrado = !!match;
       c.moveName = match ? match.moveName : null;
       c.cobertura = match
-        ? (match.cuenta === PC_CUENTAS_PUENTE.liquidityTransfer ? 'Pase manual' : 'Factura/Cobro (ej. COGAYT)')
+        ? (match.esPaseManual ? 'Pase manual' : 'Factura/Cobro (ej. COGAYT)')
         : null;
     });
 
@@ -3895,22 +3914,22 @@ async function pcRegistrar(idx) {
   const monto = pcXmlSafe(c.monto);
 
   try {
-    const moveOrigenId = await odooCall('account.move', 'create', [[{
+    const moveOrigenId = await odooCall('account.move', 'create', [{
       journal_id: c.origenJournal, date: c.fecha, ref: ref, move_type: 'entry',
       line_ids: [
         [0, 0, { account_id: PC_CUENTAS_PUENTE.outstandingPayments, credit: monto, debit: 0, name: nombreLinea }],
         [0, 0, { account_id: PC_CUENTAS_PUENTE.liquidityTransfer, debit: monto, credit: 0, name: nombreLinea }],
       ]
-    }]]);
+    }]);
     await odooCall('account.move', 'action_post', [[moveOrigenId]]);
 
-    const moveDestinoId = await odooCall('account.move', 'create', [[{
+    const moveDestinoId = await odooCall('account.move', 'create', [{
       journal_id: c.destinoJournal, date: c.fecha, ref: ref, move_type: 'entry',
       line_ids: [
         [0, 0, { account_id: PC_CUENTAS_PUENTE.outstandingReceipts, debit: monto, credit: 0, name: nombreLinea }],
         [0, 0, { account_id: PC_CUENTAS_PUENTE.liquidityTransfer, credit: monto, debit: 0, name: nombreLinea }],
       ]
-    }]]);
+    }]);
     await odooCall('account.move', 'action_post', [[moveDestinoId]]);
 
     c.registrado = true;
