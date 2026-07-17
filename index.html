@@ -3153,7 +3153,7 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
           <div class="card-title"><i class="ti ti-upload"></i> Extractos por cuenta</div>
         </div>
         <div class="card-body">
-          <div class="grid2" id="pc-accounts" style="grid-template-columns:repeat(4,1fr);gap:12px;">
+          <div class="grid2" id="pc-accounts" style="grid-template-columns:repeat(5,1fr);gap:12px;">
             <!-- se arma por JS -->
           </div>
           <div style="display:flex;gap:8px;margin-top:14px;">
@@ -3542,7 +3542,7 @@ const pageTitles = {
   convenios:    ['Convenios',              'Estado y seguimiento de convenios vigentes'],
   ingresocogayt:['Ingreso + COGAYT',       'Registro de ingresos y liquidación COGAYT'],
   corrgalicia:  ['Corrector Galicia',      'Arregla convenio y CBU de archivos de Pagos Masivos antes de subir'],
-  pasescuentas: ['Pases entre Cuentas',    'Concilia extractos vs. Odoo y registra pases faltantes — 288 · 51-33 · 203 · 294'],
+  pasescuentas: ['Pases entre Cuentas',    'Concilia extractos vs. Odoo y registra pases faltantes — 288 · 51-33 · 203 · 294 · 229'],
 };
 
 function showHonTab(id, el) {
@@ -3571,6 +3571,7 @@ const PC_CUENTAS = [
   { apodo: '51-33', journalId: 174, nombre: 'BNA 0051-33' },
   { apodo: '203',   journalId: 166, nombre: 'BNA 0203-38' },
   { apodo: '294',   journalId: 168, nombre: 'BNA 0294-92' },
+  { apodo: '229',   journalId: 167, nombre: 'BNA 0229-44' },
 ];
 
 let pcExtractos = {};
