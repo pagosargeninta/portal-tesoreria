@@ -13201,125 +13201,162 @@ async function cargarSaldosFA() {
   }, 90000);
 
   try {
-    // 1. Diarios de la company con su moneda
+    // Cuentas de "pendiente de conciliar" (fijas, confirmadas contra Odoo)
+    var CUENTA_OUTSTANDING_RECEIPTS = 909; // 1.1.1.02.003
+    var CUENTA_OUTSTANDING_PAYMENTS = 910; // 1.1.1.02.004
+
+    var faNormalizar = function(s) {
+      // Saca código contable al inicio y sufijo de moneda "(USD)"/"(EUR)" al final, para poder
+      // matchear "BANCO M.E. NACIÓN - MIAMI 004350200002" (nombre de cuenta) con
+      // "BANCO M.E. NACIÓN - MIAMI 004350200002 (USD)" (nombre de diario)
+      return (s || '').trim().toUpperCase()
+        .replace(/^[0-9.\-]+\s+/, '')
+        .replace(/\s*\([^)]*\)\s*$/, '')
+        .replace(/\s+/g, ' ');
+    };
+
+    // 1. Diarios de la company, para saber la moneda de cada uno
     var diarios = await odooCall('account.journal', 'search_read',
       [[['company_id', '=', FA_COMPANY_ID]]],
       { fields: ['id', 'name', 'currency_id'] });
 
-    var faNormalizar = function(s) {
-      return (s || '').trim().toUpperCase().replace(/^[0-9.\-]+\s+/, '').replace(/\s+/g, ' ');
-    };
-
     var monedaPorDiario = {};
-    var nombreNormADiario = {}; // nombre de cuenta normalizado -> nombre real del diario
+    var nombreNormADiario = {}; // nombre normalizado -> nombre real del diario (con sufijo de moneda si tiene)
     diarios.forEach(function(d) {
       monedaPorDiario[d.name] = d.currency_id ? d.currency_id[1] : 'ARS';
       nombreNormADiario[faNormalizar(d.name)] = d.name;
     });
 
-    // 2. Contar y traer account.move.line en paralelo (mismo patrón search_count + paginado
-    //    que usan los demás módulos del portal, pero disparando las páginas a la vez en vez
-    //    de una por una, que es lo que hacía lenta la carga)
-    var domainML = [
+    // 2. Cuentas "Efectivo y Banco" — código 111xxx (esto ya excluye 112101/211404/211405/211406
+    //    porque ninguna arranca con 111, y de paso deja afuera cuentas de otro tipo)
+    progreso.innerHTML = '<i class="ti ti-loader"></i> Buscando cuentas de Efectivo y Banco...';
+    var cuentasBanco = await odooCall('account.account', 'search_read',
+      [[['company_ids', 'in', [FA_COMPANY_ID]], ['code', '=like', '111%']]],
+      { fields: ['id', 'code', 'name'] });
+
+    var bankAccountIds = cuentasBanco.map(function(c) { return c.id; });
+    var accountIdToNombre = {};
+    cuentasBanco.forEach(function(c) { accountIdToNombre[c.id] = c.name; });
+
+    // 3a. Movimientos propios: líneas contables directo sobre esas cuentas de banco
+    //     (esto incluye automáticamente los asientos de apertura de "Saldos Iniciales",
+    //     porque también impactan la misma cuenta 111xxx — no hace falta redirigir nada)
+    var domainBanco = [
       ['move_id.company_id', '=', FA_COMPANY_ID],
       ['move_id.state', '=', 'posted'],
-      ['analytic_distribution', '!=', false]
+      ['analytic_distribution', '!=', false],
+      ['account_id', 'in', bankAccountIds]
     ];
     var camposML = ['journal_id', 'account_id', 'credit', 'debit', 'amount_currency', 'currency_id', 'analytic_distribution'];
 
-    var totalML = await odooCall('account.move.line', 'search_count', [domainML]);
+    var totalBanco = await odooCall('account.move.line', 'search_count', [domainBanco]);
     var pageSize = 8000;
-    var offsets = [];
-    for (var o = 0; o < totalML; o += pageSize) offsets.push(o);
+    var offsetsBanco = [];
+    for (var o1 = 0; o1 < totalBanco; o1 += pageSize) offsetsBanco.push(o1);
 
-    progreso.innerHTML = '<i class="ti ti-loader"></i> Trayendo ' + totalML + ' líneas contables (' + offsets.length + ' lotes en paralelo)...';
+    progreso.innerHTML = '<i class="ti ti-loader"></i> Trayendo ' + totalBanco + ' líneas de cuentas bancarias...';
 
-    var paginas = await Promise.all(offsets.map(function(off) {
+    var paginasBanco = await Promise.all(offsetsBanco.map(function(off) {
       return odooCall('account.move.line', 'search_read',
-        [domainML], { fields: camposML, limit: pageSize, offset: off });
+        [domainBanco], { fields: camposML, limit: pageSize, offset: off });
     }));
 
-    var filtradas = [];
-    paginas.forEach(function(pagina) {
+    var lineasBanco = [];
+    paginasBanco.forEach(function(pagina) {
       pagina.forEach(function(l) {
         if (l.analytic_distribution && Object.keys(l.analytic_distribution).includes(String(FA_ANALYTIC_ID))) {
-          filtradas.push(l);
+          lineasBanco.push(l);
         }
       });
     });
 
-    progreso.textContent = 'Líneas con FUNCIONAMIENTO FA: ' + filtradas.length;
+    // 3b. Pendiente de conciliar: cuentas 909 (Outstanding Receipts) y 910 (Outstanding Payments),
+    //     estas SÍ se agrupan por diario (journal_id) porque son cuentas puente compartidas
+    progreso.innerHTML = '<i class="ti ti-loader"></i> Trayendo pendiente de conciliar...';
+    var domainConciliar = [
+      ['move_id.company_id', '=', FA_COMPANY_ID],
+      ['move_id.state', '=', 'posted'],
+      ['analytic_distribution', '!=', false],
+      ['account_id', 'in', [CUENTA_OUTSTANDING_RECEIPTS, CUENTA_OUTSTANDING_PAYMENTS]]
+    ];
+    var totalConciliar = await odooCall('account.move.line', 'search_count', [domainConciliar]);
+    var offsetsConciliar = [];
+    for (var o2 = 0; o2 < totalConciliar; o2 += pageSize) offsetsConciliar.push(o2);
 
-    // 3. Agrupar por diario, prorrateando por % de distribución.
-    //    Las líneas del diario "Saldos Iniciales" no son un diario real — son saldos de
-    //    apertura de cuentas de banco, cargadas con cuentas que se llaman EXACTAMENTE
-    //    igual que el diario correspondiente (ej: cuenta "BANCO $ NACIÓN - 001607400203-38"
-    //    dentro de Saldos Iniciales == diario "BANCO $ NACIÓN - 001607400203-38"). Se
-    //    redirigen por nombre para que el saldo inicial se sume al saldo del diario en
-    //    vez de figurar aparte.
-    //
-    //    La moneda se decide por el DIARIO (account.journal.currency_id), no por la línea:
-    //    muchas líneas no traen currency_id propio seteado aunque pertenezcan a un diario
-    //    en USD/EUR, y eso hacía que se contaran como ARS por error.
-    //    Para diarios en moneda extranjera usamos amount_currency (el monto real en esa
-    //    moneda) en vez de credit/debit (que ya viene convertido a pesos por Odoo).
-    //    Signo: amount_currency sigue la convención debit-credit; credit-debit (ARS) es
-    //    la convención opuesta, por eso se invierte con "-" para que ambas queden consistentes.
-    var porDiario = {};
-    var sinIdentificar = 0;
-    var debugPropio = {};      // suma de líneas cuyo journal_id YA era ese diario
-    var debugRedirigido = {};  // suma de líneas redirigidas desde "Saldos Iniciales"
+    var paginasConciliar = await Promise.all(offsetsConciliar.map(function(off) {
+      return odooCall('account.move.line', 'search_read',
+        [domainConciliar], { fields: camposML, limit: pageSize, offset: off });
+    }));
 
-    filtradas.forEach(function(l) {
-      var pct = l.analytic_distribution[String(FA_ANALYTIC_ID)] / 100;
-      var j = l.journal_id[1];
-      var esSaldoInicial = j.toLowerCase().indexOf('saldos iniciales') !== -1;
-
-      if (esSaldoInicial) {
-        var nombreCuenta = l.account_id && l.account_id[1];
-        var diarioDestino = nombreCuenta ? nombreNormADiario[faNormalizar(nombreCuenta)] : null;
-        if (diarioDestino) {
-          j = diarioDestino;
-        } else {
-          sinIdentificar++; // cuenta de Saldos Iniciales que no matchea ningún diario por nombre
+    var lineasConciliar = [];
+    paginasConciliar.forEach(function(pagina) {
+      pagina.forEach(function(l) {
+        if (l.analytic_distribution && Object.keys(l.analytic_distribution).includes(String(FA_ANALYTIC_ID))) {
+          lineasConciliar.push(l);
         }
-      }
-
-      var moneda = monedaPorDiario[j] || 'ARS';
-      var esExtranjera = moneda !== 'ARS';
-      var valor = esExtranjera ? (-l.amount_currency * pct) : ((l.credit - l.debit) * pct);
-
-      if (!porDiario[j]) porDiario[j] = { moneda: moneda, saldo: 0 };
-      porDiario[j].saldo += valor;
-
-      // Debug: acumular por separado según origen de la línea
-      if (esSaldoInicial) {
-        debugRedirigido[j] = (debugRedirigido[j] || 0) + valor;
-      } else {
-        debugPropio[j] = (debugPropio[j] || 0) + valor;
-      }
+      });
     });
 
-    if (sinIdentificar > 0) {
-      console.warn('Saldos Iniciales: ' + sinIdentificar + ' líneas no se pudieron asociar a ningún diario por nombre de cuenta (quedaron en "Saldos Iniciales").');
+    progreso.textContent = 'Cuenta banco: ' + lineasBanco.length + ' líneas · Pendiente de conciliar: ' + lineasConciliar.length + ' líneas.';
+
+    var faValor = function(l, moneda, pct) {
+      var esExtranjera = moneda !== 'ARS';
+      // amount_currency sigue la convención debit-credit; credit-debit (ARS) es la opuesta,
+      // por eso se invierte con "-" para que ambas queden consistentes
+      return esExtranjera ? (-l.amount_currency * pct) : ((l.credit - l.debit) * pct);
+    };
+
+    // 4. Combinar ambas fuentes por nombre normalizado de diario
+    var porDiario = {};          // clave = nombre normalizado -> { label, moneda, propio, conciliar }
+    var sinIdentificarConciliar = 0;
+
+    lineasBanco.forEach(function(l) {
+      var pct = l.analytic_distribution[String(FA_ANALYTIC_ID)] / 100;
+      var nombreCuenta = accountIdToNombre[l.account_id[0]] || l.account_id[1];
+      var key = faNormalizar(nombreCuenta);
+      var nombreDiario = nombreNormADiario[key] || nombreCuenta; // preferimos el nombre del diario (con sufijo de moneda)
+      var moneda = monedaPorDiario[nombreDiario] || 'ARS';
+      var valor = faValor(l, moneda, pct);
+
+      if (!porDiario[key]) porDiario[key] = { label: nombreDiario, moneda: moneda, propio: 0, conciliar: 0 };
+      porDiario[key].propio += valor;
+    });
+
+    lineasConciliar.forEach(function(l) {
+      var pct = l.analytic_distribution[String(FA_ANALYTIC_ID)] / 100;
+      var nombreDiarioOrigen = l.journal_id[1];
+      var key = faNormalizar(nombreDiarioOrigen);
+      var moneda = monedaPorDiario[nombreDiarioOrigen] || 'ARS';
+      var valor = faValor(l, moneda, pct);
+
+      if (!porDiario[key]) {
+        porDiario[key] = { label: nombreDiarioOrigen, moneda: moneda, propio: 0, conciliar: 0 };
+        sinIdentificarConciliar++; // diario que aparece en conciliación pero no tiene cuenta 111xxx propia
+      }
+      porDiario[key].conciliar += valor;
+    });
+
+    if (sinIdentificarConciliar > 0) {
+      console.warn('Pendiente de conciliar: ' + sinIdentificarConciliar + ' diario(s) con saldo en Outstanding Receipts/Payments pero sin cuenta 111xxx propia asociada.');
     }
 
-    console.log('=== FA — Desglose por diario (propio vs redirigido de Saldos Iniciales) ===');
-    console.table(Object.keys(porDiario).map(function(j) {
+    console.log('=== FA — Desglose por diario (cuenta banco vs pendiente de conciliar) ===');
+    console.table(Object.values(porDiario).map(function(d) {
       return {
-        diario: j,
-        propio: (debugPropio[j] || 0).toFixed(2),
-        saldos_iniciales: (debugRedirigido[j] || 0).toFixed(2),
-        TOTAL: porDiario[j].saldo.toFixed(2)
+        diario: d.label,
+        moneda: d.moneda,
+        cuenta_banco: d.propio.toFixed(2),
+        pendiente_conciliar: d.conciliar.toFixed(2),
+        TOTAL: (d.propio + d.conciliar).toFixed(2)
       };
     }));
 
-    // 4. Separar por moneda
+    // 5. Separar por moneda para mostrar
     var porMoneda = {};
-    Object.entries(porDiario).forEach(function(entry) {
-      var diario = entry[0], info = entry[1];
-      if (!porMoneda[info.moneda]) porMoneda[info.moneda] = [];
-      porMoneda[info.moneda].push({ diario: diario, saldo: info.saldo });
+    Object.values(porDiario).forEach(function(d) {
+      var saldo = d.propio + d.conciliar;
+      if (!porMoneda[d.moneda]) porMoneda[d.moneda] = [];
+      porMoneda[d.moneda].push({ diario: d.label, saldo: saldo });
     });
 
     // 5. Guardar en estado global (moneda base ARS primero, resto alfabético)
@@ -13343,7 +13380,7 @@ async function cargarSaldosFA() {
     document.getElementById('fa-resumen-monedas').style.display = 'flex';
     document.getElementById('fa-tabla-wrap').style.display = 'block';
     document.getElementById('fa-last-update').textContent = 'Actualizado ' + window.__faData.actualizado.toLocaleTimeString('es-AR');
-    progreso.innerHTML = '<i class="ti ti-check" style="color:var(--success);"></i> ' + filtradas.length + ' líneas procesadas · ' + filasFlat.length + ' diarios con movimiento.';
+    progreso.innerHTML = '<i class="ti ti-check" style="color:var(--success);"></i> ' + (lineasBanco.length + lineasConciliar.length) + ' líneas procesadas · ' + filasFlat.length + ' diarios con movimiento.';
 
   } catch (err) {
     progreso.innerHTML = '<i class="ti ti-alert-circle" style="color:var(--danger);"></i> Error cargando saldos: ' + (err.message || err);
