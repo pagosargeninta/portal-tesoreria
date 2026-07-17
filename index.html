@@ -3627,6 +3627,78 @@ function pcParseFecha(v) {
   return null;
 }
 
+// Busca en una fila (array) índices de columnas reconocibles. Devuelve null si no parece un header válido.
+function pcTryHeader(row) {
+  if (!row || !row.length) return null;
+  const norm = v => (v === undefined || v === null) ? '' : v.toString().toLowerCase().trim();
+  const idxOf = keys => row.findIndex(c => keys.some(k => norm(c).includes(k)));
+  const fecha = idxOf(['fecha','date']);
+  if (fecha === -1) return null;
+  const debito = idxOf(['debito','débito','egreso']);
+  const credito = idxOf(['credito','crédito','ingreso']);
+  const importe = idxOf(['importe','monto','amount']);
+  const descripcion = idxOf(['concepto','descripcion','descripción','detalle','etiqueta','referencia']);
+  if (importe === -1 && (debito === -1 || credito === -1)) return null;
+  return {
+    fecha,
+    debito: debito !== -1 ? debito : null,
+    credito: credito !== -1 ? credito : null,
+    importe: importe !== -1 ? importe : null,
+    descripcion: descripcion !== -1 ? descripcion : null,
+  };
+}
+
+// Recorre las hojas de un workbook (xlsx) buscando la que tenga un header reconocible.
+// Prioriza headers "simples" en la primera fila (ej. hoja "Hoja1": Fecha/etiqueta/Importe);
+// si ninguna hoja tiene eso, escanea las primeras filas de cada hoja buscando la tabla real
+// (ej. extractos de BNA que traen 13 filas de metadata antes del header).
+function pcElegirHoja(workbook) {
+  const hojas = workbook.SheetNames.map(name => ({
+    name, rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: '', raw: true })
+  }));
+  for (const h of hojas) {
+    if (!h.rows.length) continue;
+    const cols = pcTryHeader(h.rows[0]);
+    if (cols) return { ...h, headerRowIdx: 0, cols };
+  }
+  for (const h of hojas) {
+    for (let i = 0; i < Math.min(h.rows.length, 60); i++) {
+      const cols = pcTryHeader(h.rows[i]);
+      if (cols) return { ...h, headerRowIdx: i, cols };
+    }
+  }
+  return null;
+}
+
+function pcParseXlsxBuffer(buffer, apodo, filename) {
+  const wb = XLSX.read(buffer, { type: 'array' });
+  const elegida = pcElegirHoja(wb);
+  if (!elegida) {
+    pcLog(`[${apodo}] ${filename}: no encontré una fila de encabezado con "Fecha" + "Importe"/"Débito-Crédito" en ninguna hoja (${wb.SheetNames.join(', ')}).`);
+    return 0;
+  }
+  const { rows, headerRowIdx, cols, name } = elegida;
+  let count = 0;
+  for (let i = headerRowIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.every(v => v === '' || v === null || v === undefined)) continue;
+    const fecha = pcParseFecha(row[cols.fecha]);
+    if (!fecha) continue;
+    const descripcion = cols.descripcion !== null ? row[cols.descripcion] : '';
+    if (cols.debito !== null || cols.credito !== null) {
+      const debe = cols.debito !== null ? pcParseMonto(row[cols.debito]) : 0;
+      const haber = cols.credito !== null ? pcParseMonto(row[cols.credito]) : 0;
+      if (debe > 0) { pcExtractos[apodo].push({ fecha, monto: debe, tipo:'debe', descripcion }); count++; }
+      if (haber > 0) { pcExtractos[apodo].push({ fecha, monto: haber, tipo:'haber', descripcion }); count++; }
+    } else if (cols.importe !== null) {
+      const imp = pcParseMonto(row[cols.importe]);
+      if (imp !== 0) { pcExtractos[apodo].push({ fecha, monto: Math.abs(imp), tipo: imp < 0 ? 'debe':'haber', descripcion }); count++; }
+    }
+  }
+  pcLog(`[${apodo}] ${filename}: hoja "${name}" (header en fila ${headerRowIdx+1}), ${count} movimientos.`);
+  return count;
+}
+
 function pcHandleFiles(ev) {
   const apodo = ev.target.dataset.apodo;
   const files = Array.from(ev.target.files);
@@ -3634,31 +3706,48 @@ function pcHandleFiles(ev) {
   if (!pcExtractos[apodo]) pcExtractos[apodo] = [];
 
   files.forEach(file => {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const headers = results.meta.fields || [];
-        const cols = pcDetectColumns(headers);
-        let count = 0;
-        results.data.forEach(row => {
-          const fecha = pcParseFecha(row[cols.fecha]);
-          if (!fecha) return;
-          if (cols.debito || cols.credito) {
-            const debe = pcParseMonto(row[cols.debito]);
-            const haber = pcParseMonto(row[cols.credito]);
-            if (debe > 0) { pcExtractos[apodo].push({ fecha, monto: debe, tipo:'debe', descripcion: row[cols.descripcion]||'' }); count++; }
-            if (haber > 0) { pcExtractos[apodo].push({ fecha, monto: haber, tipo:'haber', descripcion: row[cols.descripcion]||'' }); count++; }
-          } else if (cols.importe) {
-            const imp = pcParseMonto(row[cols.importe]);
-            if (imp !== 0) { pcExtractos[apodo].push({ fecha, monto: Math.abs(imp), tipo: imp < 0 ? 'debe':'haber', descripcion: row[cols.descripcion]||'' }); count++; }
-          }
-        });
-        statusEl.textContent = `${pcExtractos[apodo].length} movimientos cargados`;
-        pcLog(`[${apodo}] ${file.name}: ${count} filas (cols: ${JSON.stringify(cols)})`);
-      },
-      error: (err) => pcLog(`[${apodo}] ERROR en ${file.name}: ${err}`)
-    });
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'csv') {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const headers = results.meta.fields || [];
+          const cols = pcDetectColumns(headers);
+          let count = 0;
+          results.data.forEach(row => {
+            const fecha = pcParseFecha(row[cols.fecha]);
+            if (!fecha) return;
+            if (cols.debito || cols.credito) {
+              const debe = pcParseMonto(row[cols.debito]);
+              const haber = pcParseMonto(row[cols.credito]);
+              if (debe > 0) { pcExtractos[apodo].push({ fecha, monto: debe, tipo:'debe', descripcion: row[cols.descripcion]||'' }); count++; }
+              if (haber > 0) { pcExtractos[apodo].push({ fecha, monto: haber, tipo:'haber', descripcion: row[cols.descripcion]||'' }); count++; }
+            } else if (cols.importe) {
+              const imp = pcParseMonto(row[cols.importe]);
+              if (imp !== 0) { pcExtractos[apodo].push({ fecha, monto: Math.abs(imp), tipo: imp < 0 ? 'debe':'haber', descripcion: row[cols.descripcion]||'' }); count++; }
+            }
+          });
+          statusEl.textContent = `${pcExtractos[apodo].length} movimientos cargados`;
+          pcLog(`[${apodo}] ${file.name}: ${count} filas (CSV, cols: ${JSON.stringify(cols)})`);
+        },
+        error: (err) => pcLog(`[${apodo}] ERROR en ${file.name}: ${err}`)
+      });
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          pcParseXlsxBuffer(new Uint8Array(e.target.result), apodo, file.name);
+          statusEl.textContent = `${pcExtractos[apodo].length} movimientos cargados`;
+        } catch (err) {
+          pcLog(`[${apodo}] ERROR leyendo ${file.name}: ${err.message || err}`);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      pcLog(`[${apodo}] ${file.name}: extensión "${ext}" no soportada (usá .csv, .xlsx o .xls).`);
+    }
   });
 }
 
@@ -3678,8 +3767,8 @@ async function pcFetchRegistrados(desde, hasta) {
 async function pcProcesar() {
   const btn = document.getElementById('pc-btn-procesar');
   btn.disabled = true;
-  document.getElementById('pc-log').textContent = '';
   document.getElementById('pc-log').style.display = 'block';
+  pcLog('──────── Procesando ────────');
 
   const desde = document.getElementById('pc-desde').value;
   const hasta = document.getElementById('pc-hasta').value;
