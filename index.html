@@ -3156,6 +3156,10 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
             </div>
           </div>
           <div style="font-size:11px;color:var(--muted);margin-top:4px;">El monto mínimo descarta comisiones, intereses y cargos chicos que por azar coinciden en fecha/monto entre dos cuentas. Los excluidos por descripción ya se registran en Odoo por factura/cobro, no como pase manual.</div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="pc-solo-pase" checked style="width:auto;">
+            <span><strong>Modo estricto:</strong> solo considerar movimientos cuya descripción diga "PASE" literalmente (ignora el resto, aunque el monto/fecha coincidan)</span>
+          </label>
         </div>
       </div>
 
@@ -3195,11 +3199,18 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
       <div class="card">
         <div class="card-header">
           <div class="card-title"><i class="ti ti-list-check"></i> Resultado</div>
-          <select id="pc-filter" onchange="pcRender()" style="font-size:12px;">
-            <option value="pendiente" selected>Solo pendientes</option>
-            <option value="all">Todos</option>
-            <option value="registrado">Solo registrados</option>
-          </select>
+          <div style="display:flex;gap:8px;">
+            <select id="pc-filter" onchange="pcRender()" style="font-size:12px;">
+              <option value="pendiente" selected>Solo pendientes</option>
+              <option value="all">Todos</option>
+              <option value="registrado">Solo registrados</option>
+            </select>
+            <select id="pc-filter-confianza" onchange="pcRender()" style="font-size:12px;">
+              <option value="all" selected>Toda confianza</option>
+              <option value="Alta">Solo Alta</option>
+              <option value="Media">Alta + Media</option>
+            </select>
+          </div>
         </div>
         <div class="table-wrap" style="max-height:520px;overflow-y:auto;">
           <table style="font-size:12px;">
@@ -3209,6 +3220,8 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
                 <th style="text-align:left;padding:8px 12px;">Origen</th>
                 <th style="text-align:left;padding:8px 12px;">Destino</th>
                 <th style="text-align:right;padding:8px 12px;">Monto</th>
+                <th style="text-align:left;padding:8px 12px;">Confianza</th>
+                <th style="text-align:left;padding:8px 12px;">Descripción (origen → destino)</th>
                 <th style="text-align:left;padding:8px 12px;">Estado</th>
                 <th style="text-align:left;padding:8px 12px;"></th>
               </tr>
@@ -3810,6 +3823,7 @@ async function pcProcesar() {
   const hasta = document.getElementById('pc-hasta').value;
   const tolDays = parseInt(document.getElementById('pc-tol').value) || 3;
   const montoMin = parseFloat(document.getElementById('pc-monto-min').value) || 0;
+  const soloPase = document.getElementById('pc-solo-pase').checked;
 
   try {
     pcLog('Consultando pases ya registrados en Odoo (cuenta puente 922)...');
@@ -3841,37 +3855,86 @@ async function pcProcesar() {
     const totalExtractos = Object.values(pcExtractos).reduce((a,arr) => a + arr.length, 0);
     const excluidos = Object.values(pcExtractos).reduce((a,arr) => a + arr.filter(m => pcEsCogayt(m) || m.monto < montoMin).length, 0);
     pcLog(`Excluyendo por descripción (${excludeKw.join(', ') || 'ninguna palabra'}) y monto < $${montoMin.toLocaleString('es-AR')}: ${excluidos} de ${totalExtractos} movimientos.`);
-    pcLog('Cruzando extractos entre sí para armar candidatos de pase...');
-    pcCandidatos = [];
+    if (soloPase) pcLog('Modo estricto activo: solo se consideran movimientos cuya descripción dice "PASE".');
+    pcLog('Cruzando extractos entre sí (con scoring de confianza) para armar candidatos de pase...');
+
+    // Variantes de texto para buscar el "apodo" de una cuenta dentro de la descripción
+    // del movimiento (ej: descripción "Inter Calo 5133 2" debería reconocer la cuenta '51-33').
+    function pcApodoVariants(apodo) {
+      const digits = apodo.replace(/[^0-9]/g, '');
+      return [...new Set([apodo.toUpperCase(), digits])].filter(Boolean);
+    }
+    const KEYWORDS_TRANSFER = ['PASE', 'TRANSF', 'INTER', 'TRF'];
+
+    // Puntaje de un posible par salida→entrada. Devuelve null si ni siquiera
+    // cumple la tolerancia básica de monto/fecha.
+    function pcScoreMatch(salida, entrada, origApodo, destApodo) {
+      const diffMonto = Math.abs(entrada.monto - salida.monto);
+      const diffDias = Math.abs((new Date(entrada.fecha) - new Date(salida.fecha)) / 86400000);
+      if (diffMonto >= 0.5 || diffDias > tolDays) return null;
+
+      let score = 0;
+      score += diffMonto < 0.01 ? 3 : 1;              // monto exacto vs. "parecido"
+      score += diffDias === 0 ? 2 : (diffDias <= 1 ? 1 : 0); // mismo día vs. cercano
+
+      const textoSalida = (salida.descripcion || '').toUpperCase();
+      const textoEntrada = (entrada.descripcion || '').toUpperCase();
+      const mencionaDestino = pcApodoVariants(destApodo).some(v => textoSalida.includes(v));
+      const mencionaOrigen = pcApodoVariants(origApodo).some(v => textoEntrada.includes(v));
+      if (mencionaDestino) score += 3;   // la salida menciona la cuenta destino → señal fuerte
+      if (mencionaOrigen) score += 3;    // la entrada menciona la cuenta origen → señal fuerte
+      if (KEYWORDS_TRANSFER.some(k => textoSalida.includes(k))) score += 1;
+      if (KEYWORDS_TRANSFER.some(k => textoEntrada.includes(k))) score += 1;
+
+      return { score, diffDias, diffMonto };
+    }
+
+    function pcConfianza(score) {
+      if (score >= 7) return 'Alta';
+      if (score >= 4) return 'Media';
+      return 'Baja';
+    }
+
+    // 1) Armar TODOS los pares posibles con su score
+    const pcDicePase = m => (m.descripcion || '').toString().toUpperCase().includes('PASE');
+    const pares = [];
     for (const cOrigen of PC_CUENTAS) {
-      const salidas = (pcExtractos[cOrigen.apodo] || []).filter(m => m.tipo === 'debe' && !pcEsCogayt(m) && m.monto >= montoMin);
-      for (const salida of salidas) {
-        for (const cDestino of PC_CUENTAS) {
-          if (cDestino.apodo === cOrigen.apodo) continue;
-          const entradas = (pcExtractos[cDestino.apodo] || []).filter(m => m.tipo === 'haber' && !pcEsCogayt(m) && m.monto >= montoMin);
-          const match = entradas.find(e => {
-            const montoOk = Math.abs(e.monto - salida.monto) < 0.5;
-            const diffDias = Math.abs((new Date(e.fecha) - new Date(salida.fecha)) / 86400000);
-            return montoOk && diffDias <= tolDays;
-          });
-          if (match) {
-            pcCandidatos.push({
-              fecha: salida.fecha, origen: cOrigen.apodo, origenJournal: cOrigen.journalId,
-              destino: cDestino.apodo, destinoJournal: cDestino.journalId, monto: salida.monto,
-            });
+      const salidas = (pcExtractos[cOrigen.apodo] || [])
+        .map((m, i) => ({ ...m, _i: i }))
+        .filter(m => m.tipo === 'debe' && !pcEsCogayt(m) && m.monto >= montoMin && (!soloPase || pcDicePase(m)));
+      for (const cDestino of PC_CUENTAS) {
+        if (cDestino.apodo === cOrigen.apodo) continue;
+        const entradas = (pcExtractos[cDestino.apodo] || [])
+          .map((m, i) => ({ ...m, _i: i }))
+          .filter(m => m.tipo === 'haber' && !pcEsCogayt(m) && m.monto >= montoMin && (!soloPase || pcDicePase(m)));
+        for (const salida of salidas) {
+          for (const entrada of entradas) {
+            const s = pcScoreMatch(salida, entrada, cOrigen.apodo, cDestino.apodo);
+            if (s) pares.push({ cOrigen, cDestino, salida, entrada, ...s });
           }
         }
       }
     }
 
-    const vistos = new Set();
-    pcCandidatos = pcCandidatos.filter(c => {
-      const key = `${c.origenJournal}-${c.destinoJournal}-${c.fecha}-${c.monto}`;
-      const keyInv = `${c.destinoJournal}-${c.origenJournal}-${c.fecha}-${c.monto}`;
-      if (vistos.has(key) || vistos.has(keyInv)) return false;
-      vistos.add(key);
-      return true;
-    });
+    // 2) Matching único greedy: mejor score primero, y una vez usada una salida
+    //    o entrada específica, no puede volver a matchear con otra cosa.
+    pares.sort((a, b) => b.score - a.score || a.diffDias - b.diffDias || a.diffMonto - b.diffMonto);
+    const salidaUsada = new Set();
+    const entradaUsada = new Set();
+    pcCandidatos = [];
+    for (const p of pares) {
+      const keyS = `${p.cOrigen.apodo}#${p.salida._i}`;
+      const keyE = `${p.cDestino.apodo}#${p.entrada._i}`;
+      if (salidaUsada.has(keyS) || entradaUsada.has(keyE)) continue;
+      salidaUsada.add(keyS);
+      entradaUsada.add(keyE);
+      pcCandidatos.push({
+        fecha: p.salida.fecha, origen: p.cOrigen.apodo, origenJournal: p.cOrigen.journalId,
+        destino: p.cDestino.apodo, destinoJournal: p.cDestino.journalId, monto: p.salida.monto,
+        confianza: pcConfianza(p.score), score: p.score,
+        descOrigen: p.salida.descripcion || '', descDestino: p.entrada.descripcion || '',
+      });
+    }
 
     pcCandidatos.forEach(c => {
       const match = registradosIdx.find(r =>
@@ -3886,7 +3949,11 @@ async function pcProcesar() {
         : null;
     });
 
-    pcLog(`✓ Listo. ${pcCandidatos.filter(c=>!c.registrado).length} pendientes de registrar.`);
+    const pend = pcCandidatos.filter(c=>!c.registrado);
+    const porConfianza = { Alta:0, Media:0, Baja:0 };
+    pend.forEach(c => porConfianza[c.confianza]++);
+    pcLog(`✓ Listo. ${pend.length} pendientes de registrar → Alta: ${porConfianza.Alta} · Media: ${porConfianza.Media} · Baja: ${porConfianza.Baja}.`);
+    pcLog(`(Revisá "Baja" a mano en Odoo antes de confiar — el sistema te va a pedir confirmación extra para esos.)`);
     pcRender();
   } catch (err) {
     pcLog('ERROR: ' + (err.message || err));
@@ -3905,38 +3972,44 @@ function pcXmlSafe(v) {
 
 async function pcRegistrar(idx) {
   const c = pcCandidatos[idx];
+
+  if (c.confianza === 'Baja') {
+    const ok = confirm(
+      `Este pase tiene confianza BAJA (${c.origen} → ${c.destino}, $${c.monto.toLocaleString('es-AR')}, ${c.fecha}).\n\n` +
+      `El monto/fecha coinciden pero no encontré ninguna mención cruzada entre las descripciones de ambas cuentas. ` +
+      `Podría ser una coincidencia y no un pase real.\n\nRevisalo en Odoo antes si tenés dudas. ¿Registrar de todas formas?`
+    );
+    if (!ok) return;
+  }
+
   const btn = document.getElementById(`pc-reg-btn-${idx}`);
   btn.disabled = true;
   btn.textContent = 'Registrando...';
 
-  const ref = `PASE ${c.origen} a ${c.destino}`;
-  const nombreLinea = `Transferencia Interna: ${ref}`;
+  const memo = `PASE ${c.origen} a ${c.destino}`;
   const monto = pcXmlSafe(c.monto);
 
   try {
-    const moveOrigenId = await odooCall('account.move', 'create', [{
-      journal_id: c.origenJournal, date: c.fecha, ref: ref, move_type: 'entry',
-      line_ids: [
-        [0, 0, { account_id: PC_CUENTAS_PUENTE.outstandingPayments, credit: monto, debit: 0, name: nombreLinea }],
-        [0, 0, { account_id: PC_CUENTAS_PUENTE.liquidityTransfer, debit: monto, credit: 0, name: nombreLinea }],
-      ]
+    // Mecanismo oficial de Odoo para "Banco y Caja → Transferencia": un solo
+    // account.payment con is_internal_transfer=true. Odoo genera solo el pago
+    // espejo (paired_internal_transfer_payment_id) y los dos asientos BNK
+    // correspondientes — exactamente como cuando lo cargás a mano en la UI.
+    const paymentId = await odooCall('account.payment', 'create', [{
+      payment_type: 'outbound',
+      is_internal_transfer: true,
+      journal_id: c.origenJournal,
+      destination_journal_id: c.destinoJournal,
+      amount: monto,
+      date: c.fecha,
+      memo: memo,
     }]);
-    await odooCall('account.move', 'action_post', [[moveOrigenId]]);
-
-    const moveDestinoId = await odooCall('account.move', 'create', [{
-      journal_id: c.destinoJournal, date: c.fecha, ref: ref, move_type: 'entry',
-      line_ids: [
-        [0, 0, { account_id: PC_CUENTAS_PUENTE.outstandingReceipts, debit: monto, credit: 0, name: nombreLinea }],
-        [0, 0, { account_id: PC_CUENTAS_PUENTE.liquidityTransfer, credit: monto, debit: 0, name: nombreLinea }],
-      ]
-    }]);
-    await odooCall('account.move', 'action_post', [[moveDestinoId]]);
+    await odooCall('account.payment', 'action_post', [[paymentId]]);
 
     c.registrado = true;
-    pcLog(`✓ Registrado: ${ref} — ${c.fecha} — $${c.monto} (moves ${moveOrigenId}/${moveDestinoId})`);
+    pcLog(`✓ Registrado: ${memo} — ${c.fecha} — $${c.monto} (payment ${paymentId})`);
     pcRender();
   } catch (err) {
-    pcLog(`✗ ERROR registrando ${ref}: ${err.message || err}`);
+    pcLog(`✗ ERROR registrando ${memo}: ${err.message || err}`);
     btn.disabled = false;
     btn.textContent = 'Reintentar';
   }
@@ -3946,11 +4019,18 @@ function pcRender() {
   const body = document.getElementById('pc-tbody');
   const empty = document.getElementById('pc-empty');
   const filter = document.getElementById('pc-filter').value;
+  const filterConf = document.getElementById('pc-filter-confianza').value;
   if (!body) return;
 
   let rows = pcCandidatos.map((c, idx) => ({...c, idx}));
   if (filter === 'pendiente') rows = rows.filter(r => !r.registrado);
   if (filter === 'registrado') rows = rows.filter(r => r.registrado);
+  if (filterConf === 'Alta') rows = rows.filter(r => r.confianza === 'Alta');
+  if (filterConf === 'Media') rows = rows.filter(r => r.confianza === 'Alta' || r.confianza === 'Media');
+
+  // Alta confianza primero, dentro de cada uno los pendientes arriba
+  const ordenConf = { Alta: 0, Media: 1, Baja: 2 };
+  rows.sort((a,b) => (a.registrado - b.registrado) || (ordenConf[a.confianza] - ordenConf[b.confianza]));
 
   document.getElementById('pc-metrics').style.display = pcCandidatos.length ? 'grid' : 'none';
   document.getElementById('pc-m-total').textContent = pcCandidatos.length;
@@ -3968,12 +4048,17 @@ function pcRender() {
   }
   empty.style.display = 'none';
 
+  const confBadge = { Alta: 'badge-ok', Media: 'badge-warn', Baja: 'badge-danger' };
+  const truncar = (s, n=40) => (s||'').toString().trim().slice(0,n) || '—';
+
   body.innerHTML = rows.map(r => `
     <tr>
       <td style="padding:8px 12px;">${r.fecha}</td>
       <td style="padding:8px 12px;">${r.origen}</td>
       <td style="padding:8px 12px;">${r.destino}</td>
       <td style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;">$${r.monto.toLocaleString('es-AR',{minimumFractionDigits:2})}</td>
+      <td style="padding:8px 12px;"><span class="badge ${confBadge[r.confianza]}" title="score interno: ${r.score}">${r.confianza}</span></td>
+      <td style="padding:8px 12px;font-size:11px;color:var(--muted);max-width:260px;" title="${(r.descOrigen||'')} → ${(r.descDestino||'')}">${truncar(r.descOrigen)} → ${truncar(r.descDestino)}</td>
       <td style="padding:8px 12px;">${r.registrado
         ? `<span class="badge badge-ok"><i class="ti ti-check"></i> Registrado${r.cobertura ? ' · '+r.cobertura : ''}</span>`
         : `<span class="badge badge-warn"><i class="ti ti-alert-triangle"></i> Sin registrar</span>`}</td>
