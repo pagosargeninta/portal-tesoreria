@@ -3754,14 +3754,24 @@ function pcHandleFiles(ev) {
 
 async function pcFetchRegistrados(desde, hasta) {
   const journalIds = PC_CUENTAS.map(c => c.journalId);
+  // OJO: no solo miramos la cuenta puente 922 (Liquidity Transfer, exclusiva de
+  // "Transferencia Interna"). Las cuentas 910 (Outstanding Payments) y 909
+  // (Outstanding Receipts) las usa CUALQUIER movimiento bancario ya conciliado
+  // en Odoo -- incluidas facturas/cobros de COGAYT entre estas mismas cuentas.
+  // Si el monto+fecha ya aparece ahí en ese journal, el pase YA está cubierto
+  // en Odoo (aunque no haya sido cargado como "pase manual").
   return await odooCall('account.move.line', 'search_read', [
     [
-      ['account_id', '=', PC_CUENTAS_PUENTE.liquidityTransfer],
+      ['account_id', 'in', [
+        PC_CUENTAS_PUENTE.liquidityTransfer,
+        PC_CUENTAS_PUENTE.outstandingPayments,
+        PC_CUENTAS_PUENTE.outstandingReceipts,
+      ]],
       ['journal_id', 'in', journalIds],
       ['date', '>=', desde],
       ['date', '<=', hasta],
     ],
-    ['id','move_id','journal_id','date','debit','credit','name','ref']
+    ['id','move_id','journal_id','date','debit','credit','name','ref','account_id']
   ]);
 }
 
@@ -3786,6 +3796,7 @@ async function pcProcesar() {
       monto: Math.round((l.debit || l.credit) * 100) / 100,
       moveId: l.move_id[0],
       moveName: l.move_id[1],
+      cuenta: l.account_id[0],
     }));
 
     pcLog('Cruzando extractos entre sí para armar candidatos de pase...');
@@ -3828,6 +3839,9 @@ async function pcProcesar() {
       );
       c.registrado = !!match;
       c.moveName = match ? match.moveName : null;
+      c.cobertura = match
+        ? (match.cuenta === PC_CUENTAS_PUENTE.liquidityTransfer ? 'Pase manual' : 'Factura/Cobro (ej. COGAYT)')
+        : null;
     });
 
     pcLog(`✓ Listo. ${pcCandidatos.filter(c=>!c.registrado).length} pendientes de registrar.`);
@@ -3840,6 +3854,13 @@ async function pcProcesar() {
   }
 }
 
+// El proxy XML-RPC codifica los números enteros como <int> (32 bits, máx ~2147M).
+// Con montos en pesos por encima de eso, hay que forzar que viaje como <double>
+// agregando una fracción mínima — Odoo la redondea sola al guardar (precisión 2 decimales).
+function pcXmlSafe(v) {
+  return Number.isInteger(v) ? v + 0.001 : v;
+}
+
 async function pcRegistrar(idx) {
   const c = pcCandidatos[idx];
   const btn = document.getElementById(`pc-reg-btn-${idx}`);
@@ -3848,13 +3869,14 @@ async function pcRegistrar(idx) {
 
   const ref = `PASE ${c.origen} a ${c.destino}`;
   const nombreLinea = `Transferencia Interna: ${ref}`;
+  const monto = pcXmlSafe(c.monto);
 
   try {
     const moveOrigenId = await odooCall('account.move', 'create', [[{
       journal_id: c.origenJournal, date: c.fecha, ref: ref, move_type: 'entry',
       line_ids: [
-        [0, 0, { account_id: PC_CUENTAS_PUENTE.outstandingPayments, credit: c.monto, debit: 0, name: nombreLinea }],
-        [0, 0, { account_id: PC_CUENTAS_PUENTE.liquidityTransfer, debit: c.monto, credit: 0, name: nombreLinea }],
+        [0, 0, { account_id: PC_CUENTAS_PUENTE.outstandingPayments, credit: monto, debit: 0, name: nombreLinea }],
+        [0, 0, { account_id: PC_CUENTAS_PUENTE.liquidityTransfer, debit: monto, credit: 0, name: nombreLinea }],
       ]
     }]]);
     await odooCall('account.move', 'action_post', [[moveOrigenId]]);
@@ -3862,8 +3884,8 @@ async function pcRegistrar(idx) {
     const moveDestinoId = await odooCall('account.move', 'create', [[{
       journal_id: c.destinoJournal, date: c.fecha, ref: ref, move_type: 'entry',
       line_ids: [
-        [0, 0, { account_id: PC_CUENTAS_PUENTE.outstandingReceipts, debit: c.monto, credit: 0, name: nombreLinea }],
-        [0, 0, { account_id: PC_CUENTAS_PUENTE.liquidityTransfer, credit: c.monto, debit: 0, name: nombreLinea }],
+        [0, 0, { account_id: PC_CUENTAS_PUENTE.outstandingReceipts, debit: monto, credit: 0, name: nombreLinea }],
+        [0, 0, { account_id: PC_CUENTAS_PUENTE.liquidityTransfer, credit: monto, debit: 0, name: nombreLinea }],
       ]
     }]]);
     await odooCall('account.move', 'action_post', [[moveDestinoId]]);
@@ -3911,7 +3933,7 @@ function pcRender() {
       <td style="padding:8px 12px;">${r.destino}</td>
       <td style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;">$${r.monto.toLocaleString('es-AR',{minimumFractionDigits:2})}</td>
       <td style="padding:8px 12px;">${r.registrado
-        ? `<span class="badge badge-ok"><i class="ti ti-check"></i> Registrado</span>`
+        ? `<span class="badge badge-ok"><i class="ti ti-check"></i> Registrado${r.cobertura ? ' · '+r.cobertura : ''}</span>`
         : `<span class="badge badge-warn"><i class="ti ti-alert-triangle"></i> Sin registrar</span>`}</td>
       <td style="padding:8px 12px;">${r.registrado ? '' : `<button class="btn btn-primary" id="pc-reg-btn-${r.idx}" style="padding:4px 10px;font-size:11px;" onclick="pcRegistrar(${r.idx})">Registrar ahora</button>`}</td>
     </tr>
