@@ -13205,6 +13205,13 @@ async function cargarSaldosFA() {
     var CUENTA_OUTSTANDING_RECEIPTS = 909; // 1.1.1.02.003
     var CUENTA_OUTSTANDING_PAYMENTS = 910; // 1.1.1.02.004
 
+    // EXCLUSIÓN TEMPORAL: la cuenta "BANCO M.E. NACIÓN - MADRID 474700954" (id 1789) y sus dos
+    // diarios duplicados (id 116 y 261) tienen una inconsistencia de moneda en Odoo (todo cargado
+    // en USD en vez de EUR). Se excluye hasta que se corrija la carga en Odoo — sacar esta lista
+    // una vez resuelto.
+    var CUENTAS_EXCLUIDAS = [1789];
+    var DIARIOS_EXCLUIDOS = [116, 261];
+
     var faNormalizar = function(s) {
       // Saca código contable al inicio y sufijo de moneda "(USD)"/"(EUR)" al final, para poder
       // matchear "BANCO M.E. NACIÓN - MIAMI 004350200002" (nombre de cuenta) con
@@ -13239,7 +13246,9 @@ async function cargarSaldosFA() {
       [[['company_ids', 'in', [FA_COMPANY_ID]], ['code', '=like', '111%']]],
       { fields: ['id', 'code', 'name', 'currency_id'] });
 
-    var bankAccountIds = cuentasBanco.map(function(c) { return c.id; });
+    var bankAccountIds = cuentasBanco
+      .map(function(c) { return c.id; })
+      .filter(function(id) { return CUENTAS_EXCLUIDAS.indexOf(id) === -1; });
     var cuentaPorId = {}; // id de cuenta -> { name, moneda, diarioId (si matchea por nombre) }
     cuentasBanco.forEach(function(c) {
       var moneda = c.currency_id ? c.currency_id[1] : 'ARS';
@@ -13300,7 +13309,8 @@ async function cargarSaldosFA() {
     var lineasConciliar = [];
     paginasConciliar.forEach(function(pagina) {
       pagina.forEach(function(l) {
-        if (l.analytic_distribution && Object.keys(l.analytic_distribution).includes(String(FA_ANALYTIC_ID))) {
+        if (l.analytic_distribution && Object.keys(l.analytic_distribution).includes(String(FA_ANALYTIC_ID))
+            && DIARIOS_EXCLUIDOS.indexOf(l.journal_id[0]) === -1) {
           lineasConciliar.push(l);
         }
       });
