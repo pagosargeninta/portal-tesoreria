@@ -700,10 +700,6 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
     <div class="nav-item" onclick="showPage('buscador',this)"><i class="ti ti-search"></i> Buscador</div>
     <div class="nav-item" onclick="showPage('anticipos',this)"><i class="ti ti-report-money"></i> Control Anticipos</div>
     <div class="nav-item" onclick="showPage('cogayt',this)"><i class="ti ti-percentage"></i> Control COGAYT</div>
-    <div class="nav-item" onclick="showPage('pasescuentas',this)">
-      <i class="ti ti-arrows-left-right"></i> Pases entre Cuentas
-      <span class="nav-badge" id="badge-pasescuentas"></span>
-    </div>
 
     <div class="sidebar-section">Config</div>
     <div class="nav-item" onclick="showPage('corrgalicia',this)"><i class="ti ti-tool"></i> Corrector Galicia</div>
@@ -3118,123 +3114,6 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
     </div>
     <!-- ══════════ FIN CORRECTOR GALICIA ══════════ -->
 
-    <!-- ══════════ PASES ENTRE CUENTAS ══════════ -->
-    <div id="page-pasescuentas" class="page">
-
-      <div class="alert info" style="margin-bottom:16px;">
-        <i class="ti ti-info-circle"></i>
-        <div>Cruza los extractos bancarios reales contra lo ya registrado en Odoo (cuenta puente <strong>922 · Liquidity Transfer</strong>) para detectar pases entre estas 4 cuentas que nunca se cargaron, y los registra con el mismo mecanismo de Transferencia Interna (Outstanding Payments/Receipts + Liquidity Transfer) en un clic.</div>
-      </div>
-
-      <div class="card" style="margin-bottom:16px;">
-        <div class="card-header">
-          <div class="card-title"><i class="ti ti-calendar"></i> Período a conciliar</div>
-        </div>
-        <div class="card-body">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-            <div class="field">
-              <label>Desde</label>
-              <input type="date" id="pc-desde" value="2026-01-01">
-            </div>
-            <div class="field">
-              <label>Hasta</label>
-              <input type="date" id="pc-hasta">
-            </div>
-            <div class="field">
-              <label>Tolerancia (días entre salida y entrada)</label>
-              <input type="number" id="pc-tol" value="3" min="0" max="10">
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-top:12px;">
-            <div class="field">
-              <label>Monto mínimo a considerar</label>
-              <input type="number" id="pc-monto-min" value="50000" min="0" step="1000">
-            </div>
-            <div class="field">
-              <label>Excluir movimientos cuya descripción contenga (separado por comas)</label>
-              <input type="text" id="pc-excluir" value="COGAYT, LS" style="width:100%;">
-            </div>
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px;">El monto mínimo descarta comisiones, intereses y cargos chicos que por azar coinciden en fecha/monto entre dos cuentas. Los excluidos por descripción ya se registran en Odoo por factura/cobro, no como pase manual.</div>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="pc-solo-pase" checked style="width:auto;">
-            <span><strong>Modo estricto:</strong> solo considerar movimientos cuya descripción diga "PASE" literalmente (ignora el resto, aunque el monto/fecha coincidan)</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom:16px;">
-        <div class="card-header">
-          <div class="card-title"><i class="ti ti-upload"></i> Extractos por cuenta</div>
-        </div>
-        <div class="card-body">
-          <div class="grid2" id="pc-accounts" style="grid-template-columns:repeat(5,1fr);gap:12px;">
-            <!-- se arma por JS -->
-          </div>
-          <div style="display:flex;gap:8px;margin-top:14px;">
-            <button class="btn btn-primary" id="pc-btn-procesar" onclick="pcProcesar()">
-              <i class="ti ti-wand"></i> Procesar y cruzar contra Odoo
-            </button>
-            <button class="btn" onclick="pcReset()"><i class="ti ti-refresh"></i> Limpiar</button>
-          </div>
-          <div class="log-box" id="pc-log" style="display:none;margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);max-height:140px;overflow-y:auto;background:var(--surface-alt);border:1px solid var(--border);border-radius:6px;padding:10px;white-space:pre-wrap;"></div>
-        </div>
-      </div>
-
-      <div class="metrics-grid" id="pc-metrics" style="display:none;margin-bottom:16px;">
-        <div class="metric-card success">
-          <div class="metric-label">Candidatos detectados</div>
-          <div class="metric-value" id="pc-m-total">0</div>
-        </div>
-        <div class="metric-card info">
-          <div class="metric-label">Ya registrados</div>
-          <div class="metric-value" id="pc-m-ok">0</div>
-        </div>
-        <div class="metric-card warn">
-          <div class="metric-label">Sin registrar</div>
-          <div class="metric-value" id="pc-m-pend">0</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="ti ti-list-check"></i> Resultado</div>
-          <div style="display:flex;gap:8px;">
-            <select id="pc-filter" onchange="pcRender()" style="font-size:12px;">
-              <option value="pendiente" selected>Solo pendientes</option>
-              <option value="all">Todos</option>
-              <option value="registrado">Solo registrados</option>
-            </select>
-            <select id="pc-filter-confianza" onchange="pcRender()" style="font-size:12px;">
-              <option value="all" selected>Toda confianza</option>
-              <option value="Alta">Solo Alta</option>
-              <option value="Media">Alta + Media</option>
-            </select>
-          </div>
-        </div>
-        <div class="table-wrap" style="max-height:520px;overflow-y:auto;">
-          <table style="font-size:12px;">
-            <thead>
-              <tr>
-                <th style="text-align:left;padding:8px 12px;">Fecha</th>
-                <th style="text-align:left;padding:8px 12px;">Origen</th>
-                <th style="text-align:left;padding:8px 12px;">Destino</th>
-                <th style="text-align:right;padding:8px 12px;">Monto</th>
-                <th style="text-align:left;padding:8px 12px;">Confianza</th>
-                <th style="text-align:left;padding:8px 12px;">Descripción (origen → destino)</th>
-                <th style="text-align:left;padding:8px 12px;">Estado</th>
-                <th style="text-align:left;padding:8px 12px;"></th>
-              </tr>
-            </thead>
-            <tbody id="pc-tbody"></tbody>
-          </table>
-        </div>
-        <div id="pc-empty" style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Subí los extractos y presioná "Procesar" para ver los resultados.</div>
-      </div>
-
-    </div>
-    <!-- ══════════ FIN PASES ENTRE CUENTAS ══════════ -->
-
     <!-- ══════════ CONFIG ══════════ -->
     <div id="page-config" class="page">
       <div class="grid2">
@@ -3566,7 +3445,6 @@ const pageTitles = {
   convenios:    ['Convenios',              'Estado y seguimiento de convenios vigentes'],
   ingresocogayt:['Ingreso + COGAYT',       'Registro de ingresos y liquidación COGAYT'],
   corrgalicia:  ['Corrector Galicia',      'Arregla convenio y CBU de archivos de Pagos Masivos antes de subir'],
-  pasescuentas: ['Pases entre Cuentas',    'Concilia extractos vs. Odoo y registra pases faltantes — 288 · 51-33 · 203 · 294 · 229'],
 };
 
 function showHonTab(id, el) {
@@ -3586,498 +3464,6 @@ function showHonTab(id, el) {
 function filterCarta() {}
 
 // ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════
-// PASES ENTRE CUENTAS — concilia extractos vs Odoo y registra faltantes
-// ═══════════════════════════════════════════════════════
-const PC_CUENTAS_PUENTE = { outstandingPayments: 910, outstandingReceipts: 909, liquidityTransfer: 922 };
-const PC_CUENTAS = [
-  { apodo: '288',   journalId: 158, nombre: 'Galicia 0000288-4' },
-  { apodo: '51-33', journalId: 174, nombre: 'BNA 0051-33' },
-  { apodo: '203',   journalId: 166, nombre: 'BNA 0203-38' },
-  { apodo: '294',   journalId: 168, nombre: 'BNA 0294-92' },
-  { apodo: '229',   journalId: 167, nombre: 'BNA 0229-44' },
-];
-
-let pcExtractos = {};
-let pcCandidatos = [];
-
-function pcLog(msg) {
-  const el = document.getElementById('pc-log');
-  el.style.display = 'block';
-  el.textContent += msg + '\n';
-  el.scrollTop = el.scrollHeight;
-}
-
-function pcBuildAccountsGrid() {
-  const grid = document.getElementById('pc-accounts');
-  if (!grid) return;
-  grid.innerHTML = PC_CUENTAS.map(c => `
-    <div class="field" style="border:1px solid var(--border);border-radius:var(--radius);padding:10px;background:var(--surface-alt);">
-      <label style="font-weight:700;color:var(--text);">${c.apodo}</label>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">${c.nombre}</div>
-      <input type="file" multiple accept=".csv,.xlsx,.xls" data-apodo="${c.apodo}" onchange="pcHandleFiles(event)" style="font-size:11px;width:100%;">
-      <div style="font-size:11px;color:var(--verde-dk);margin-top:6px;" id="pc-status-${c.apodo}"></div>
-    </div>
-  `).join('');
-  const hastaEl = document.getElementById('pc-hasta');
-  if (hastaEl && !hastaEl.value) hastaEl.value = new Date().toISOString().slice(0,10);
-}
-
-function pcDetectColumns(headers) {
-  const norm = h => (h||'').toString().toLowerCase().trim();
-  const find = keys => headers.find(h => keys.some(k => norm(h).includes(k)));
-  return {
-    fecha: find(['fecha','date']),
-    debito: find(['debito','débito','egreso','salida']),
-    credito: find(['credito','crédito','ingreso','entrada']),
-    importe: find(['importe','monto','amount']),
-    descripcion: find(['concepto','descripcion','descripción','detalle','referencia']),
-  };
-}
-
-function pcParseMonto(v) {
-  if (v === undefined || v === null || v === '') return 0;
-  if (typeof v === 'number') return v;
-  const n = parseFloat(v.toString().trim().replace(/\./g,'').replace(',', '.'));
-  return isNaN(n) ? 0 : n;
-}
-
-function pcParseFecha(v) {
-  if (!v) return null;
-  const s = v.toString().trim();
-  let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
-  if (m) { let [,d,mo,y] = m; if (y.length===2) y = '20'+y; return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`; }
-  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  return null;
-}
-
-function pcGetExcludeKeywords() {
-  const raw = document.getElementById('pc-excluir')?.value || '';
-  return raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-}
-
-function pcEsCogayt(m) {
-  const desc = (m.descripcion || '').toString().toUpperCase();
-  return pcGetExcludeKeywords().some(kw => desc.includes(kw));
-}
-
-// Busca en una fila (array) índices de columnas reconocibles. Devuelve null si no parece un header válido.
-function pcTryHeader(row) {
-  if (!row || !row.length) return null;
-  const norm = v => (v === undefined || v === null) ? '' : v.toString().toLowerCase().trim();
-  const idxOf = keys => row.findIndex(c => keys.some(k => norm(c).includes(k)));
-  const fecha = idxOf(['fecha','date']);
-  if (fecha === -1) return null;
-  const debito = idxOf(['debito','débito','egreso']);
-  const credito = idxOf(['credito','crédito','ingreso']);
-  const importe = idxOf(['importe','monto','amount']);
-  const descripcion = idxOf(['concepto','descripcion','descripción','detalle','etiqueta','referencia']);
-  if (importe === -1 && (debito === -1 || credito === -1)) return null;
-  return {
-    fecha,
-    debito: debito !== -1 ? debito : null,
-    credito: credito !== -1 ? credito : null,
-    importe: importe !== -1 ? importe : null,
-    descripcion: descripcion !== -1 ? descripcion : null,
-  };
-}
-
-// Recorre las hojas de un workbook (xlsx) buscando la que tenga un header reconocible.
-// Prioriza headers "simples" en la primera fila (ej. hoja "Hoja1": Fecha/etiqueta/Importe);
-// si ninguna hoja tiene eso, escanea las primeras filas de cada hoja buscando la tabla real
-// (ej. extractos de BNA que traen 13 filas de metadata antes del header).
-function pcElegirHoja(workbook) {
-  const hojas = workbook.SheetNames.map(name => ({
-    name, rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: '', raw: true })
-  }));
-  for (const h of hojas) {
-    if (!h.rows.length) continue;
-    const cols = pcTryHeader(h.rows[0]);
-    if (cols) return { ...h, headerRowIdx: 0, cols };
-  }
-  for (const h of hojas) {
-    for (let i = 0; i < Math.min(h.rows.length, 60); i++) {
-      const cols = pcTryHeader(h.rows[i]);
-      if (cols) return { ...h, headerRowIdx: i, cols };
-    }
-  }
-  return null;
-}
-
-function pcParseXlsxBuffer(buffer, apodo, filename) {
-  const wb = XLSX.read(buffer, { type: 'array' });
-  const elegida = pcElegirHoja(wb);
-  if (!elegida) {
-    pcLog(`[${apodo}] ${filename}: no encontré una fila de encabezado con "Fecha" + "Importe"/"Débito-Crédito" en ninguna hoja (${wb.SheetNames.join(', ')}).`);
-    return 0;
-  }
-  const { rows, headerRowIdx, cols, name } = elegida;
-  let count = 0;
-  for (let i = headerRowIdx + 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.every(v => v === '' || v === null || v === undefined)) continue;
-    const fecha = pcParseFecha(row[cols.fecha]);
-    if (!fecha) continue;
-    const descripcion = cols.descripcion !== null ? row[cols.descripcion] : '';
-    if (cols.debito !== null || cols.credito !== null) {
-      const debe = cols.debito !== null ? pcParseMonto(row[cols.debito]) : 0;
-      const haber = cols.credito !== null ? pcParseMonto(row[cols.credito]) : 0;
-      if (debe > 0) { pcExtractos[apodo].push({ fecha, monto: debe, tipo:'debe', descripcion }); count++; }
-      if (haber > 0) { pcExtractos[apodo].push({ fecha, monto: haber, tipo:'haber', descripcion }); count++; }
-    } else if (cols.importe !== null) {
-      const imp = pcParseMonto(row[cols.importe]);
-      if (imp !== 0) { pcExtractos[apodo].push({ fecha, monto: Math.abs(imp), tipo: imp < 0 ? 'debe':'haber', descripcion }); count++; }
-    }
-  }
-  pcLog(`[${apodo}] ${filename}: hoja "${name}" (header en fila ${headerRowIdx+1}), ${count} movimientos.`);
-  return count;
-}
-
-function pcHandleFiles(ev) {
-  const apodo = ev.target.dataset.apodo;
-  const files = Array.from(ev.target.files);
-  const statusEl = document.getElementById(`pc-status-${apodo}`);
-  if (!pcExtractos[apodo]) pcExtractos[apodo] = [];
-
-  files.forEach(file => {
-    const ext = file.name.split('.').pop().toLowerCase();
-
-    if (ext === 'csv') {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          const headers = results.meta.fields || [];
-          const cols = pcDetectColumns(headers);
-          let count = 0;
-          results.data.forEach(row => {
-            const fecha = pcParseFecha(row[cols.fecha]);
-            if (!fecha) return;
-            if (cols.debito || cols.credito) {
-              const debe = pcParseMonto(row[cols.debito]);
-              const haber = pcParseMonto(row[cols.credito]);
-              if (debe > 0) { pcExtractos[apodo].push({ fecha, monto: debe, tipo:'debe', descripcion: row[cols.descripcion]||'' }); count++; }
-              if (haber > 0) { pcExtractos[apodo].push({ fecha, monto: haber, tipo:'haber', descripcion: row[cols.descripcion]||'' }); count++; }
-            } else if (cols.importe) {
-              const imp = pcParseMonto(row[cols.importe]);
-              if (imp !== 0) { pcExtractos[apodo].push({ fecha, monto: Math.abs(imp), tipo: imp < 0 ? 'debe':'haber', descripcion: row[cols.descripcion]||'' }); count++; }
-            }
-          });
-          statusEl.textContent = `${pcExtractos[apodo].length} movimientos cargados`;
-          pcLog(`[${apodo}] ${file.name}: ${count} filas (CSV, cols: ${JSON.stringify(cols)})`);
-        },
-        error: (err) => pcLog(`[${apodo}] ERROR en ${file.name}: ${err}`)
-      });
-    } else if (ext === 'xlsx' || ext === 'xls') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          pcParseXlsxBuffer(new Uint8Array(e.target.result), apodo, file.name);
-          statusEl.textContent = `${pcExtractos[apodo].length} movimientos cargados`;
-        } catch (err) {
-          pcLog(`[${apodo}] ERROR leyendo ${file.name}: ${err.message || err}`);
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      pcLog(`[${apodo}] ${file.name}: extensión "${ext}" no soportada (usá .csv, .xlsx o .xls).`);
-    }
-  });
-}
-
-async function pcFetchRegistrados(desde, hasta) {
-  const journalIds = PC_CUENTAS.map(c => c.journalId);
-  // OJO: no solo miramos la cuenta puente 922 (Liquidity Transfer, exclusiva de
-  // "Transferencia Interna"). Las cuentas 910 (Outstanding Payments) y 909
-  // (Outstanding Receipts) las usa CUALQUIER movimiento bancario ya conciliado
-  // en Odoo -- incluidas facturas/cobros de COGAYT entre estas mismas cuentas.
-  // Si el monto+fecha ya aparece ahí en ese journal, el pase YA está cubierto
-  // en Odoo (aunque no haya sido cargado como "pase manual").
-  return await odooCall('account.move.line', 'search_read', [
-    [
-      ['account_id', 'in', [
-        PC_CUENTAS_PUENTE.liquidityTransfer,
-        PC_CUENTAS_PUENTE.outstandingPayments,
-        PC_CUENTAS_PUENTE.outstandingReceipts,
-      ]],
-      ['journal_id', 'in', journalIds],
-      ['date', '>=', desde],
-      ['date', '<=', hasta],
-    ],
-    ['id','move_id','journal_id','date','debit','credit','name','ref','account_id']
-  ]);
-}
-
-function pcEsCogayt(mov) {
-  return (mov.descripcion || '').toString().toUpperCase().includes('COGAYT');
-}
-
-async function pcProcesar() {
-  const btn = document.getElementById('pc-btn-procesar');
-  btn.disabled = true;
-  document.getElementById('pc-log').style.display = 'block';
-  pcLog('──────── Procesando ────────');
-
-  const desde = document.getElementById('pc-desde').value;
-  const hasta = document.getElementById('pc-hasta').value;
-  const tolDays = parseInt(document.getElementById('pc-tol').value) || 3;
-  const montoMin = parseFloat(document.getElementById('pc-monto-min').value) || 0;
-  const soloPase = document.getElementById('pc-solo-pase').checked;
-
-  try {
-    pcLog('Consultando pases ya registrados en Odoo (cuenta puente 922)...');
-    const registrados = await pcFetchRegistrados(desde, hasta);
-    pcLog(`→ ${registrados.length} líneas encontradas (~${Math.round(registrados.length/2)} pases).`);
-
-    // Agrupamos por asiento: un pase manual real SIEMPRE tiene una línea en la
-    // cuenta puente 922, además de la de 910/909. Una factura/cobro (COGAYT, etc.)
-    // toca 910/909 pero NUNCA 922. Por eso no alcanza con mirar la cuenta de la
-    // línea que matcheó — hay que ver si ESE asiento completo incluye 922.
-    const cuentasPorMove = {};
-    registrados.forEach(l => {
-      const mid = l.move_id[0];
-      if (!cuentasPorMove[mid]) cuentasPorMove[mid] = new Set();
-      cuentasPorMove[mid].add(l.account_id[0]);
-    });
-
-    const registradosIdx = registrados.map(l => ({
-      journalId: l.journal_id[0],
-      fecha: l.date,
-      monto: Math.round((l.debit || l.credit) * 100) / 100,
-      moveId: l.move_id[0],
-      moveName: l.move_id[1],
-      cuenta: l.account_id[0],
-      esPaseManual: cuentasPorMove[l.move_id[0]].has(PC_CUENTAS_PUENTE.liquidityTransfer),
-    }));
-
-    const excludeKw = pcGetExcludeKeywords();
-    const totalExtractos = Object.values(pcExtractos).reduce((a,arr) => a + arr.length, 0);
-    const excluidos = Object.values(pcExtractos).reduce((a,arr) => a + arr.filter(m => pcEsCogayt(m) || m.monto < montoMin).length, 0);
-    pcLog(`Excluyendo por descripción (${excludeKw.join(', ') || 'ninguna palabra'}) y monto < $${montoMin.toLocaleString('es-AR')}: ${excluidos} de ${totalExtractos} movimientos.`);
-    if (soloPase) pcLog('Modo estricto activo: solo se consideran movimientos cuya descripción dice "PASE".');
-    pcLog('Cruzando extractos entre sí (con scoring de confianza) para armar candidatos de pase...');
-
-    // Variantes de texto para buscar el "apodo" de una cuenta dentro de la descripción
-    // del movimiento (ej: descripción "Inter Calo 5133 2" debería reconocer la cuenta '51-33').
-    function pcApodoVariants(apodo) {
-      const digits = apodo.replace(/[^0-9]/g, '');
-      return [...new Set([apodo.toUpperCase(), digits])].filter(Boolean);
-    }
-    const KEYWORDS_TRANSFER = ['PASE', 'TRANSF', 'INTER', 'TRF'];
-
-    // Puntaje de un posible par salida→entrada. Devuelve null si ni siquiera
-    // cumple la tolerancia básica de monto/fecha.
-    function pcScoreMatch(salida, entrada, origApodo, destApodo) {
-      const diffMonto = Math.abs(entrada.monto - salida.monto);
-      const diffDias = Math.abs((new Date(entrada.fecha) - new Date(salida.fecha)) / 86400000);
-      if (diffMonto >= 0.5 || diffDias > tolDays) return null;
-
-      let score = 0;
-      score += diffMonto < 0.01 ? 3 : 1;              // monto exacto vs. "parecido"
-      score += diffDias === 0 ? 2 : (diffDias <= 1 ? 1 : 0); // mismo día vs. cercano
-
-      const textoSalida = (salida.descripcion || '').toUpperCase();
-      const textoEntrada = (entrada.descripcion || '').toUpperCase();
-      const mencionaDestino = pcApodoVariants(destApodo).some(v => textoSalida.includes(v));
-      const mencionaOrigen = pcApodoVariants(origApodo).some(v => textoEntrada.includes(v));
-      if (mencionaDestino) score += 3;   // la salida menciona la cuenta destino → señal fuerte
-      if (mencionaOrigen) score += 3;    // la entrada menciona la cuenta origen → señal fuerte
-      if (KEYWORDS_TRANSFER.some(k => textoSalida.includes(k))) score += 1;
-      if (KEYWORDS_TRANSFER.some(k => textoEntrada.includes(k))) score += 1;
-
-      return { score, diffDias, diffMonto };
-    }
-
-    function pcConfianza(score) {
-      if (score >= 7) return 'Alta';
-      if (score >= 4) return 'Media';
-      return 'Baja';
-    }
-
-    // 1) Armar TODOS los pares posibles con su score
-    const pcDicePase = m => (m.descripcion || '').toString().toUpperCase().includes('PASE');
-    const pares = [];
-    for (const cOrigen of PC_CUENTAS) {
-      const salidas = (pcExtractos[cOrigen.apodo] || [])
-        .map((m, i) => ({ ...m, _i: i }))
-        .filter(m => m.tipo === 'debe' && !pcEsCogayt(m) && m.monto >= montoMin && (!soloPase || pcDicePase(m)));
-      for (const cDestino of PC_CUENTAS) {
-        if (cDestino.apodo === cOrigen.apodo) continue;
-        const entradas = (pcExtractos[cDestino.apodo] || [])
-          .map((m, i) => ({ ...m, _i: i }))
-          .filter(m => m.tipo === 'haber' && !pcEsCogayt(m) && m.monto >= montoMin && (!soloPase || pcDicePase(m)));
-        for (const salida of salidas) {
-          for (const entrada of entradas) {
-            const s = pcScoreMatch(salida, entrada, cOrigen.apodo, cDestino.apodo);
-            if (s) pares.push({ cOrigen, cDestino, salida, entrada, ...s });
-          }
-        }
-      }
-    }
-
-    // 2) Matching único greedy: mejor score primero, y una vez usada una salida
-    //    o entrada específica, no puede volver a matchear con otra cosa.
-    pares.sort((a, b) => b.score - a.score || a.diffDias - b.diffDias || a.diffMonto - b.diffMonto);
-    const salidaUsada = new Set();
-    const entradaUsada = new Set();
-    pcCandidatos = [];
-    for (const p of pares) {
-      const keyS = `${p.cOrigen.apodo}#${p.salida._i}`;
-      const keyE = `${p.cDestino.apodo}#${p.entrada._i}`;
-      if (salidaUsada.has(keyS) || entradaUsada.has(keyE)) continue;
-      salidaUsada.add(keyS);
-      entradaUsada.add(keyE);
-      pcCandidatos.push({
-        fecha: p.salida.fecha, origen: p.cOrigen.apodo, origenJournal: p.cOrigen.journalId,
-        destino: p.cDestino.apodo, destinoJournal: p.cDestino.journalId, monto: p.salida.monto,
-        confianza: pcConfianza(p.score), score: p.score,
-        descOrigen: p.salida.descripcion || '', descDestino: p.entrada.descripcion || '',
-      });
-    }
-
-    pcCandidatos.forEach(c => {
-      const match = registradosIdx.find(r =>
-        r.journalId === c.origenJournal &&
-        Math.abs(r.monto - c.monto) < 0.5 &&
-        Math.abs((new Date(r.fecha) - new Date(c.fecha)) / 86400000) <= tolDays
-      );
-      c.registrado = !!match;
-      c.moveName = match ? match.moveName : null;
-      c.cobertura = match
-        ? (match.esPaseManual ? 'Pase manual' : 'Factura/Cobro (ej. COGAYT)')
-        : null;
-    });
-
-    const pend = pcCandidatos.filter(c=>!c.registrado);
-    const porConfianza = { Alta:0, Media:0, Baja:0 };
-    pend.forEach(c => porConfianza[c.confianza]++);
-    pcLog(`✓ Listo. ${pend.length} pendientes de registrar → Alta: ${porConfianza.Alta} · Media: ${porConfianza.Media} · Baja: ${porConfianza.Baja}.`);
-    pcLog(`(Revisá "Baja" a mano en Odoo antes de confiar — el sistema te va a pedir confirmación extra para esos.)`);
-    pcRender();
-  } catch (err) {
-    pcLog('ERROR: ' + (err.message || err));
-    console.error(err);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// El proxy XML-RPC codifica los números enteros como <int> (32 bits, máx ~2147M).
-// Con montos en pesos por encima de eso, hay que forzar que viaje como <double>
-// agregando una fracción mínima — Odoo la redondea sola al guardar (precisión 2 decimales).
-function pcXmlSafe(v) {
-  return Number.isInteger(v) ? v + 0.001 : v;
-}
-
-async function pcRegistrar(idx) {
-  const c = pcCandidatos[idx];
-
-  if (c.confianza === 'Baja') {
-    const ok = confirm(
-      `Este pase tiene confianza BAJA (${c.origen} → ${c.destino}, $${c.monto.toLocaleString('es-AR')}, ${c.fecha}).\n\n` +
-      `El monto/fecha coinciden pero no encontré ninguna mención cruzada entre las descripciones de ambas cuentas. ` +
-      `Podría ser una coincidencia y no un pase real.\n\nRevisalo en Odoo antes si tenés dudas. ¿Registrar de todas formas?`
-    );
-    if (!ok) return;
-  }
-
-  const btn = document.getElementById(`pc-reg-btn-${idx}`);
-  btn.disabled = true;
-  btn.textContent = 'Registrando...';
-
-  const memo = `PASE ${c.origen} a ${c.destino}`;
-  const monto = pcXmlSafe(c.monto);
-
-  try {
-    // Mecanismo oficial de Odoo para "Banco y Caja → Transferencia": un solo
-    // account.payment con is_internal_transfer=true. Odoo genera solo el pago
-    // espejo (paired_internal_transfer_payment_id) y los dos asientos BNK
-    // correspondientes — exactamente como cuando lo cargás a mano en la UI.
-    const paymentId = await odooCall('account.payment', 'create', [{
-      payment_type: 'outbound',
-      is_internal_transfer: true,
-      journal_id: c.origenJournal,
-      destination_journal_id: c.destinoJournal,
-      amount: monto,
-      date: c.fecha,
-      memo: memo,
-    }]);
-    await odooCall('account.payment', 'action_post', [[paymentId]]);
-
-    c.registrado = true;
-    pcLog(`✓ Registrado: ${memo} — ${c.fecha} — $${c.monto} (payment ${paymentId})`);
-    pcRender();
-  } catch (err) {
-    pcLog(`✗ ERROR registrando ${memo}: ${err.message || err}`);
-    btn.disabled = false;
-    btn.textContent = 'Reintentar';
-  }
-}
-
-function pcRender() {
-  const body = document.getElementById('pc-tbody');
-  const empty = document.getElementById('pc-empty');
-  const filter = document.getElementById('pc-filter').value;
-  const filterConf = document.getElementById('pc-filter-confianza').value;
-  if (!body) return;
-
-  let rows = pcCandidatos.map((c, idx) => ({...c, idx}));
-  if (filter === 'pendiente') rows = rows.filter(r => !r.registrado);
-  if (filter === 'registrado') rows = rows.filter(r => r.registrado);
-  if (filterConf === 'Alta') rows = rows.filter(r => r.confianza === 'Alta');
-  if (filterConf === 'Media') rows = rows.filter(r => r.confianza === 'Alta' || r.confianza === 'Media');
-
-  // Alta confianza primero, dentro de cada uno los pendientes arriba
-  const ordenConf = { Alta: 0, Media: 1, Baja: 2 };
-  rows.sort((a,b) => (a.registrado - b.registrado) || (ordenConf[a.confianza] - ordenConf[b.confianza]));
-
-  document.getElementById('pc-metrics').style.display = pcCandidatos.length ? 'grid' : 'none';
-  document.getElementById('pc-m-total').textContent = pcCandidatos.length;
-  document.getElementById('pc-m-ok').textContent = pcCandidatos.filter(c=>c.registrado).length;
-  document.getElementById('pc-m-pend').textContent = pcCandidatos.filter(c=>!c.registrado).length;
-  const badge = document.getElementById('badge-pasescuentas');
-  const pend = pcCandidatos.filter(c=>!c.registrado).length;
-  badge.textContent = pend > 0 ? pend : '';
-
-  if (!rows.length) {
-    body.innerHTML = '';
-    empty.style.display = 'block';
-    empty.textContent = pcCandidatos.length ? 'No hay resultados para este filtro.' : 'Subí los extractos y presioná "Procesar" para ver los resultados.';
-    return;
-  }
-  empty.style.display = 'none';
-
-  const confBadge = { Alta: 'badge-ok', Media: 'badge-warn', Baja: 'badge-danger' };
-  const truncar = (s, n=40) => (s||'').toString().trim().slice(0,n) || '—';
-
-  body.innerHTML = rows.map(r => `
-    <tr>
-      <td style="padding:8px 12px;">${r.fecha}</td>
-      <td style="padding:8px 12px;">${r.origen}</td>
-      <td style="padding:8px 12px;">${r.destino}</td>
-      <td style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;">$${r.monto.toLocaleString('es-AR',{minimumFractionDigits:2})}</td>
-      <td style="padding:8px 12px;"><span class="badge ${confBadge[r.confianza]}" title="score interno: ${r.score}">${r.confianza}</span></td>
-      <td style="padding:8px 12px;font-size:11px;color:var(--muted);max-width:260px;" title="${(r.descOrigen||'')} → ${(r.descDestino||'')}">${truncar(r.descOrigen)} → ${truncar(r.descDestino)}</td>
-      <td style="padding:8px 12px;">${r.registrado
-        ? `<span class="badge badge-ok"><i class="ti ti-check"></i> Registrado${r.cobertura ? ' · '+r.cobertura : ''}</span>`
-        : `<span class="badge badge-warn"><i class="ti ti-alert-triangle"></i> Sin registrar</span>`}</td>
-      <td style="padding:8px 12px;">${r.registrado ? '' : `<button class="btn btn-primary" id="pc-reg-btn-${r.idx}" style="padding:4px 10px;font-size:11px;" onclick="pcRegistrar(${r.idx})">Registrar ahora</button>`}</td>
-    </tr>
-  `).join('');
-}
-
-function pcReset() {
-  pcExtractos = {}; pcCandidatos = [];
-  pcBuildAccountsGrid();
-  document.getElementById('pc-log').textContent = '';
-  document.getElementById('pc-log').style.display = 'none';
-  document.getElementById('pc-metrics').style.display = 'none';
-  pcRender();
-}
-
-document.addEventListener('DOMContentLoaded', () => { pcBuildAccountsGrid(); });
-
 // CORRECTOR GALICIA — parche temporal mientras se arregla
 // el script generador del TXT de Pagos Masivos (bug: convenio
 // mal escrito en header/trailer + CBU de beneficiarios corrompido).
@@ -8306,7 +7692,6 @@ function honDetalleExcel(){
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 
@@ -13823,35 +13208,44 @@ async function cargarSaldosFA() {
     var faNormalizar = function(s) {
       // Saca código contable al inicio y sufijo de moneda "(USD)"/"(EUR)" al final, para poder
       // matchear "BANCO M.E. NACIÓN - MIAMI 004350200002" (nombre de cuenta) con
-      // "BANCO M.E. NACIÓN - MIAMI 004350200002 (USD)" (nombre de diario)
+      // "BANCO M.E. NACIÓN - MIAMI 004350200002 (USD)" (nombre de diario) — SOLO se usa para
+      // decidir el LABEL a mostrar, nunca para decidir la moneda (eso ahora es siempre por ID).
       return (s || '').trim().toUpperCase()
         .replace(/^[0-9.\-]+\s+/, '')
         .replace(/\s*\([^)]*\)\s*$/, '')
         .replace(/\s+/g, ' ');
     };
 
-    // 1. Diarios de la company, para saber la moneda de cada uno
+    // 1. Diarios de la company — se indexan por ID (nunca por nombre, que puede tener
+    //    diferencias invisibles de espacios/encoding entre llamadas y romper el match en silencio)
     var diarios = await odooCall('account.journal', 'search_read',
       [[['company_id', '=', FA_COMPANY_ID]]],
       { fields: ['id', 'name', 'currency_id'] });
 
-    var monedaPorDiario = {};
-    var nombreNormADiario = {}; // nombre normalizado -> nombre real del diario (con sufijo de moneda si tiene)
+    var diarioPorId = {};        // id de diario -> { name, moneda }
+    var nombreNormADiarioId = {}; // nombre normalizado -> id de diario (solo para resolver el label del lado banco)
     diarios.forEach(function(d) {
-      monedaPorDiario[d.name] = d.currency_id ? d.currency_id[1] : 'ARS';
-      nombreNormADiario[faNormalizar(d.name)] = d.name;
+      var moneda = d.currency_id ? d.currency_id[1] : 'ARS';
+      diarioPorId[d.id] = { name: d.name, moneda: moneda };
+      nombreNormADiarioId[faNormalizar(d.name)] = d.id;
     });
 
     // 2. Cuentas "Efectivo y Banco" — código 111xxx (esto ya excluye 112101/211404/211405/211406
-    //    porque ninguna arranca con 111, y de paso deja afuera cuentas de otro tipo)
+    //    porque ninguna arranca con 111, y de paso deja afuera cuentas de otro tipo).
+    //    Traemos también su currency_id PROPIO: es la fuente de verdad más confiable para la
+    //    moneda de cada cuenta (no depende de matchear nombres con el diario).
     progreso.innerHTML = '<i class="ti ti-loader"></i> Buscando cuentas de Efectivo y Banco...';
     var cuentasBanco = await odooCall('account.account', 'search_read',
       [[['company_ids', 'in', [FA_COMPANY_ID]], ['code', '=like', '111%']]],
-      { fields: ['id', 'code', 'name'] });
+      { fields: ['id', 'code', 'name', 'currency_id'] });
 
     var bankAccountIds = cuentasBanco.map(function(c) { return c.id; });
-    var accountIdToNombre = {};
-    cuentasBanco.forEach(function(c) { accountIdToNombre[c.id] = c.name; });
+    var cuentaPorId = {}; // id de cuenta -> { name, moneda, diarioId (si matchea por nombre) }
+    cuentasBanco.forEach(function(c) {
+      var moneda = c.currency_id ? c.currency_id[1] : 'ARS';
+      var diarioId = nombreNormADiarioId[faNormalizar(c.name)] || null;
+      cuentaPorId[c.id] = { name: c.name, moneda: moneda, diarioId: diarioId };
+    });
 
     // 3a. Movimientos propios: líneas contables directo sobre esas cuentas de banco
     //     (esto incluye automáticamente los asientos de apertura de "Saldos Iniciales",
@@ -13921,31 +13315,36 @@ async function cargarSaldosFA() {
       return esExtranjera ? (l.amount_currency * pct) : ((l.debit - l.credit) * pct);
     };
 
-    // 4. Combinar ambas fuentes por nombre normalizado de diario
-    var porDiario = {};          // clave = nombre normalizado -> { label, moneda, propio, conciliar }
+    // 4. Combinar ambas fuentes. Clave de agrupación = ID de diario cuando se puede resolver
+    //    (siempre exacto, nunca falla por diferencias de texto); si una cuenta banco no matchea
+    //    ningún diario por nombre, se agrupa por su propio ID de cuenta como fallback.
+    var porDiario = {};          // clave = 'j:<id diario>' o 'a:<id cuenta>' -> { label, moneda, propio, conciliar }
     var sinIdentificarConciliar = 0;
 
     lineasBanco.forEach(function(l) {
       var pct = l.analytic_distribution[String(FA_ANALYTIC_ID)] / 100;
-      var nombreCuenta = accountIdToNombre[l.account_id[0]] || l.account_id[1];
-      var key = faNormalizar(nombreCuenta);
-      var nombreDiario = nombreNormADiario[key] || nombreCuenta; // preferimos el nombre del diario (con sufijo de moneda)
-      var moneda = monedaPorDiario[nombreDiario] || 'ARS';
+      var cuentaId = l.account_id[0];
+      var info = cuentaPorId[cuentaId];
+      var moneda = info ? info.moneda : 'ARS'; // SIEMPRE de la cuenta propia, nunca por nombre de diario
+      var key = (info && info.diarioId) ? ('j:' + info.diarioId) : ('a:' + cuentaId);
+      var label = (info && info.diarioId) ? diarioPorId[info.diarioId].name : (info ? info.name : l.account_id[1]);
       var valor = faValor(l, moneda, pct);
 
-      if (!porDiario[key]) porDiario[key] = { label: nombreDiario, moneda: moneda, propio: 0, conciliar: 0 };
+      if (!porDiario[key]) porDiario[key] = { label: label, moneda: moneda, propio: 0, conciliar: 0 };
       porDiario[key].propio += valor;
     });
 
     lineasConciliar.forEach(function(l) {
       var pct = l.analytic_distribution[String(FA_ANALYTIC_ID)] / 100;
-      var nombreDiarioOrigen = l.journal_id[1];
-      var key = faNormalizar(nombreDiarioOrigen);
-      var moneda = monedaPorDiario[nombreDiarioOrigen] || 'ARS';
+      var diarioId = l.journal_id[0];
+      var info = diarioPorId[diarioId]; // match por ID: siempre exacto, no depende del texto del nombre
+      var moneda = info ? info.moneda : 'ARS';
+      var key = 'j:' + diarioId;
+      var label = info ? info.name : l.journal_id[1];
       var valor = faValor(l, moneda, pct);
 
       if (!porDiario[key]) {
-        porDiario[key] = { label: nombreDiarioOrigen, moneda: moneda, propio: 0, conciliar: 0 };
+        porDiario[key] = { label: label, moneda: moneda, propio: 0, conciliar: 0 };
         sinIdentificarConciliar++; // diario que aparece en conciliación pero no tiene cuenta 111xxx propia
       }
       porDiario[key].conciliar += valor;
