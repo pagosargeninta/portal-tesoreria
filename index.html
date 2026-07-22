@@ -1963,38 +1963,23 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
         </div>
         <div class="card-body">
           <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5;">
-            Registra el cobro de un convenio internacional, en ARS o en moneda extranjera. Crea la factura de ingreso
-            al convenio con la cuenta que elijas, y el cobro correspondiente — con tipo de cambio manual cuando aplica,
-            para que quede asentado en Odoo con el valor que vos determines (no el oficial del día).
+            Cobra el COGAYT de un convenio internacional (el que te llega por mail para cobrarle a cada convenio por
+            ejecución), en ARS o en moneda extranjera con tipo de cambio manual. Sigue exactamente el mismo mecanismo
+            que "Cobrar COGAYT" en Control COGAYT: factura de COGAYT a Fundación, su cobro, y la liquidación de
+            salida al convenio — sin el paso de ingreso por desembolso, que no aplica acá.
           </div>
 
-          <div class="grid2" style="margin-bottom:4px;">
-            <div class="field">
-              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿Quién deposita? (organismo / cliente)</label>
-              <div style="position:relative;">
-                <input type="text" id="cbi-cliente-input" placeholder="Buscar por nombre o CUIT..."
-                  style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
-                  oninput="cbiBuscarCliente(this.value)" autocomplete="off">
-                <div id="cbi-cliente-resultados" style="display:none;position:absolute;top:100%;left:0;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
-              </div>
-              <div id="cbi-cliente-elegido" style="display:none;margin-top:6px;padding:7px 12px;background:rgba(45,134,89,.08);border-radius:6px;font-size:12px;color:var(--success);font-weight:600;">
-                <i class="ti ti-check"></i> <span id="cbi-cliente-elegido-nombre"></span>
-                <button onclick="cbiLimpiarCliente()" style="background:none;border:none;color:var(--muted);cursor:pointer;float:right;font-size:13px;"><i class="ti ti-x"></i></button>
-              </div>
+          <div class="field" style="margin-bottom:4px;max-width:480px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Convenio</label>
+            <div style="position:relative;">
+              <input type="text" id="cbi-convenio-input" placeholder="Buscar convenio por nombre..."
+                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+                oninput="cbiBuscarConvenio(this.value)" autocomplete="off">
+              <div id="cbi-convenio-resultados" style="display:none;position:absolute;top:100%;left:0;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
             </div>
-
-            <div class="field">
-              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Convenio</label>
-              <div style="position:relative;">
-                <input type="text" id="cbi-convenio-input" placeholder="Buscar convenio por nombre..."
-                  style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
-                  oninput="cbiBuscarConvenio(this.value)" autocomplete="off">
-                <div id="cbi-convenio-resultados" style="display:none;position:absolute;top:100%;left:0;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
-              </div>
-              <div id="cbi-convenio-elegido" style="display:none;margin-top:6px;padding:7px 12px;background:rgba(45,134,89,.08);border-radius:6px;font-size:12px;color:var(--success);font-weight:600;">
-                <i class="ti ti-check"></i> <span id="cbi-convenio-elegido-nombre"></span>
-                <button onclick="cbiLimpiarConvenio()" style="background:none;border:none;color:var(--muted);cursor:pointer;float:right;font-size:13px;"><i class="ti ti-x"></i></button>
-              </div>
+            <div id="cbi-convenio-elegido" style="display:none;margin-top:6px;padding:7px 12px;background:rgba(45,134,89,.08);border-radius:6px;font-size:12px;color:var(--success);font-weight:600;">
+              <i class="ti ti-check"></i> <span id="cbi-convenio-elegido-nombre"></span>
+              <button onclick="cbiLimpiarConvenio()" style="background:none;border:none;color:var(--muted);cursor:pointer;float:right;font-size:13px;"><i class="ti ti-x"></i></button>
             </div>
           </div>
 
@@ -2107,7 +2092,7 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
 
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
             <button class="btn btn-primary" id="cbi-btn-procesar" onclick="cbiProcesar()" style="padding:10px 24px;font-size:13px;">
-              <i class="ti ti-player-play"></i> Registrar cobro en Odoo
+              <i class="ti ti-player-play"></i> Cobrar COGAYT internacional
             </button>
             <button class="btn" id="cbi-btn-nota" onclick="cbiIrANotaMiami()" style="padding:10px 24px;font-size:13px;">
               <i class="ti ti-world"></i> Generar Nota Miami (pase real de fondos)
@@ -12550,10 +12535,9 @@ document.querySelector('.nav-item[onclick*="ingresocogayt"]')?.addEventListener(
 // manual que queda asentado en Odoo (no el oficial del día).
 // ═══════════════════════════════════════════════════════
 
-let cbiClienteSel  = null; // {id, name}
 let cbiConvenioSel = null; // {id, name}
 let cbiBancoSel    = null; // {id, code, name}
-let cbiTimerCliente = null, cbiTimerConvenio = null, cbiTimerBanco = null;
+let cbiTimerConvenio = null, cbiTimerBanco = null;
 const cbiCurrencyCache = {}; // { 'USD': id, 'EUR': id, 'ARS': id }
 
 document.querySelector('.nav-item[onclick*="cobrointernacional"]')?.addEventListener('click', () => {
@@ -12597,48 +12581,6 @@ function cbiElegirBancoPorId(id) {
 function cbiLimpiarBanco() {
   cbiBancoSel = null;
   document.getElementById('cbi-banco-elegido').style.display = 'none';
-}
-
-// ── Cliente (organismo que deposita) ──
-function cbiBuscarCliente(q) {
-  clearTimeout(cbiTimerCliente);
-  const cont = document.getElementById('cbi-cliente-resultados');
-  if (!q || q.length < 3) { if (cont) cont.style.display = 'none'; return; }
-  cbiTimerCliente = setTimeout(async () => {
-    try {
-      const domain = /^[0-9-]+$/.test(q.replace(/ /g,''))
-        ? [['vat','ilike', q.replace(/[^0-9]/g,'')]]
-        : [['name','ilike', q]];
-      const res = await odooCall('res.partner', 'search_read',
-        [domain], { fields: ['id','name','vat'], limit: 15, order: 'name asc' });
-      if (!cont) return;
-      if (!res.length) { cont.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">Sin resultados</div>'; cont.style.display='block'; return; }
-      window._cbiClienteTemp = {};
-      res.forEach(p => { window._cbiClienteTemp[p.id] = p.name; });
-      cont.innerHTML = res.map(p => {
-        const cuit = p.vat ? p.vat.replace(/(\d{2})(\d{8})(\d{1})/,'$1-$2-$3') : '—';
-        return `<div onclick="cbiElegirClientePorId(${p.id})"
-          style="padding:9px 14px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);"
-          onmouseover="this.style.background='var(--surface-alt,#f4f6f5)'" onmouseout="this.style.background=''">
-          <div style="font-weight:500;">${p.name}</div>
-          <div style="font-size:10px;color:var(--muted);">${cuit}</div>
-        </div>`;
-      }).join('');
-      cont.style.display = 'block';
-    } catch(e) { console.error('cbiBuscarCliente error:', e); }
-  }, 300);
-}
-function cbiElegirClientePorId(id) {
-  const nombre = (window._cbiClienteTemp && window._cbiClienteTemp[id]) || ('Cliente #'+id);
-  cbiClienteSel = { id, name: nombre };
-  document.getElementById('cbi-cliente-resultados').style.display = 'none';
-  document.getElementById('cbi-cliente-input').value = '';
-  document.getElementById('cbi-cliente-elegido-nombre').textContent = nombre;
-  document.getElementById('cbi-cliente-elegido').style.display = 'block';
-}
-function cbiLimpiarCliente() {
-  cbiClienteSel = null;
-  document.getElementById('cbi-cliente-elegido').style.display = 'none';
 }
 
 // ── Convenio (analítica) ──
@@ -12748,7 +12690,7 @@ async function cbiForzarTipoCambio(currencyId, fechaStr, arsPorUnidad) {
 }
 
 function cbiInicializarPasos() {
-  const pasos = ['Creando factura de ingreso al convenio...', 'Cobrando la factura...'];
+  const pasos = ['Creando factura de COGAYT a Fundación...', 'Cobrando la factura de COGAYT...', 'Creando la liquidación de salida del convenio...'];
   const cont = document.getElementById('cbi-pasos');
   cont.innerHTML = pasos.map((texto, i) => `
     <div id="cbi-paso-${i}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:6px;background:var(--surface-alt,#f8faf9);opacity:0.5;">
@@ -12774,7 +12716,6 @@ function cbiSetPaso(idx, estado, texto) {
 
 function cbiValidar() {
   const errores = [];
-  if (!cbiClienteSel) errores.push('Elegí quién deposita');
   if (!cbiConvenioSel) errores.push('Elegí el convenio');
   const moneda = document.getElementById('cbi-moneda').value;
   const importe = parseFloat((document.getElementById('cbi-importe').value||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
@@ -12788,6 +12729,29 @@ function cbiValidar() {
   return errores;
 }
 
+// Nombre técnico (modelo.campo) del campo "Tasa de Cambio (Analítica)" en
+// Odoo — falta confirmar con Ramiro. Mientras esté en null, el paso se
+// omite (no bloquea el resto del proceso) y queda un aviso en consola.
+const CBI_CAMPO_TASA_ANALITICA = { modelo: 'account.move', campo: 'x_exchange_rate' }; // "Tasa de Cambio (Analítica)"
+
+async function cbiSetTasaCambioAnalitica(moveId, tasa) {
+  if (!CBI_CAMPO_TASA_ANALITICA) {
+    console.warn('CBI: falta configurar CBI_CAMPO_TASA_ANALITICA — no se completó "Tasa de Cambio (Analítica)" en Odoo.');
+    return;
+  }
+  try {
+    await odooCall(CBI_CAMPO_TASA_ANALITICA.modelo, 'write',
+      [[moveId], { [CBI_CAMPO_TASA_ANALITICA.campo]: tasa }]);
+  } catch(e) {
+    console.warn('No se pudo escribir la Tasa de Cambio (Analítica):', e.message);
+  }
+}
+
+// Cobra el COGAYT de un convenio internacional — MISMA cadena que "Cobrar
+// COGAYT" en Control COGAYT (factura de COGAYT a Fundación → cobro →
+// liquidación de salida al convenio), sin el paso de ingreso por
+// desembolso, que no aplica a este flujo. Con moneda extranjera, fuerza
+// el tipo de cambio manual en las 3 piezas para que Odoo quede consistente.
 async function cbiProcesar() {
   const errores = cbiValidar();
   const msgEl = document.getElementById('cbi-faltantes');
@@ -12808,57 +12772,99 @@ async function cbiProcesar() {
 
   try {
     let currencyId = null;
+    let tcManual = null;
     if (moneda !== 'ARS') {
       currencyId = await cbiObtenerCurrencyId(moneda);
-      const tc = parseFloat((document.getElementById('cbi-tc').value||'').replace(',','.'));
-      await cbiForzarTipoCambio(currencyId, hoy, tc);
+      tcManual = parseFloat((document.getElementById('cbi-tc').value||'').replace(',','.'));
+      await cbiForzarTipoCambio(currencyId, hoy, tcManual);
     }
 
-    // ── PASO 1: Factura de ingreso al convenio (misma cuenta y diario
-    //    que usa Ingreso + COGAYT: 211401 Fondos de Terceros, diario Desembolsos) ──
-    cbiSetPaso(0, 'cargando', 'Creando factura de ingreso al convenio...');
-    const facturaPayload = {
+    // ── PASO 1: Factura de COGAYT (FA-C) a Fundación ──
+    cbiSetPaso(0, 'cargando', 'Creando factura de COGAYT a Fundación...');
+    const facCogaytPayload = {
       move_type: 'out_invoice',
-      partner_id: cbiClienteSel.id,
-      journal_id: IC_JOURNAL_DESEMBOLSOS,
+      partner_id: IC_PARTNER_FUNDACION,
+      journal_id: IC_JOURNAL_COGAYT_VTA,
       invoice_date: hoy,
       date: hoy,
       invoice_line_ids: [[0, 0, {
-        product_id: IC_PRODUCTO_DESEMBOLSO,
-        name: ref,
+        product_id: IC_PRODUCTO_COGAYT,
+        name: 'Ingreso Prestaciones de Servicios — ' + ref,
+        quantity: 1,
+        price_unit: importe,
+        account_id: IC_CUENTA_411000,
+        analytic_distribution: { [IC_ANALITICA_FUNC_FA]: 100 }
+      }]]
+    };
+    if (currencyId) facCogaytPayload.currency_id = currencyId;
+    const facCogaytId = await odooCall('account.move', 'create', [facCogaytPayload]);
+    await icPostearVerificado('account.move', facCogaytId, 'la factura de COGAYT');
+    const facCogaytData = await odooCall('account.move', 'read', [[facCogaytId], ['name']]);
+    const numeroFacCogayt = facCogaytData[0].name;
+    if (tcManual) await cbiSetTasaCambioAnalitica(facCogaytId, tcManual);
+    cbiSetPaso(0, 'ok', `Factura COGAYT creada — N° ${numeroFacCogayt}`);
+
+    // ── PASO 2: Cobro de la factura de COGAYT (RE-X) ──
+    cbiSetPaso(1, 'cargando', 'Cobrando la factura de COGAYT...');
+    const pagoPayload = {
+      payment_type: 'inbound',
+      partner_id: IC_PARTNER_FUNDACION,
+      partner_type: 'customer',
+      amount: importe,
+      journal_id: bancoId,
+      date: hoy,
+      memo: `INGRESO CH ${ref} COGAYT`,
+      destination_account_id: 2323 // 112201 Cogayt a Cobrar
+    };
+    if (currencyId) pagoPayload.currency_id = currencyId;
+    const pagoId = await odooCall('account.payment', 'create', [pagoPayload]);
+    await icPostearVerificado('account.payment', pagoId, 'el cobro de COGAYT');
+    await icConciliarPago(pagoId, facCogaytId);
+    cbiSetPaso(1, 'ok', 'Cobro registrado y conciliado');
+
+    // ── PASO 3: Liquidación de salida del convenio (LU-C) ──
+    cbiSetPaso(2, 'cargando', 'Creando la liquidación al convenio...');
+    const soloNumero = numeroFacCogayt.replace(/^[A-Z\-]+\s+/i, '').trim();
+    const liquidacionPayload = {
+      move_type: 'in_invoice',
+      partner_id: IC_PARTNER_FUNDACION,
+      journal_id: IC_JOURNAL_PROV_FAR,
+      l10n_latam_document_type_id: 87, // LU-C (29)
+      invoice_date: hoy,
+      date: hoy,
+      ref: numeroFacCogayt,
+      invoice_line_ids: [[0, 0, {
+        product_id: IC_PRODUCTO_GASTOS_ADM,
+        name: 'G3-Gastos Administrativos — ' + ref,
         quantity: 1,
         price_unit: importe,
         account_id: IC_CUENTA_211401,
         analytic_distribution: { [cbiConvenioSel.id]: 100 }
       }]]
     };
-    if (currencyId) facturaPayload.currency_id = currencyId;
-    const facturaId = await odooCall('account.move', 'create', [facturaPayload]);
-    await icPostearVerificado('account.move', facturaId, 'la factura de ingreso');
-    cbiSetPaso(0, 'ok', `Factura creada (ID ${facturaId})`);
+    if (currencyId) liquidacionPayload.currency_id = currencyId;
+    const liquidacionId = await odooCall('account.move', 'create', [liquidacionPayload]);
+    try {
+      await odooCall('account.move', 'write', [[liquidacionId], { l10n_latam_document_number: soloNumero }]);
+    } catch(eDoc) {
+      console.warn('No se pudo setear l10n_latam_document_number:', eDoc.message);
+    }
+    await icPostearVerificado('account.move', liquidacionId, 'la liquidación');
+    if (tcManual) await cbiSetTasaCambioAnalitica(liquidacionId, tcManual);
 
-    // ── PASO 2: Cobro de la factura ──
-    cbiSetPaso(1, 'cargando', 'Cobrando la factura...');
-    const clienteAccData = await odooCall('res.partner', 'read',
-      [[cbiClienteSel.id], ['property_account_receivable_id']]);
-    const clienteCuentaReceivable = clienteAccData[0]?.property_account_receivable_id?.[0];
-    const pagoPayload = {
-      payment_type: 'inbound',
-      partner_id: cbiClienteSel.id,
-      partner_type: 'customer',
-      amount: importe,
-      journal_id: bancoId,
-      date: hoy,
-      memo: ref,
-      ...(clienteCuentaReceivable ? { destination_account_id: clienteCuentaReceivable } : {})
-    };
-    if (currencyId) pagoPayload.currency_id = currencyId;
-    const pagoId = await odooCall('account.payment', 'create', [pagoPayload]);
-    await icPostearVerificado('account.payment', pagoId, 'el cobro');
-    await icConciliarPago(pagoId, facturaId);
-    cbiSetPaso(1, 'ok', 'Cobro registrado y conciliado');
+    let pdfOk = false;
+    try { pdfOk = await icAdjuntarPdfFactura(facCogaytId, liquidacionId, numeroFacCogayt); }
+    catch(ePdf) { console.warn('No se pudo adjuntar el PDF:', ePdf.message); }
 
-    showToast('Cobro internacional registrado ✓', 'ok');
+    const cfgPago = getConfig();
+    const baseUrlPago = (cfgPago.url || 'https://argeninta.odoo.com').replace(/\/$/, '');
+    const liqUrlPago = baseUrlPago + '/odoo/account.move/' + liquidacionId;
+    cbiSetPaso(2, 'ok',
+      `Liquidación N° ${numeroFacCogayt} creada${pdfOk?' con PDF adjuntado':''}. ` +
+      `<a href="${liqUrlPago}" target="_blank" style="color:var(--info);font-weight:600;">Falta pagarla →</a>`
+    );
+
+    showToast('COGAYT internacional cobrado ✓', 'ok');
 
     // Guardar para prefill de la Nota Miami
     window._cbiUltimoCobro = { importe, moneda, ref, fecha: hoy };
@@ -12873,10 +12879,10 @@ async function cbiProcesar() {
   } catch(e) {
     console.error('cbiProcesar error:', e);
     msgEl.textContent = 'Error: ' + e.message;
-    showToast('Error al registrar el cobro: ' + e.message, 'err');
+    showToast('Error al cobrar el COGAYT: ' + e.message, 'err');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-player-play"></i> Registrar cobro en Odoo';
+    btn.innerHTML = '<i class="ti ti-player-play"></i> Cobrar COGAYT internacional';
   }
 }
 
