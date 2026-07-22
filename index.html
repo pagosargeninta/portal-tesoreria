@@ -12702,7 +12702,7 @@ async function cbiModificarTasaFactura(moveId, arsPorUnidad) {
 }
 
 function cbiInicializarPasos() {
-  const pasos = ['Creando factura de COGAYT a Fundación...', 'Cobrando la factura de COGAYT...', 'Creando la liquidación de salida del convenio...'];
+  const pasos = ['Creando factura de COGAYT a Fundación...', 'Cobrando la factura de COGAYT...', 'Creando la liquidación de salida del convenio...', 'Pagando la liquidación (OP-X)...'];
   const cont = document.getElementById('cbi-pasos');
   cont.innerHTML = pasos.map((texto, i) => `
     <div id="cbi-paso-${i}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:6px;background:var(--surface-alt,#f8faf9);opacity:0.5;">
@@ -12744,6 +12744,24 @@ function cbiValidar() {
 // Nombre técnico (modelo.campo) del campo "Tasa de Cambio (Analítica)" en
 // Odoo — falta confirmar con Ramiro. Mientras esté en null, el paso se
 // omite (no bloquea el resto del proceso) y queda un aviso en consola.
+// Nombre técnico (modelo.campo) del campo "Total Pago" en account.payment —
+// falta confirmar con Ramiro. Al escribirlo, Odoo recalcula el Rate como
+// división simple (monto ARS / monto USD), igual que hace a mano.
+const CBI_CAMPO_TOTAL_PAGO = null; // ej: { modelo: 'account.payment', campo: 'x_studio_total_pago' }
+
+async function cbiSetTotalPago(paymentId, montoARS) {
+  if (!CBI_CAMPO_TOTAL_PAGO) {
+    console.warn('CBI: falta configurar CBI_CAMPO_TOTAL_PAGO — el pago quedó con el TC del día, no el manual.');
+    return;
+  }
+  try {
+    await odooCall(CBI_CAMPO_TOTAL_PAGO.modelo, 'write',
+      [[paymentId], { [CBI_CAMPO_TOTAL_PAGO.campo]: montoARS }]);
+  } catch(e) {
+    console.warn('No se pudo escribir el Total Pago manual:', e.message);
+  }
+}
+
 const CBI_CAMPO_TASA_ANALITICA = { modelo: 'account.move', campo: 'x_exchange_rate' }; // "Tasa de Cambio (Analítica)"
 
 async function cbiSetTasaCambioAnalitica(moveId, tasa) {
@@ -12871,18 +12889,58 @@ async function cbiProcesar() {
     }
     await icPostearVerificado('account.move', liquidacionId, 'la liquidación');
     if (tcManual) await cbiSetTasaCambioAnalitica(liquidacionId, tcManual);
+    cbiSetPaso(2, 'ok', `Liquidación N° ${numeroFacCogayt} creada`);
+
+    // ── PASO 4: Pago de la liquidación (OP-X) — creado directo por RPC en
+    //    vez del wizard action_register_payment, que falla cuando Fundación
+    //    se paga a sí misma ("no se pueden registrar pagos para asientos
+    //    varios"). Si algo sale mal, no frena el proceso: queda el link
+    //    "Falta pagarla" como respaldo manual.
+    cbiSetPaso(3, 'cargando', 'Pagando la liquidación (OP-X)...');
+    let liquidacionPagada = false;
+    try {
+      const fundacionData = await odooCall('res.partner', 'read',
+        [[IC_PARTNER_FUNDACION], ['property_account_payable_id']]);
+      const cuentaPayableFundacion = fundacionData[0]?.property_account_payable_id?.[0];
+      const pagoLiqPayload = {
+        payment_type: 'outbound',
+        partner_id: IC_PARTNER_FUNDACION,
+        partner_type: 'supplier',
+        amount: importe,
+        journal_id: bancoId,
+        date: hoy,
+        memo: `COGAYT ${soloNumero}`,
+        ...(cuentaPayableFundacion ? { destination_account_id: cuentaPayableFundacion } : {})
+      };
+      if (currencyId) pagoLiqPayload.currency_id = currencyId;
+      const pagoLiqId = await odooCall('account.payment', 'create', [pagoLiqPayload]);
+      await icPostearVerificado('account.payment', pagoLiqId, 'el pago de la liquidación');
+      if (tcManual) await cbiSetTotalPago(pagoLiqId, importe * tcManual);
+      await icConciliarPago(pagoLiqId, liquidacionId);
+      liquidacionPagada = true;
+      cbiSetPaso(3, 'ok', 'Liquidación pagada ✓ (OP-X creado y conciliado)');
+    } catch(ePago) {
+      console.warn('No se pudo pagar automáticamente la liquidación:', ePago.message);
+      cbiSetPaso(3, 'error', 'No se pudo pagar sola — usá el link de abajo para pagarla a mano');
+    }
 
     let pdfOk = false;
     try { pdfOk = await icAdjuntarPdfFactura(facCogaytId, liquidacionId, numeroFacCogayt); }
     catch(ePdf) { console.warn('No se pudo adjuntar el PDF:', ePdf.message); }
 
-    const cfgPago = getConfig();
-    const baseUrlPago = (cfgPago.url || 'https://argeninta.odoo.com').replace(/\/$/, '');
-    const liqUrlPago = baseUrlPago + '/odoo/account.move/' + liquidacionId;
-    cbiSetPaso(2, 'ok',
-      `Liquidación N° ${numeroFacCogayt} creada${pdfOk?' con PDF adjuntado':''}. ` +
-      `<a href="${liqUrlPago}" target="_blank" style="color:var(--info);font-weight:600;">Falta pagarla →</a>`
-    );
+    if (pdfOk) {
+      const stepEl = document.getElementById('cbi-paso-2');
+      if (stepEl) stepEl.querySelector('.cbi-paso-texto').textContent = `Liquidación N° ${numeroFacCogayt} creada con PDF adjuntado`;
+    }
+
+    if (!liquidacionPagada) {
+      const cfgPago = getConfig();
+      const baseUrlPago = (cfgPago.url || 'https://argeninta.odoo.com').replace(/\/$/, '');
+      const liqUrlPago = baseUrlPago + '/odoo/account.move/' + liquidacionId;
+      cbiSetPaso(3, 'error',
+        `No se pudo pagar sola. <a href="${liqUrlPago}" target="_blank" style="color:var(--info);font-weight:600;">Pagarla a mano →</a>`
+      );
+    }
 
     showToast('COGAYT internacional cobrado ✓', 'ok');
 
