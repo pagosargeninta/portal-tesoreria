@@ -2024,10 +2024,18 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
             </div>
           </div>
 
-          <div class="field" style="margin-bottom:4px;">
-            <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Referencia / concepto</label>
-            <input type="text" id="cbi-ref" placeholder="Ej: Cobro convenio FAO Enero 2026"
-              style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+          <div class="grid2" style="margin-bottom:4px;">
+            <div class="field">
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Fecha de la factura de COGAYT</label>
+              <input type="date" id="cbi-fecha"
+                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+              <div style="font-size:10px;color:var(--muted);margin-top:4px;">Solo cambia la fecha de la factura de COGAYT. El cobro y la liquidación quedan con la fecha de hoy.</div>
+            </div>
+            <div class="field">
+              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Referencia / concepto</label>
+              <input type="text" id="cbi-ref" placeholder="Ej: Cobro convenio FAO Enero 2026"
+                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+            </div>
           </div>
 
           <div id="cbi-faltantes" style="font-size:11px;color:var(--danger);margin:8px 0;"></div>
@@ -12543,6 +12551,11 @@ const cbiCurrencyCache = {}; // { 'USD': id, 'EUR': id, 'ARS': id }
 
 document.querySelector('.nav-item[onclick*="cobrointernacional"]')?.addEventListener('click', () => {
   cbiToggleMoneda();
+  const fechaInput = document.getElementById('cbi-fecha');
+  if (fechaInput && !fechaInput.value) {
+    const d = new Date();
+    fechaInput.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
 });
 
 // ── Banco / diario, buscado por código (ej: "229") o por nombre ──
@@ -12764,6 +12777,7 @@ async function cbiProcesar() {
 
   const _ahora = new Date();
   const hoy = `${_ahora.getFullYear()}-${String(_ahora.getMonth()+1).padStart(2,'0')}-${String(_ahora.getDate()).padStart(2,'0')}`;
+  const fechaFactura = document.getElementById('cbi-fecha').value || hoy;
   const moneda = document.getElementById('cbi-moneda').value;
   const importe = parseFloat((document.getElementById('cbi-importe').value||'').replace(/[^0-9.,]/g,'').replace(',','.'));
   const bancoId = cbiBancoSel.id;
@@ -12783,8 +12797,8 @@ async function cbiProcesar() {
       move_type: 'out_invoice',
       partner_id: IC_PARTNER_FUNDACION,
       journal_id: IC_JOURNAL_COGAYT_VTA,
-      invoice_date: hoy,
-      date: hoy,
+      invoice_date: fechaFactura,
+      date: fechaFactura,
       invoice_line_ids: [[0, 0, {
         product_id: IC_PRODUCTO_COGAYT,
         name: 'Ingreso Prestaciones de Servicios — ' + ref,
@@ -12818,7 +12832,7 @@ async function cbiProcesar() {
       amount: importe,
       journal_id: bancoId,
       date: hoy,
-      memo: `INGRESO CH ${ref} COGAYT`,
+      memo: ref,
       destination_account_id: 2323 // 112201 Cogayt a Cobrar
     };
     if (currencyId) pagoPayload.currency_id = currencyId;
