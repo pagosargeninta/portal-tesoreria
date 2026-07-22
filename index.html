@@ -6010,25 +6010,120 @@ async function honCrearFactura(datos, cartaId, contrato, partnerId) {
   return { invoiceId, usoContrato };
 }
 
-// ── Genera y descarga un CSV con el estado de cada operación de la carga ──
-function honDescargarResumen(filas) {
+// ── Carga ExcelJS bajo demanda (mismo patrón que html2canvas/jsPDF en el portal) ──
+let _exceljsCargado = false;
+async function honCargarExcelJS() {
+  if (_exceljsCargado && window.ExcelJS) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+    s.onload = res;
+    s.onerror = () => rej(new Error('No se pudo cargar ExcelJS'));
+    document.head.appendChild(s);
+  });
+  _exceljsCargado = true;
+}
+
+// Colores de fill por estado (ARGB, sin # inicial — formato ExcelJS)
+function honColorEstado(estado) {
+  if (estado.startsWith('LISTA'))                                 return 'FFE8F8EE'; // verde claro
+  if (estado.startsWith('HECHO — PROVEEDOR DUPLICADO'))           return 'FFFEF3D6'; // amarillo suave
+  if (estado.startsWith('REVISAR — CUIT duplicado') ||
+      estado.startsWith('REVISAR — PROVEEDOR DUPLICADO'))         return 'FFFDE7E5'; // rosado
+  if (estado.startsWith('REVISAR'))                                return 'FFFEFCE8'; // amarillo pálido
+  if (estado === 'ERROR')                                          return 'FFFEF2F2'; // rojo claro
+  return 'FFFFFFFF';
+}
+
+// ── Genera y descarga un Excel prolijo con el estado de cada operación de la carga ──
+// Hoja "Resumen": contadores por estado + totales. Hoja "Detalle": una fila por PDF procesado.
+async function honDescargarResumen(filas) {
   if (!filas.length) return;
-  const headers = ['Archivo','Proveedor','CUIT','Nro Factura','Total','Confianza IA %','ID Odoo','PDF adjunto','Estado','Detalle'];
-  const esc = v => {
-    const s = (v === null || v === undefined) ? '' : String(v);
-    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  };
-  const rows = filas.map(f => [
-    f.archivo, f.proveedor, f.cuit, f.nro_factura, f.total, f.confianza,
-    f.odoo_id, f.pdf_adjunto, f.estado, f.detalle
-  ].map(esc).join(';'));
-  const csv = '\uFEFF' + headers.join(';') + '\n' + rows.join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  try {
+    await honCargarExcelJS();
+  } catch (e) {
+    console.warn('ExcelJS no disponible, no se genera el resumen descargable:', e.message);
+    showToast('No se pudo generar el Excel de resumen (sin conexión a CDN)', 'err');
+    return;
+  }
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Portal de Tesorería — Fundación ArgenINTA';
+  wb.created = new Date();
+
+  const VERDE = 'FF27AE60', VERDE_TXT = 'FFFFFFFF';
+
+  // ── Hoja 1: Resumen ──
+  const wsR = wb.addWorksheet('Resumen', { views: [{ showGridLines: false }] });
+  wsR.columns = [{ width: 34 }, { width: 16 }];
+  wsR.mergeCells('A1:B1');
+  wsR.getCell('A1').value = 'Resumen de carga — Honorarios';
+  wsR.getCell('A1').font = { bold: true, size: 14, color: { argb: VERDE } };
+  wsR.getCell('A2').value = 'Generado';
+  wsR.getCell('B2').value = new Date().toLocaleString('es-AR');
+  wsR.getCell('A2').font = { italic: true, color: { argb: 'FF4A6555' } };
+  wsR.getCell('B2').font = { italic: true, color: { argb: 'FF4A6555' } };
+
+  const conteos = {};
+  filas.forEach(f => { conteos[f.estado] = (conteos[f.estado] || 0) + 1; });
+
+  let row = 4;
+  wsR.getCell(`A${row}`).value = 'Total procesadas';
+  wsR.getCell(`B${row}`).value = filas.length;
+  wsR.getRow(row).font = { bold: true };
+  row++;
+  Object.keys(conteos).sort().forEach(estado => {
+    wsR.getCell(`A${row}`).value = estado;
+    wsR.getCell(`B${row}`).value = conteos[estado];
+    wsR.getCell(`A${row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: honColorEstado(estado) } };
+    wsR.getCell(`B${row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: honColorEstado(estado) } };
+    row++;
+  });
+
+  // ── Hoja 2: Detalle ──
+  const wsD = wb.addWorksheet('Detalle', { views: [{ state: 'frozen', ySplit: 1, showGridLines: false }] });
+  const headers = ['Archivo', 'Proveedor', 'CUIT', 'Nro Factura', 'Total', 'Confianza IA %', 'ID Odoo', 'PDF adjunto', 'Estado', 'Detalle'];
+  wsD.columns = [
+    { header: headers[0], key: 'archivo',     width: 30 },
+    { header: headers[1], key: 'proveedor',   width: 30 },
+    { header: headers[2], key: 'cuit',        width: 14 },
+    { header: headers[3], key: 'nro_factura', width: 16 },
+    { header: headers[4], key: 'total',       width: 14 },
+    { header: headers[5], key: 'confianza',   width: 14 },
+    { header: headers[6], key: 'odoo_id',     width: 10 },
+    { header: headers[7], key: 'pdf_adjunto', width: 12 },
+    { header: headers[8], key: 'estado',      width: 34 },
+    { header: headers[9], key: 'detalle',     width: 44 },
+  ];
+  wsD.getRow(1).eachCell(c => {
+    c.font = { bold: true, color: { argb: VERDE_TXT } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
+    c.alignment = { vertical: 'middle' };
+  });
+  wsD.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+
+  filas.forEach(f => {
+    const r = wsD.addRow(f);
+    const color = honColorEstado(f.estado);
+    r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } }; });
+    r.getCell('total').numFmt = '#,##0.00';
+    r.getCell('confianza').numFmt = '0"%"';
+    if (f.odoo_id) {
+      const baseUrl = (JSON.parse(localStorage.getItem('odoo_config') || '{}').url || localStorage.getItem('odoo_url') || 'https://argeninta.odoo.com').replace(/\/$/, '');
+      r.getCell('odoo_id').value = { text: String(f.odoo_id), hyperlink: `${baseUrl}/odoo/accounting/${f.odoo_id}` };
+      r.getCell('odoo_id').font = { color: { argb: 'FF1A5C9E' }, underline: true };
+    }
+  });
+  wsD.getColumn('estado').alignment = { wrapText: true };
+  wsD.getColumn('detalle').alignment = { wrapText: true };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   a.href = url;
-  a.download = `resumen_honorarios_${ts}.csv`;
+  a.download = `resumen_honorarios_${ts}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -6140,6 +6235,10 @@ async function honProcesar() {
           contratoBadge = `<span class="badge badge-danger" title="Proveedor duplicado en Odoo y ninguno tiene contrato con línea exacta: ${nombres} — revisar manualmente">⚠ Duplicado sin contrato</span>`;
           estadoResumen = 'REVISAR — PROVEEDOR DUPLICADO sin contrato';
           detalleResumen = `Línea armada desde el PDF. Duplicados: ${nombres}`;
+        } else if (usoContrato && contratoUsable.linea.qty_to_invoice > 1) {
+          contratoBadge = `<span class="badge badge-warn" title="El contrato ${contratoUsable.orden?.name || ''} tiene ${contratoUsable.linea.qty_to_invoice} períodos pendientes acumulados en la misma línea — verificar que corresponda a este mes">📑 Contrato · ⚠ Multi-período</span>`;
+          estadoResumen = 'REVISAR — contrato con varios períodos pendientes';
+          detalleResumen = `Contrato: ${contratoUsable.orden?.name || ''} (${contratoUsable.linea.qty_to_invoice} períodos pendientes en la línea)`;
         } else if (usoContrato) {
           contratoBadge = `<span class="badge badge-ok" title="Línea tomada del contrato ${contratoUsable.orden?.name || ''} — lista para confirmar">📑 Contrato</span>`;
           estadoResumen = 'LISTA — desde contrato';
@@ -6212,8 +6311,8 @@ async function honProcesar() {
   if (document.getElementById('hon-total-ok'))  document.getElementById('hon-total-ok').textContent  = prevOk  + okCount;
   if (document.getElementById('hon-total-err')) document.getElementById('hon-total-err').textContent = prevErr + errCount;
 
-  // Descarga automática del resumen de la carga (CSV)
-  honDescargarResumen(resumenFilas);
+  // Descarga automática del resumen de la carga (Excel)
+  await honDescargarResumen(resumenFilas);
 
   // Limpiar selección
   honFiles = [];
