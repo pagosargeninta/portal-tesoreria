@@ -2001,6 +2001,7 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
               <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Tipo de cambio manual (ARS por 1 unidad)</label>
               <input type="text" id="cbi-tc" placeholder="Ej: 1350" oninput="cbiActualizarPreview()"
                 style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+              <div style="font-size:10px;color:var(--muted);margin-top:4px;">Se aplica solo durante los segundos en que se crean los 3 documentos; después se restaura el tipo de cambio que había antes.</div>
             </div>
           </div>
 
@@ -12670,23 +12671,21 @@ async function cbiObtenerCurrencyId(codigo) {
   return res[0].id;
 }
 
-// ── Fuerza el tipo de cambio manual en res.currency.rate para esa fecha ──
-// Convención de Odoo: rate = unidades de MONEDA EXTRANJERA por 1 unidad de
-// la moneda de la compañía (ARS). Si Ramiro carga "1350" queriendo decir
-// "1350 ARS = 1 USD", el rate a guardar es 1 / 1350.
-async function cbiForzarTipoCambio(currencyId, fechaStr, arsPorUnidad) {
+// ── Aplica el tipo de cambio manual a UN account.move puntual, usando el
+//    wizard nativo de Odoo "Modificar Tipo de Cambio" (account.move.change.rate)
+//    — el mismo que se abre con el lápiz al lado de la cotización en la
+//    factura. Esto NO toca res.currency.rate para nada: queda 100% aislado
+//    a este documento, cero efecto sobre el resto del equipo.
+//    Precondición de Odoo: el move debe estar en borrador, con fecha
+//    asignada, y en una moneda distinta a la de la compañía.
+//    El campo currency_rate del wizard usa la MISMA convención que se ve en
+//    pantalla: ARS por 1 unidad de moneda extranjera (no hay que invertirlo).
+async function cbiModificarTasaFactura(moveId, arsPorUnidad) {
   if (!arsPorUnidad || arsPorUnidad <= 0) throw new Error('Tipo de cambio manual inválido');
-  const rate = 1 / arsPorUnidad;
-  const existente = await odooCall('res.currency.rate', 'search_read',
-    [[['currency_id','=', currencyId], ['name','=', fechaStr], ['company_id','=', 1]]],
-    { fields: ['id'], limit: 1 });
-  if (existente.length) {
-    await odooCall('res.currency.rate', 'write', [[existente[0].id], { rate: rate }]);
-  } else {
-    await odooCall('res.currency.rate', 'create', [{
-      currency_id: currencyId, name: fechaStr, rate: rate, company_id: 1
-    }]);
-  }
+  const ctx = { active_id: moveId, active_model: 'account.move', active_ids: [moveId] };
+  const wizardId = await odooCall('account.move.change.rate', 'create',
+    [{ currency_rate: arsPorUnidad }], { context: ctx });
+  await odooCall('account.move.change.rate', 'confirm', [[wizardId]], { context: ctx });
 }
 
 function cbiInicializarPasos() {
@@ -12776,7 +12775,6 @@ async function cbiProcesar() {
     if (moneda !== 'ARS') {
       currencyId = await cbiObtenerCurrencyId(moneda);
       tcManual = parseFloat((document.getElementById('cbi-tc').value||'').replace(',','.'));
-      await cbiForzarTipoCambio(currencyId, hoy, tcManual);
     }
 
     // ── PASO 1: Factura de COGAYT (FA-C) a Fundación ──
@@ -12798,6 +12796,10 @@ async function cbiProcesar() {
     };
     if (currencyId) facCogaytPayload.currency_id = currencyId;
     const facCogaytId = await odooCall('account.move', 'create', [facCogaytPayload]);
+    // Aplicar el tipo de cambio manual ANTES de postear (el move tiene que
+    // seguir en borrador para que el wizard lo acepte) — 100% aislado a
+    // este documento, no toca res.currency.rate.
+    if (tcManual) await cbiModificarTasaFactura(facCogaytId, tcManual);
     await icPostearVerificado('account.move', facCogaytId, 'la factura de COGAYT');
     const facCogaytData = await odooCall('account.move', 'read', [[facCogaytId], ['name']]);
     const numeroFacCogayt = facCogaytData[0].name;
@@ -12805,6 +12807,9 @@ async function cbiProcesar() {
     cbiSetPaso(0, 'ok', `Factura COGAYT creada — N° ${numeroFacCogayt}`);
 
     // ── PASO 2: Cobro de la factura de COGAYT (RE-X) ──
+    // El cobro NO fuerza tipo de cambio — toma el oficial/real del día del
+    // banco. Si difiere del tipo de cambio manual de la factura, Odoo genera
+    // solo la diferencia de cambio al conciliar (comportamiento estándar).
     cbiSetPaso(1, 'cargando', 'Cobrando la factura de COGAYT...');
     const pagoPayload = {
       payment_type: 'inbound',
@@ -12844,6 +12849,7 @@ async function cbiProcesar() {
     };
     if (currencyId) liquidacionPayload.currency_id = currencyId;
     const liquidacionId = await odooCall('account.move', 'create', [liquidacionPayload]);
+    if (tcManual) await cbiModificarTasaFactura(liquidacionId, tcManual);
     try {
       await odooCall('account.move', 'write', [[liquidacionId], { l10n_latam_document_number: soloNumero }]);
     } catch(eDoc) {
