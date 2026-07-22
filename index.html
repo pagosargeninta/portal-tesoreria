@@ -5895,7 +5895,59 @@ async function honExtractWithClaude(file, intentos) {
   }
 }
 
-async function honCrearFactura(datos, cartaId) {
+// ── Resuelve el partner (proveedor) a partir del CUIT extraído. ──
+// Devuelve {id, duplicado:false} si hay uno solo, o {id:null, duplicado:true, candidatos}
+// si hay 2+ partners con el mismo CUIT (proveedor duplicado en Odoo) — no se puede
+// resolver solo, requiere revisión manual.
+async function honResolverPartner(datos) {
+  if (!datos.cuit) return { id: null, duplicado: false };
+  const cuitClean = datos.cuit.replace(/\D/g, '');
+  const partners = await odooCall('res.partner', 'search_read',
+    [[['vat', 'like', cuitClean]]], { fields: ['id', 'name'] });
+  if (!partners?.length) return { id: null, duplicado: false };
+  if (partners.length > 1) return { id: null, duplicado: true, candidatos: partners };
+  return { id: partners[0].id, duplicado: false };
+}
+
+// ── Busca la línea de la Orden de Compra (contrato) pendiente de facturar ──
+// para ese proveedor, e intenta identificar cuál es "la que tiene que quedar":
+// si hay una sola línea pendiente la usa directo; si hay varias, matchea por monto
+// EXACTO (tolerancia 0%) contra lo extraído del PDF. Devuelve null si no hay contrato,
+// o {multiples:true,...} si hay ambigüedad real (no matchea ninguna exacto).
+async function honBuscarLineaContrato(partnerId, montoRef) {
+  if (!partnerId) return null;
+  try {
+    const ordenes = await odooCall('purchase.order', 'search_read',
+      [[['partner_id', '=', partnerId], ['state', '=', 'purchase'], ['invoice_status', '!=', 'invoiced']]],
+      { fields: ['id', 'name'], order: 'id desc', limit: 10 });
+    if (!ordenes?.length) return null;
+
+    const orderIds = ordenes.map(o => o.id);
+    const lineas = await odooCall('purchase.order.line', 'search_read',
+      [[['order_id', 'in', orderIds], ['qty_to_invoice', '!=', 0]]],
+      { fields: ['id', 'order_id', 'product_id', 'name', 'price_unit', 'product_qty', 'qty_invoiced', 'qty_to_invoice', 'taxes_id', 'analytic_distribution'] });
+    if (!lineas?.length) return null;
+
+    let elegida = null;
+    if (lineas.length === 1) {
+      elegida = lineas[0];
+    } else if (montoRef > 0) {
+      // Tolerancia 0%: exige coincidencia exacta (redondeada a centavos) para
+      // evitar tomar la línea equivocada cuando hay varias líneas pendientes.
+      elegida = lineas.find(l => Math.round(l.price_unit * 100) === Math.round(montoRef * 100)) || null;
+    }
+
+    if (!elegida) return { multiples: true, lineas, ordenes };
+
+    const orden = ordenes.find(o => o.id === elegida.order_id[0]) || ordenes[0];
+    return { linea: elegida, orden, multiples: false };
+  } catch (e) {
+    console.warn('honBuscarLineaContrato:', e.message);
+    return null;
+  }
+}
+
+async function honCrearFactura(datos, cartaId, contrato, partnerId) {
   const parseNum = v => parseFloat((v || '0').toString().replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
   const neto   = parseNum(datos.neto) || parseNum(datos.total);
   const iva    = parseNum(datos.iva);
@@ -5907,16 +5959,38 @@ async function honCrearFactura(datos, cartaId) {
     : `Honorarios - ${nombre}`;
   const hoy = new Date().toISOString().split('T')[0];
   const lineas = [];
-  if (neto > 0) {
-    const l = { name: ref, quantity: 1, price_unit: neto };
-    if (cartaId) l.analytic_distribution = { [cartaId]: 100 };
-    lineas.push([0, 0, l]);
+  let usoContrato = false;
+
+  if (contrato && contrato.linea) {
+    // ── Línea armada directo desde el contrato (purchase_line_id = matching nativo) ──
+    const l = contrato.linea;
+    const lineVals = {
+      product_id:      l.product_id ? l.product_id[0] : false,
+      name:             l.name || ref,
+      quantity:         1,
+      price_unit:       l.price_unit,
+      purchase_line_id: l.id,
+    };
+    if (l.taxes_id && l.taxes_id.length) lineVals.tax_ids = [[6, 0, l.taxes_id]];
+    lineVals.analytic_distribution = (l.analytic_distribution && Object.keys(l.analytic_distribution).length)
+      ? l.analytic_distribution
+      : (cartaId ? { [cartaId]: 100 } : undefined);
+    lineas.push([0, 0, lineVals]);
+    usoContrato = true;
+  } else {
+    // ── Fallback: sin contrato identificado, se arma desde lo extraído del PDF ──
+    if (neto > 0) {
+      const l = { name: ref, quantity: 1, price_unit: neto };
+      if (cartaId) l.analytic_distribution = { [cartaId]: 100 };
+      lineas.push([0, 0, l]);
+    }
+    if (iva > 0) {
+      const l = { name: 'IVA', quantity: 1, price_unit: iva };
+      if (cartaId) l.analytic_distribution = { [cartaId]: 100 };
+      lineas.push([0, 0, l]);
+    }
   }
-  if (iva > 0) {
-    const l = { name: 'IVA', quantity: 1, price_unit: iva };
-    if (cartaId) l.analytic_distribution = { [cartaId]: 100 };
-    lineas.push([0, 0, l]);
-  }
+
   const vals = {
     move_type:                  'in_invoice',
     l10n_latam_document_number: datos.nro_factura || false,
@@ -5925,17 +5999,40 @@ async function honCrearFactura(datos, cartaId) {
     ref:                        ref,
     invoice_line_ids:           lineas,
   };
+  if (contrato && contrato.orden) vals.invoice_origin = contrato.orden.name;
   if (datos.cae) {
     vals.l10n_ar_afip_auth_mode = 'CAE';
     vals.l10n_ar_afip_auth_code = datos.cae.replace(/\D/g, '');
   }
-  if (datos.cuit) {
-    const cuitClean = datos.cuit.replace(/\D/g, '');
-    const partners = await odooCall('res.partner', 'search_read',
-      [[['vat', 'like', cuitClean]]], { fields: ['id'], limit: 1 });
-    if (partners?.length) vals.partner_id = partners[0].id;
-  }
-  return await odooCall('account.move', 'create', [vals]);
+  if (partnerId) vals.partner_id = partnerId;
+
+  const invoiceId = await odooCall('account.move', 'create', [vals]);
+  return { invoiceId, usoContrato };
+}
+
+// ── Genera y descarga un CSV con el estado de cada operación de la carga ──
+function honDescargarResumen(filas) {
+  if (!filas.length) return;
+  const headers = ['Archivo','Proveedor','CUIT','Nro Factura','Total','Confianza IA %','ID Odoo','PDF adjunto','Estado','Detalle'];
+  const esc = v => {
+    const s = (v === null || v === undefined) ? '' : String(v);
+    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = filas.map(f => [
+    f.archivo, f.proveedor, f.cuit, f.nro_factura, f.total, f.confianza,
+    f.odoo_id, f.pdf_adjunto, f.estado, f.detalle
+  ].map(esc).join(';'));
+  const csv = '\uFEFF' + headers.join(';') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  a.href = url;
+  a.download = `resumen_honorarios_${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 // ── Proceso principal: extrae con IA → crea factura → adjunta PDF ──
@@ -5959,6 +6056,7 @@ async function honProcesar() {
   tbody.innerHTML = '';
 
   let okCount = 0, errCount = 0;
+  const resumenFilas = []; // acumula el estado de cada operación para el CSV final
 
   const BATCH_SIZE = 25;
   const BATCH_DELAY = 5000; // 5s entre lotes con 25 paralelos
@@ -5989,7 +6087,38 @@ async function honProcesar() {
         const datos = await honExtractWithClaude(file);
         const conf = datos.confidence || 0;
         const fmt = n => n ? '$' + parseFloat(n).toLocaleString('es-AR') : '—';
-        const odooId = await honCrearFactura(datos, cartaId);
+
+        const resPartner = await honResolverPartner(datos);
+        const montoRef  = parseFloat(datos.neto) || parseFloat(datos.total) || 0;
+
+        // Resuelve partnerId + contrato a usar. Si el CUIT matchea 2+ proveedores
+        // (duplicado en Odoo), prueba el contrato de cada uno y se queda con el
+        // primero que tenga una línea exacta — la factura sale igual de "lista",
+        // pero queda marcada para que corrijan el duplicado en el maestro.
+        let partnerId = resPartner.id;
+        let contratoEncontrado = null;
+        let contratoUsable = null;
+        let esDuplicado = resPartner.duplicado;
+
+        if (!resPartner.duplicado) {
+          contratoEncontrado = await honBuscarLineaContrato(resPartner.id, montoRef);
+          contratoUsable = (contratoEncontrado && !contratoEncontrado.multiples) ? contratoEncontrado : null;
+        } else {
+          for (const cand of resPartner.candidatos) {
+            const c = await honBuscarLineaContrato(cand.id, montoRef);
+            if (c && !c.multiples) {
+              partnerId = cand.id;
+              contratoEncontrado = c;
+              contratoUsable = c;
+              break;
+            }
+          }
+          // Ninguno de los duplicados tenía contrato con línea exacta: se arma desde
+          // el PDF igual que el caso "sin contrato", usando el primer candidato.
+          if (!contratoUsable) partnerId = resPartner.candidatos[0].id;
+        }
+
+        const { invoiceId: odooId, usoContrato } = await honCrearFactura(datos, cartaId, contratoUsable, partnerId);
 
         let adjuntado = false;
         try { await honAdjuntarPDF(file, odooId); adjuntado = true; } catch(e) {}
@@ -6000,14 +6129,45 @@ async function honProcesar() {
           ? '<span class="badge badge-ok" title="PDF adjunto">📎</span>'
           : '<span class="badge badge-warn" title="Sin PDF">⚠</span>';
 
+        let contratoBadge, estadoResumen, detalleResumen;
+        if (esDuplicado && usoContrato) {
+          const nombres = resPartner.candidatos.map(c => `#${c.id} ${c.name}`).join(' / ');
+          contratoBadge = `<span class="badge badge-warn" title="Proveedor duplicado en Odoo (${nombres}) — se usó el contrato de #${partnerId}. Corregir el maestro de proveedores.">📑 Contrato · ⚠ Duplicado</span>`;
+          estadoResumen = 'HECHO — PROVEEDOR DUPLICADO - CORREGIR';
+          detalleResumen = `Contrato: ${contratoUsable.orden?.name || ''} (proveedor #${partnerId}). Duplicados: ${nombres}`;
+        } else if (esDuplicado && !usoContrato) {
+          const nombres = resPartner.candidatos.map(c => `#${c.id} ${c.name}`).join(' / ');
+          contratoBadge = `<span class="badge badge-danger" title="Proveedor duplicado en Odoo y ninguno tiene contrato con línea exacta: ${nombres} — revisar manualmente">⚠ Duplicado sin contrato</span>`;
+          estadoResumen = 'REVISAR — PROVEEDOR DUPLICADO sin contrato';
+          detalleResumen = `Línea armada desde el PDF. Duplicados: ${nombres}`;
+        } else if (usoContrato) {
+          contratoBadge = `<span class="badge badge-ok" title="Línea tomada del contrato ${contratoUsable.orden?.name || ''} — lista para confirmar">📑 Contrato</span>`;
+          estadoResumen = 'LISTA — desde contrato';
+          detalleResumen = `Contrato: ${contratoUsable.orden?.name || ''}`;
+        } else if (contratoEncontrado?.multiples) {
+          contratoBadge = '<span class="badge badge-warn" title="Varias líneas de contrato pendientes, ninguna coincide exacto con el monto — revisar a mano">⚠ Revisar (multi-línea)</span>';
+          estadoResumen = 'REVISAR — múltiples líneas de contrato, sin match exacto';
+          detalleResumen = `${contratoEncontrado.lineas.length} líneas pendientes en ${contratoEncontrado.ordenes.map(o=>o.name).join(', ')}`;
+        } else {
+          contratoBadge = '<span class="badge badge-muted" title="Sin contrato/OC pendiente encontrado — línea armada desde el PDF">✎ Sin contrato</span>';
+          estadoResumen = 'REVISAR — sin contrato encontrado';
+          detalleResumen = 'Línea armada desde el PDF';
+        }
+
         tr.innerHTML = `
           <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</td>
           <td style="font-size:12px;">${datos.razon_social || datos.cuit || '—'}</td>
           <td class="mono" style="font-size:11px;">${fmt(datos.total)}</td>
           <td><span class="badge ${confBadge}" style="font-size:10px;">${conf}% ${modoIcon}</span></td>
           <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
-            <span class="badge badge-ok">✓ ID ${odooId}</span>${adjBadge}
+            <span class="badge badge-ok">✓ ID ${odooId}</span>${adjBadge}${contratoBadge}
           </td>`;
+
+        resumenFilas.push({
+          archivo: file.name, proveedor: datos.razon_social || '', cuit: datos.cuit || '',
+          nro_factura: datos.nro_factura || '', total: datos.total || '', confianza: conf,
+          odoo_id: odooId, pdf_adjunto: adjuntado ? 'SI' : 'NO', estado: estadoResumen, detalle: detalleResumen
+        });
 
         okCount++;
         document.getElementById('hon-count-ok').textContent = okCount;
@@ -6018,6 +6178,10 @@ async function honProcesar() {
           <td style="font-size:11px;color:var(--muted);" title="${file.name}">${file.name}</td>
           <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
           <td><span class="badge badge-danger">✗ Error</span></td>`;
+        resumenFilas.push({
+          archivo: file.name, proveedor: '', cuit: '', nro_factura: '', total: '', confianza: '',
+          odoo_id: '', pdf_adjunto: '', estado: 'ERROR', detalle: msg
+        });
         errCount++;
       }
     }));
@@ -6047,6 +6211,9 @@ async function honProcesar() {
   const prevErr = parseInt(document.getElementById('hon-total-err')?.textContent) || 0;
   if (document.getElementById('hon-total-ok'))  document.getElementById('hon-total-ok').textContent  = prevOk  + okCount;
   if (document.getElementById('hon-total-err')) document.getElementById('hon-total-err').textContent = prevErr + errCount;
+
+  // Descarga automática del resumen de la carga (CSV)
+  honDescargarResumen(resumenFilas);
 
   // Limpiar selección
   honFiles = [];
