@@ -2009,7 +2009,7 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
             </div>
             <div class="field">
               <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Importe (en la moneda elegida)</label>
-              <input type="text" id="cbi-importe" placeholder="Ej: 12000" oninput="cbiActualizarPreview()"
+              <input type="text" id="cbi-importe" placeholder="Ej: 12000" oninput="cbiActualizarPreview();cbiCalcularClavePase();"
                 style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
             </div>
             <div class="field" id="cbi-tc-wrap">
@@ -2024,25 +2024,17 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
             <span style="color:var(--muted);font-size:11px;"> — este valor es solo de referencia; el asiento en Odoo usará exactamente el tipo de cambio que cargaste.</span>
           </div>
 
-          <div class="grid2" style="margin-bottom:4px;">
-            <div class="field">
-              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">Cuenta contable (escribí el código, ej: 229)</label>
-              <div style="position:relative;">
-                <input type="text" id="cbi-cuenta-input" placeholder="Ej: 229..."
-                  style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
-                  oninput="cbiBuscarCuenta(this.value)" autocomplete="off">
-                <div id="cbi-cuenta-resultados" style="display:none;position:absolute;top:100%;left:0;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
-              </div>
-              <div id="cbi-cuenta-elegida" style="display:none;margin-top:6px;padding:7px 12px;background:rgba(45,134,89,.08);border-radius:6px;font-size:12px;color:var(--success);font-weight:600;">
-                <i class="ti ti-check"></i> <span id="cbi-cuenta-elegida-nombre"></span>
-                <button onclick="cbiLimpiarCuenta()" style="background:none;border:none;color:var(--muted);cursor:pointer;float:right;font-size:13px;"><i class="ti ti-x"></i></button>
-              </div>
+          <div class="field" style="margin-bottom:4px;max-width:480px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿A qué banco entra el cobro? (escribí el código del diario, ej: 229, o el nombre)</label>
+            <div style="position:relative;">
+              <input type="text" id="cbi-banco-input" placeholder="Ej: 229..."
+                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;"
+                oninput="cbiBuscarBanco(this.value)" autocomplete="off">
+              <div id="cbi-banco-resultados" style="display:none;position:absolute;top:100%;left:0;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
             </div>
-            <div class="field">
-              <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:6px;">¿A qué banco entra el cobro?</label>
-              <select id="cbi-banco" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);box-sizing:border-box;">
-                <option value="">Cargando bancos...</option>
-              </select>
+            <div id="cbi-banco-elegido" style="display:none;margin-top:6px;padding:7px 12px;background:rgba(45,134,89,.08);border-radius:6px;font-size:12px;color:var(--success);font-weight:600;">
+              <i class="ti ti-check"></i> <span id="cbi-banco-elegido-nombre"></span>
+              <button onclick="cbiLimpiarBanco()" style="background:none;border:none;color:var(--muted);cursor:pointer;float:right;font-size:13px;"><i class="ti ti-x"></i></button>
             </div>
           </div>
 
@@ -2086,9 +2078,8 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
                   style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);box-sizing:border-box;">
               </div>
               <div class="field">
-                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Clave</label>
-                <input type="text" id="cbi-pase-clave" placeholder="Ej: 1042"
-                  style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Clave (calculada automático, igual que Notas Miami)</label>
+                <div style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;color:var(--verde);background:var(--verde-claro);box-sizing:border-box;font-family:'JetBrains Mono',monospace;" id="cbi-pase-clave-display">—</div>
               </div>
             </div>
             <div class="grid3" style="margin-bottom:4px;">
@@ -12561,31 +12552,51 @@ document.querySelector('.nav-item[onclick*="ingresocogayt"]')?.addEventListener(
 
 let cbiClienteSel  = null; // {id, name}
 let cbiConvenioSel = null; // {id, name}
-let cbiCuentaSel   = null; // {id, code, name}
-let cbiBancosCache = null;
-let cbiTimerCliente = null, cbiTimerConvenio = null, cbiTimerCuenta = null;
+let cbiBancoSel    = null; // {id, code, name}
+let cbiTimerCliente = null, cbiTimerConvenio = null, cbiTimerBanco = null;
 const cbiCurrencyCache = {}; // { 'USD': id, 'EUR': id, 'ARS': id }
 
 document.querySelector('.nav-item[onclick*="cobrointernacional"]')?.addEventListener('click', () => {
-  cbiCargarBancos();
   cbiToggleMoneda();
 });
 
-async function cbiCargarBancos() {
-  if (cbiBancosCache) return cbiBancosCache;
-  try {
-    const bancos = await odooCall('account.journal', 'search_read',
-      [[['type','in',['bank','cash']],['company_id','=',1]]],
-      { fields: ['id','name','code'], order: 'name asc', limit: 200 });
-    cbiBancosCache = bancos;
-    const opciones = '<option value="">Seleccionar...</option>' +
-      bancos.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
-    const sel = document.getElementById('cbi-banco');
-    if (sel) sel.innerHTML = opciones;
-  } catch(e) {
-    console.error('cbiCargarBancos error:', e);
-  }
-  return cbiBancosCache;
+// ── Banco / diario, buscado por código (ej: "229") o por nombre ──
+function cbiBuscarBanco(q) {
+  clearTimeout(cbiTimerBanco);
+  const cont = document.getElementById('cbi-banco-resultados');
+  if (!q || q.length < 2) { if (cont) cont.style.display = 'none'; return; }
+  cbiTimerBanco = setTimeout(async () => {
+    try {
+      const esCodigo = /^[0-9.]+$/.test(q.trim());
+      const domain = esCodigo
+        ? [['type','in',['bank','cash']],['company_id','=',1],['code','like', q.trim()]]
+        : [['type','in',['bank','cash']],['company_id','=',1],['name','ilike', q.trim()]];
+      const res = await odooCall('account.journal', 'search_read',
+        [domain], { fields: ['id','code','name'], limit: 15, order: 'code asc' });
+      if (!cont) return;
+      if (!res.length) { cont.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">Sin resultados</div>'; cont.style.display='block'; return; }
+      window._cbiBancoTemp = {};
+      res.forEach(b => { window._cbiBancoTemp[b.id] = { code: b.code, name: b.name }; });
+      cont.innerHTML = res.map(b => `<div onclick="cbiElegirBancoPorId(${b.id})"
+        style="padding:9px 14px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);"
+        onmouseover="this.style.background='var(--surface-alt,#f4f6f5)'" onmouseout="this.style.background=''">
+        <strong>${b.code}</strong> — ${b.name}
+      </div>`).join('');
+      cont.style.display = 'block';
+    } catch(e) { console.error('cbiBuscarBanco error:', e); }
+  }, 300);
+}
+function cbiElegirBancoPorId(id) {
+  const info = (window._cbiBancoTemp && window._cbiBancoTemp[id]) || { code: id, name: '' };
+  cbiBancoSel = { id, code: info.code, name: info.name };
+  document.getElementById('cbi-banco-resultados').style.display = 'none';
+  document.getElementById('cbi-banco-input').value = '';
+  document.getElementById('cbi-banco-elegido-nombre').textContent = info.code + ' — ' + info.name;
+  document.getElementById('cbi-banco-elegido').style.display = 'block';
+}
+function cbiLimpiarBanco() {
+  cbiBancoSel = null;
+  document.getElementById('cbi-banco-elegido').style.display = 'none';
 }
 
 // ── Cliente (organismo que deposita) ──
@@ -12666,43 +12677,6 @@ function cbiLimpiarConvenio() {
   document.getElementById('cbi-convenio-elegido').style.display = 'none';
 }
 
-// ── Cuenta contable, buscada por código (ej: "229") ──
-function cbiBuscarCuenta(q) {
-  clearTimeout(cbiTimerCuenta);
-  const cont = document.getElementById('cbi-cuenta-resultados');
-  if (!q || q.length < 2) { if (cont) cont.style.display = 'none'; return; }
-  cbiTimerCuenta = setTimeout(async () => {
-    try {
-      const esCodigo = /^[0-9.]+$/.test(q.trim());
-      const domain = esCodigo ? [['code','like', q.trim()]] : [['name','ilike', q.trim()]];
-      const res = await odooCall('account.account', 'search_read',
-        [domain], { fields: ['id','code','name'], limit: 15, order: 'code asc' });
-      if (!cont) return;
-      if (!res.length) { cont.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">Sin resultados</div>'; cont.style.display='block'; return; }
-      window._cbiCuentaTemp = {};
-      res.forEach(a => { window._cbiCuentaTemp[a.id] = { code: a.code, name: a.name }; });
-      cont.innerHTML = res.map(a => `<div onclick="cbiElegirCuentaPorId(${a.id})"
-        style="padding:9px 14px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);"
-        onmouseover="this.style.background='var(--surface-alt,#f4f6f5)'" onmouseout="this.style.background=''">
-        <strong>${a.code}</strong> — ${a.name}
-      </div>`).join('');
-      cont.style.display = 'block';
-    } catch(e) { console.error('cbiBuscarCuenta error:', e); }
-  }, 300);
-}
-function cbiElegirCuentaPorId(id) {
-  const info = (window._cbiCuentaTemp && window._cbiCuentaTemp[id]) || { code: id, name: '' };
-  cbiCuentaSel = { id, code: info.code, name: info.name };
-  document.getElementById('cbi-cuenta-resultados').style.display = 'none';
-  document.getElementById('cbi-cuenta-input').value = '';
-  document.getElementById('cbi-cuenta-elegida-nombre').textContent = info.code + ' — ' + info.name;
-  document.getElementById('cbi-cuenta-elegida').style.display = 'block';
-}
-function cbiLimpiarCuenta() {
-  cbiCuentaSel = null;
-  document.getElementById('cbi-cuenta-elegida').style.display = 'none';
-}
-
 // ── Moneda: mostrar/ocultar el tipo de cambio manual ──
 function cbiToggleMoneda() {
   const moneda = document.getElementById('cbi-moneda').value;
@@ -12711,6 +12685,7 @@ function cbiToggleMoneda() {
   const paseWrap = document.getElementById('cbi-pase-wrap');
   if (paseWrap) paseWrap.style.display = (moneda === 'ARS') ? 'none' : 'block';
   cbiActualizarPreview();
+  cbiCalcularClavePase();
 }
 
 function cbiActualizarPreview() {
@@ -12724,6 +12699,23 @@ function cbiActualizarPreview() {
   const ars = importe * tc;
   document.getElementById('cbi-preview-ars').textContent = '$' + ars.toLocaleString('es-AR',{maximumFractionDigits:2}) + ' ARS';
   preview.style.display = 'block';
+}
+
+// Calcula la Clave del Pase con la MISMA fórmula que Notas Miami
+// (NM_NUMERO_FIJO + cifra del monto + cifra del mes + cifra del día),
+// usando la fecha de hoy y el importe cargado. Se recalcula sola.
+function cbiCalcularClavePase() {
+  const disp = document.getElementById('cbi-pase-clave-display');
+  if (!disp) return null;
+  const importe = parseFloat((document.getElementById('cbi-importe').value||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+  const totalSinCentavos = Math.floor(importe);
+  const hoyD = new Date();
+  const s2 = totalSinCentavos === 0 ? NM_SIN_IMPORTE : nmDecompose(totalSinCentavos).reduce((a,b)=>a+b,0);
+  const s3 = NM_MESES_CIFRA[hoyD.getMonth()];
+  const s4 = NM_DIAS_CIFRA[hoyD.getDate()] || 0;
+  const clave = totalSinCentavos > 0 ? NM_NUMERO_FIJO + s2 + s3 + s4 : null;
+  disp.textContent = clave ?? '—';
+  return clave;
 }
 
 // ── Buscar (con cache) el id de res.currency para un código ISO ──
@@ -12784,7 +12776,6 @@ function cbiValidar() {
   const errores = [];
   if (!cbiClienteSel) errores.push('Elegí quién deposita');
   if (!cbiConvenioSel) errores.push('Elegí el convenio');
-  if (!cbiCuentaSel) errores.push('Elegí la cuenta contable');
   const moneda = document.getElementById('cbi-moneda').value;
   const importe = parseFloat((document.getElementById('cbi-importe').value||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
   if (importe <= 0) errores.push('Ingresá el importe');
@@ -12792,7 +12783,7 @@ function cbiValidar() {
     const tc = parseFloat((document.getElementById('cbi-tc').value||'').replace(',','.')) || 0;
     if (tc <= 0) errores.push('Ingresá el tipo de cambio manual');
   }
-  if (!document.getElementById('cbi-banco').value) errores.push('Elegí el banco');
+  if (!cbiBancoSel) errores.push('Elegí el banco');
   if (!document.getElementById('cbi-ref').value.trim()) errores.push('Ingresá la referencia / concepto');
   return errores;
 }
@@ -12812,7 +12803,7 @@ async function cbiProcesar() {
   const hoy = `${_ahora.getFullYear()}-${String(_ahora.getMonth()+1).padStart(2,'0')}-${String(_ahora.getDate()).padStart(2,'0')}`;
   const moneda = document.getElementById('cbi-moneda').value;
   const importe = parseFloat((document.getElementById('cbi-importe').value||'').replace(/[^0-9.,]/g,'').replace(',','.'));
-  const bancoId = parseInt(document.getElementById('cbi-banco').value);
+  const bancoId = cbiBancoSel.id;
   const ref = document.getElementById('cbi-ref').value.trim();
 
   try {
@@ -12823,18 +12814,21 @@ async function cbiProcesar() {
       await cbiForzarTipoCambio(currencyId, hoy, tc);
     }
 
-    // ── PASO 1: Factura de ingreso al convenio ──
+    // ── PASO 1: Factura de ingreso al convenio (misma cuenta y diario
+    //    que usa Ingreso + COGAYT: 211401 Fondos de Terceros, diario Desembolsos) ──
     cbiSetPaso(0, 'cargando', 'Creando factura de ingreso al convenio...');
     const facturaPayload = {
       move_type: 'out_invoice',
       partner_id: cbiClienteSel.id,
+      journal_id: IC_JOURNAL_DESEMBOLSOS,
       invoice_date: hoy,
       date: hoy,
       invoice_line_ids: [[0, 0, {
+        product_id: IC_PRODUCTO_DESEMBOLSO,
         name: ref,
         quantity: 1,
         price_unit: importe,
-        account_id: cbiCuentaSel.id,
+        account_id: IC_CUENTA_211401,
         analytic_distribution: { [cbiConvenioSel.id]: 100 }
       }]]
     };
@@ -12900,7 +12894,7 @@ async function cbiGenerarPaseDocx() {
     const monto = parseFloat((document.getElementById('cbi-importe').value||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
     const cuentaDebito = document.getElementById('cbi-pase-debito').value;
     const cuentaDestino = document.getElementById('cbi-pase-destino').value.trim();
-    const clave = document.getElementById('cbi-pase-clave').value.trim();
+    const clave = cbiCalcularClavePase();
     const exp = document.getElementById('cbi-pase-exp').value.trim();
     const firma1 = document.getElementById('cbi-pase-firma1').value.trim();
     const firma2 = document.getElementById('cbi-pase-firma2').value.trim();
