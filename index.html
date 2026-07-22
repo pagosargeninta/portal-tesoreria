@@ -12684,6 +12684,20 @@ async function cbiObtenerCurrencyId(codigo) {
   return res[0].id;
 }
 
+// ── Para cobros en ARS: buscar (solo lectura, nunca escribe nada) el tipo
+//    de cambio OFICIAL vigente a esa fecha, para poder completar igual la
+//    "Tasa de Cambio (Analítica)" y que desde el área internacional se vea
+//    el equivalente en USD. Si no hay cotización exacta para esa fecha,
+//    toma la más reciente anterior.
+async function cbiObtenerTCOficial(codigoMoneda, fechaStr) {
+  const currencyId = await cbiObtenerCurrencyId(codigoMoneda);
+  const res = await odooCall('res.currency.rate', 'search_read',
+    [[['currency_id','=', currencyId], ['company_id','=', 1], ['name','<=', fechaStr]]],
+    { fields: ['rate','name'], order: 'name desc', limit: 1 });
+  if (!res.length || !res[0].rate) return null;
+  return 1 / res[0].rate; // convención de Odoo -> ARS por 1 unidad de moneda extranjera
+}
+
 // ── Aplica el tipo de cambio manual a UN account.move puntual, usando el
 //    wizard nativo de Odoo "Modificar Tipo de Cambio" (account.move.change.rate)
 //    — el mismo que se abre con el lápiz al lado de la cotización en la
@@ -12808,6 +12822,14 @@ async function cbiProcesar() {
       currencyId = await cbiObtenerCurrencyId(moneda);
       tcManual = parseFloat((document.getElementById('cbi-tc').value||'').replace(',','.'));
     }
+    // Tasa a guardar en "Tasa de Cambio (Analítica)": la manual si es moneda
+    // extranjera, o la oficial de USD del día (solo lectura) si es ARS —
+    // así el área internacional siempre puede ver el equivalente en USD.
+    let tasaParaAnalitica = tcManual;
+    if (moneda === 'ARS') {
+      try { tasaParaAnalitica = await cbiObtenerTCOficial('USD', fechaFactura); }
+      catch(eTC) { console.warn('No se pudo obtener el TC oficial para la Analítica:', eTC.message); }
+    }
 
     // ── PASO 1: Factura de COGAYT (FA-C) a Fundación ──
     cbiSetPaso(0, 'cargando', 'Creando factura de COGAYT a Fundación...');
@@ -12835,7 +12857,7 @@ async function cbiProcesar() {
     await icPostearVerificado('account.move', facCogaytId, 'la factura de COGAYT');
     const facCogaytData = await odooCall('account.move', 'read', [[facCogaytId], ['name']]);
     const numeroFacCogayt = facCogaytData[0].name;
-    if (tcManual) await cbiSetTasaCambioAnalitica(facCogaytId, tcManual);
+    if (tasaParaAnalitica) await cbiSetTasaCambioAnalitica(facCogaytId, tasaParaAnalitica);
     cbiSetPaso(0, 'ok', `Factura COGAYT creada — N° ${numeroFacCogayt}`);
 
     // ── PASO 2: Cobro de la factura de COGAYT (RE-X) ──
@@ -12888,7 +12910,7 @@ async function cbiProcesar() {
       console.warn('No se pudo setear l10n_latam_document_number:', eDoc.message);
     }
     await icPostearVerificado('account.move', liquidacionId, 'la liquidación');
-    if (tcManual) await cbiSetTasaCambioAnalitica(liquidacionId, tcManual);
+    if (tasaParaAnalitica) await cbiSetTasaCambioAnalitica(liquidacionId, tasaParaAnalitica);
     cbiSetPaso(2, 'ok', `Liquidación N° ${numeroFacCogayt} creada`);
 
     // ── PASO 4: Pago de la liquidación (OP-X) — creado directo por RPC en
