@@ -1822,6 +1822,17 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
     <!-- ══════════ NOTAS MIAMI ══════════ -->
     <div id="page-notasmiami" class="page">
 
+      <div class="tabs" style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--border);">
+        <div id="nm-tabbtn-transferencia" class="nav-item" onclick="nmSwitchTab('transferencia')" style="border-left:none;border-bottom:2px solid var(--verde);color:var(--text);font-weight:600;padding:8px 14px;cursor:pointer;">
+          <i class="ti ti-world"></i> Transferencia al exterior
+        </div>
+        <div id="nm-tabbtn-plazofijo" class="nav-item" onclick="nmSwitchTab('plazofijo')" style="border-left:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 14px;cursor:pointer;">
+          <i class="ti ti-calendar-time"></i> Plazo fijo
+        </div>
+      </div>
+
+      <div id="nm-tab-transferencia">
+
       <div class="grid2" style="margin-bottom:16px;">
         <div class="card">
           <div class="card-header">
@@ -1950,6 +1961,88 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
         <i class="ti ti-file-download"></i> Generar NOTA (.docx)
       </button>
       <span id="nm-generar-msg" style="margin-left:10px;font-size:12px;"></span>
+
+      </div>
+      <!-- ══════════ FIN TAB TRANSFERENCIA ══════════ -->
+
+      <!-- ══════════ TAB PLAZO FIJO ══════════ -->
+      <div id="nm-tab-plazofijo" style="display:none;">
+
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-clipboard-text"></i> Datos del plazo fijo</div>
+          </div>
+          <div class="card-body">
+            <div class="grid3" style="margin-bottom:4px;">
+              <div class="field">
+                <label>Fecha de la nota</label>
+                <input type="date" id="pf-fecha">
+              </div>
+              <div class="field">
+                <label>Clave</label>
+                <input type="number" id="pf-clave" placeholder="ej: 753">
+              </div>
+              <div class="field">
+                <label>Plazo (días)</label>
+                <input type="number" id="pf-dias" value="32">
+              </div>
+            </div>
+            <div class="grid3" style="margin-bottom:4px;">
+              <div class="field">
+                <label>Cuenta</label>
+                <select id="pf-cuenta">
+                  <option value="4350106005">4350106005</option>
+                  <option value="4350110001">4350110001</option>
+                  <option value="4350120002">4350120002</option>
+                  <option value="4350130003">4350130003</option>
+                  <option value="4350180008">4350180008</option>
+                  <option value="4350200002">4350200002</option>
+                  <option value="4350210001">4350210001</option>
+                  <option value="4350260006">4350260006</option>
+                  <option value="4350280008">4350280008</option>
+                  <option value="4350290009">4350290009</option>
+                  <option value="4350300000">4350300000</option>
+                  <option value="4350310001">4350310001</option>
+                  <option value="4350320002">4350320002</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Moneda</label>
+                <input type="text" id="pf-moneda" value="U$D">
+              </div>
+              <div class="field">
+                <label>Tasa (%)</label>
+                <input type="number" step="0.01" id="pf-tasa" value="2.25">
+              </div>
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label>Monto (capital)</label>
+                <input type="number" step="0.01" id="pf-monto">
+              </div>
+              <div class="field">
+                <label>Fecha de acreditación/vencimiento</label>
+                <input type="date" id="pf-vencimiento">
+              </div>
+            </div>
+            <div class="field">
+              <label>Orden de firmas</label>
+              <select id="pf-firmas">
+                <option value="arcuri-erquiaga">Arcuri (izq.) / Erquiaga (der.)</option>
+                <option value="erquiaga-arcuri">Erquiaga (izq.) / Arcuri (der.)</option>
+              </select>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px;">El renglón izquierdo se firma en primer lugar, según se ve en las notas de referencia.</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="pf-btn-generar" onclick="pfGenerarDocx()" style="padding:10px 24px;">
+          <i class="ti ti-file-download"></i> Generar NOTA Plazo Fijo (.docx)
+        </button>
+        <span id="pf-generar-msg" style="margin-left:10px;font-size:12px;"></span>
+
+      </div>
+      <!-- ══════════ FIN TAB PLAZO FIJO ══════════ -->
 
     </div>
     <!-- ══════════ FIN NOTAS MIAMI ══════════ -->
@@ -12163,6 +12256,177 @@ async function nmGenerarDocx() {
   } catch (e) {
     console.error('nmGenerarDocx error:', e);
     nmSetMsg('nm-generar-msg', 'Error generando el documento: ' + e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// NOTAS MIAMI — selector de pestañas (Transferencia / Plazo Fijo)
+// ═══════════════════════════════════════════════════════
+function nmSwitchTab(tab) {
+  const tabs = ['transferencia', 'plazofijo'];
+  tabs.forEach(t => {
+    const panel = document.getElementById('nm-tab-' + t);
+    const btn = document.getElementById('nm-tabbtn-' + t);
+    if (!panel || !btn) return;
+    if (t === tab) {
+      panel.style.display = '';
+      btn.style.borderBottomColor = 'var(--verde)';
+      btn.style.color = 'var(--text)';
+      btn.style.fontWeight = '600';
+    } else {
+      panel.style.display = 'none';
+      btn.style.borderBottomColor = 'transparent';
+      btn.style.color = 'var(--muted)';
+      btn.style.fontWeight = '400';
+    }
+  });
+}
+
+// Autocompleta la fecha de vencimiento = fecha de la nota + días de plazo,
+// solo si el usuario todavía no la tocó a mano.
+let pfVencimientoTocadoAMano = false;
+function pfCalcularVencimiento() {
+  const fechaEl = document.getElementById('pf-fecha');
+  const diasEl = document.getElementById('pf-dias');
+  const vencEl = document.getElementById('pf-vencimiento');
+  if (!fechaEl || !diasEl || !vencEl || pfVencimientoTocadoAMano) return;
+  const fechaVal = fechaEl.value;
+  const dias = parseInt(diasEl.value || '0', 10);
+  if (!fechaVal || !dias) return;
+  const d = new Date(fechaVal + 'T00:00:00');
+  d.setDate(d.getDate() + dias);
+  vencEl.value = d.toISOString().slice(0, 10);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const pfFecha = document.getElementById('pf-fecha');
+  if (pfFecha && !pfFecha.value) pfFecha.valueAsDate = new Date();
+  document.getElementById('pf-fecha')?.addEventListener('input', pfCalcularVencimiento);
+  document.getElementById('pf-dias')?.addEventListener('input', pfCalcularVencimiento);
+  document.getElementById('pf-vencimiento')?.addEventListener('input', () => { pfVencimientoTocadoAMano = true; });
+  pfCalcularVencimiento();
+});
+
+function pfSetMsg(text, type) {
+  const el = document.getElementById('pf-generar-msg');
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = type === 'error' ? 'var(--danger)' : type === 'ok' ? 'var(--success)' : 'var(--warn)';
+}
+
+async function pfGenerarDocx() {
+  try {
+    if (typeof docx === 'undefined') {
+      pfSetMsg('Error: la librería docx no cargó (revisá tu conexión o bloqueador de scripts). Abrí la consola del navegador (F12) para más detalle.', 'error');
+      return;
+    }
+
+    const fechaVal = document.getElementById('pf-fecha').value;
+    const clave = document.getElementById('pf-clave').value;
+    const cuenta = document.getElementById('pf-cuenta').value;
+    const moneda = document.getElementById('pf-moneda').value || 'U$D';
+    const monto = parseFloat(document.getElementById('pf-monto').value || '0');
+    const dias = parseInt(document.getElementById('pf-dias').value || '0', 10);
+    const tasa = parseFloat(document.getElementById('pf-tasa').value || '0');
+    const vencimientoVal = document.getElementById('pf-vencimiento').value;
+    const ordenFirmas = document.getElementById('pf-firmas').value;
+
+    if (!fechaVal) { pfSetMsg('Falta la fecha de la nota.', 'error'); return; }
+    if (!clave) { pfSetMsg('Falta la clave.', 'error'); return; }
+    if (!cuenta) { pfSetMsg('Falta la cuenta.', 'error'); return; }
+    if (!monto) { pfSetMsg('Falta el monto.', 'error'); return; }
+    if (!dias) { pfSetMsg('Falta el plazo en días.', 'error'); return; }
+    if (!vencimientoVal) { pfSetMsg('Falta la fecha de vencimiento.', 'error'); return; }
+
+    const { Document, Packer, Paragraph, TextRun, AlignmentType, ImageRun, Table, TableRow, TableCell, WidthType, BorderStyle } = docx;
+
+    const d = new Date(fechaVal + 'T00:00:00');
+    const mesNombre = NM_MESES_NOMBRE[d.getMonth()];
+    const fechaTexto = `${d.getDate()} de ${mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)} de ${d.getFullYear()}`;
+
+    const dv = new Date(vencimientoVal + 'T00:00:00');
+    const vencTexto = `${String(dv.getDate()).padStart(2, '0')}-${String(dv.getMonth() + 1).padStart(2, '0')}-${dv.getFullYear()}`;
+
+    const montoTexto = monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    function par(text, opts) { return new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text, ...opts })] }); }
+
+    const firmantes = {
+      arcuri: { nombre: 'Cdor. Gerardo Arcuri', cargo: 'Gerente de Administración' },
+      erquiaga: { nombre: 'Gonzalo Erquiaga', cargo: 'Jefe de Compras\ny Contrataciones' },
+    };
+    const [firmaIzqKey, firmaDerKey] = ordenFirmas === 'erquiaga-arcuri' ? ['erquiaga', 'arcuri'] : ['arcuri', 'erquiaga'];
+    const firmaIzq = firmantes[firmaIzqKey];
+    const firmaDer = firmantes[firmaDerKey];
+
+    function bloqueFirma(f) {
+      const lineasCargo = f.cargo.split('\n');
+      const children = [
+        new Paragraph({ spacing: { before: 600, after: 40 }, children: [new TextRun({ text: f.nombre })] }),
+      ];
+      lineasCargo.forEach(l => children.push(new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: l, size: 20 })] })));
+      children.push(new Paragraph({ spacing: { after: 0 }, children: [new TextRun({ text: 'Fundación ArgenINTA', size: 20 })] }));
+      return children;
+    }
+
+    const tablaFirmas = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE },
+        left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE },
+        insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE },
+      },
+      rows: [
+        new TableRow({
+          children: [
+            new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: bloqueFirma(firmaIzq) }),
+            new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: bloqueFirma(firmaDer) }),
+          ],
+        }),
+      ],
+    });
+
+    const doc = new Document({
+      styles: { default: { document: { run: { font: 'Arial', size: 24 } } } },
+      sections: [{
+        properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+        children: [
+          new Paragraph({
+            spacing: { after: 200 },
+            children: [
+              new ImageRun({
+                data: nmBase64ToUint8(NM_LOGO_BASE64),
+                transformation: { width: 110, height: 36 },
+              }),
+            ],
+          }),
+          new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 40 }, children: [new TextRun({ text: `Buenos Aires, ${fechaTexto}` })] }),
+          new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 260 }, children: [new TextRun({ text: `Clave ${clave}` })] }),
+          par('Sres.'),
+          new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: 'Banco de la Nación Argentina', bold: true })] }),
+          new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: 'Sucursal: Miami', bold: true })] }),
+          par('Atentamente'),
+          par('Solicitamos por intermedio de la presente, se constituya un plazo fijo, autorizando el débito y acreditación al vencimiento, del capital más los intereses en la siguiente cuenta', { spacing: 220 }),
+          new Paragraph({ spacing: { before: 100, after: 20 }, children: [new TextRun({ text: `Cta. ${cuenta}: ${moneda} ${montoTexto} a ${dias} días - Tasa ${tasa}%` })] }),
+          new Paragraph({ spacing: { after: 320 }, children: [new TextRun({ text: `Fecha de acreditación/vencimiento será el ${vencTexto}` })] }),
+          par('Sin otro particular saludamos a Uds. muy atte.', { spacing: 200 }),
+          tablaFirmas,
+        ],
+      }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `NOTA_PLAZO_FIJO_${fechaVal}_${clave}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    pfSetMsg('Listo, .docx descargado.', 'ok');
+  } catch (e) {
+    console.error('pfGenerarDocx error:', e);
+    pfSetMsg('Error generando el documento: ' + e.message, 'error');
   }
 }
 
