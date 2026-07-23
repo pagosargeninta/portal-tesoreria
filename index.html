@@ -1979,8 +1979,10 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
                 <input type="date" id="pf-fecha">
               </div>
               <div class="field">
-                <label>Clave</label>
-                <input type="number" id="pf-clave" placeholder="ej: 753">
+                <label>Clave (calculada automático)</label>
+                <div style="text-align:center;padding:8px;background:var(--verde-claro);border-radius:var(--radius);">
+                  <div style="font-size:20px;font-weight:700;color:var(--verde);font-family:'JetBrains Mono',monospace;" id="pf-clave-display">—</div>
+                </div>
               </div>
               <div class="field">
                 <label>Plazo (días)</label>
@@ -2024,14 +2026,6 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
                 <label>Fecha de acreditación/vencimiento</label>
                 <input type="date" id="pf-vencimiento">
               </div>
-            </div>
-            <div class="field">
-              <label>Orden de firmas</label>
-              <select id="pf-firmas">
-                <option value="arcuri-erquiaga">Arcuri (izq.) / Erquiaga (der.)</option>
-                <option value="erquiaga-arcuri">Erquiaga (izq.) / Arcuri (der.)</option>
-              </select>
-              <div style="font-size:11px;color:var(--muted);margin-top:3px;">El renglón izquierdo se firma en primer lugar, según se ve en las notas de referencia.</div>
             </div>
           </div>
         </div>
@@ -12282,6 +12276,30 @@ function nmSwitchTab(tab) {
   });
 }
 
+// Clave del Plazo Fijo: misma fórmula que Notas Miami (transferencias),
+// verificado contra las dos notas de referencia (753 y 941) — coincide exacto.
+function pfCalcularClave() {
+  const fechaEl = document.getElementById('pf-fecha');
+  const montoEl = document.getElementById('pf-monto');
+  const dispEl = document.getElementById('pf-clave-display');
+  if (!fechaEl || !montoEl) return null;
+  const fechaVal = fechaEl.value;
+  const monto = parseFloat(montoEl.value || '0');
+  const totalSinCentavos = Math.floor(monto);
+
+  let s2 = totalSinCentavos === 0 ? NM_SIN_IMPORTE : nmDecompose(totalSinCentavos).reduce((a, b) => a + b, 0);
+  let s3 = 0, s4 = 0;
+  if (fechaVal) {
+    const d = new Date(fechaVal + 'T00:00:00');
+    s3 = NM_MESES_CIFRA[d.getMonth()];
+    s4 = NM_DIAS_CIFRA[d.getDate()] || 0;
+  }
+
+  const clave = fechaVal ? NM_NUMERO_FIJO + s2 + s3 + s4 : null;
+  if (dispEl) dispEl.textContent = clave ?? '—';
+  return clave;
+}
+
 // Autocompleta la fecha de vencimiento = fecha de la nota + días de plazo,
 // solo si el usuario todavía no la tocó a mano.
 let pfVencimientoTocadoAMano = false;
@@ -12302,9 +12320,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const pfFecha = document.getElementById('pf-fecha');
   if (pfFecha && !pfFecha.value) pfFecha.valueAsDate = new Date();
   document.getElementById('pf-fecha')?.addEventListener('input', pfCalcularVencimiento);
+  document.getElementById('pf-fecha')?.addEventListener('input', pfCalcularClave);
   document.getElementById('pf-dias')?.addEventListener('input', pfCalcularVencimiento);
+  document.getElementById('pf-monto')?.addEventListener('input', pfCalcularClave);
   document.getElementById('pf-vencimiento')?.addEventListener('input', () => { pfVencimientoTocadoAMano = true; });
   pfCalcularVencimiento();
+  pfCalcularClave();
 });
 
 function pfSetMsg(text, type) {
@@ -12322,14 +12343,13 @@ async function pfGenerarDocx() {
     }
 
     const fechaVal = document.getElementById('pf-fecha').value;
-    const clave = document.getElementById('pf-clave').value;
+    const clave = pfCalcularClave();
     const cuenta = document.getElementById('pf-cuenta').value;
     const moneda = document.getElementById('pf-moneda').value || 'U$D';
     const monto = parseFloat(document.getElementById('pf-monto').value || '0');
     const dias = parseInt(document.getElementById('pf-dias').value || '0', 10);
     const tasa = parseFloat(document.getElementById('pf-tasa').value || '0');
     const vencimientoVal = document.getElementById('pf-vencimiento').value;
-    const ordenFirmas = document.getElementById('pf-firmas').value;
 
     if (!fechaVal) { pfSetMsg('Falta la fecha de la nota.', 'error'); return; }
     if (!clave) { pfSetMsg('Falta la clave.', 'error'); return; }
@@ -12338,7 +12358,7 @@ async function pfGenerarDocx() {
     if (!dias) { pfSetMsg('Falta el plazo en días.', 'error'); return; }
     if (!vencimientoVal) { pfSetMsg('Falta la fecha de vencimiento.', 'error'); return; }
 
-    const { Document, Packer, Paragraph, TextRun, AlignmentType, ImageRun, Table, TableRow, TableCell, WidthType, BorderStyle } = docx;
+    const { Document, Packer, Paragraph, TextRun, AlignmentType, ImageRun } = docx;
 
     const d = new Date(fechaVal + 'T00:00:00');
     const mesNombre = NM_MESES_NOMBRE[d.getMonth()];
@@ -12351,40 +12371,7 @@ async function pfGenerarDocx() {
 
     function par(text, opts) { return new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text, ...opts })] }); }
 
-    const firmantes = {
-      arcuri: { nombre: 'Cdor. Gerardo Arcuri', cargo: 'Gerente de Administración' },
-      erquiaga: { nombre: 'Gonzalo Erquiaga', cargo: 'Jefe de Compras\ny Contrataciones' },
-    };
-    const [firmaIzqKey, firmaDerKey] = ordenFirmas === 'erquiaga-arcuri' ? ['erquiaga', 'arcuri'] : ['arcuri', 'erquiaga'];
-    const firmaIzq = firmantes[firmaIzqKey];
-    const firmaDer = firmantes[firmaDerKey];
-
-    function bloqueFirma(f) {
-      const lineasCargo = f.cargo.split('\n');
-      const children = [
-        new Paragraph({ spacing: { before: 600, after: 40 }, children: [new TextRun({ text: f.nombre })] }),
-      ];
-      lineasCargo.forEach(l => children.push(new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: l, size: 20 })] })));
-      children.push(new Paragraph({ spacing: { after: 0 }, children: [new TextRun({ text: 'Fundación ArgenINTA', size: 20 })] }));
-      return children;
-    }
-
-    const tablaFirmas = new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: {
-        top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE },
-        left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE },
-        insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE },
-      },
-      rows: [
-        new TableRow({
-          children: [
-            new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: bloqueFirma(firmaIzq) }),
-            new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: bloqueFirma(firmaDer) }),
-          ],
-        }),
-      ],
-    });
+    const espacioFirmas = new Paragraph({ spacing: { before: 900, after: 0 }, children: [new TextRun({ text: '' })] });
 
     const doc = new Document({
       styles: { default: { document: { run: { font: 'Arial', size: 24 } } } },
@@ -12410,7 +12397,7 @@ async function pfGenerarDocx() {
           new Paragraph({ spacing: { before: 100, after: 20 }, children: [new TextRun({ text: `Cta. ${cuenta}: ${moneda} ${montoTexto} a ${dias} días - Tasa ${tasa}%` })] }),
           new Paragraph({ spacing: { after: 320 }, children: [new TextRun({ text: `Fecha de acreditación/vencimiento será el ${vencTexto}` })] }),
           par('Sin otro particular saludamos a Uds. muy atte.', { spacing: 200 }),
-          tablaFirmas,
+          espacioFirmas,
         ],
       }],
     });
