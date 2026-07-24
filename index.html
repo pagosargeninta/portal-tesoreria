@@ -5959,13 +5959,19 @@ async function honBuscarLineaContrato(partnerId, montoRef) {
     const ordenes = await odooCall('purchase.order', 'search_read',
       [[['partner_id', '=', partnerId], ['state', '=', 'purchase'], ['invoice_status', '!=', 'invoiced']]],
       { fields: ['id', 'name'], order: 'id desc', limit: 10 });
-    if (!ordenes?.length) return null;
+    if (!ordenes?.length) {
+      console.info(`[contrato] partner #${partnerId}: sin órdenes de compra pendientes (state=purchase, invoice_status!=invoiced).`);
+      return null;
+    }
 
     const orderIds = ordenes.map(o => o.id);
     const lineas = await odooCall('purchase.order.line', 'search_read',
       [[['order_id', 'in', orderIds], ['qty_to_invoice', '!=', 0]]],
       { fields: ['id', 'order_id', 'product_id', 'name', 'price_unit', 'product_qty', 'qty_invoiced', 'qty_to_invoice', 'taxes_id', 'analytic_distribution'] });
-    if (!lineas?.length) return null;
+    if (!lineas?.length) {
+      console.info(`[contrato] partner #${partnerId}: OC encontradas (${ordenes.map(o=>o.name).join(', ')}) pero ninguna línea con qty_to_invoice != 0 — puede que ya estén completamente facturadas.`);
+      return null;
+    }
 
     let elegida = null;
     if (lineas.length === 1) {
@@ -5976,7 +5982,15 @@ async function honBuscarLineaContrato(partnerId, montoRef) {
       elegida = lineas.find(l => Math.round(l.price_unit * 100) === Math.round(montoRef * 100)) || null;
     }
 
-    if (!elegida) return { multiples: true, lineas, ordenes };
+    if (!elegida) {
+      console.info(
+        `[contrato] partner #${partnerId}: ${lineas.length} línea(s) pendiente(s), ninguna coincide EXACTO con el monto extraído de la factura ($${montoRef}).\n` +
+        `Monto buscado: ${montoRef}\n` +
+        'Líneas candidatas (OC — price_unit):\n' +
+        lineas.map(l => `  · ${ordenes.find(o=>o.id===l.order_id[0])?.name || l.order_id[1]} — price_unit: ${l.price_unit}`).join('\n')
+      );
+      return { multiples: true, lineas, ordenes };
+    }
 
     const orden = ordenes.find(o => o.id === elegida.order_id[0]) || ordenes[0];
     return { linea: elegida, orden, multiples: false };
@@ -6479,9 +6493,10 @@ async function honProcesar() {
           estadoResumen = 'LISTA — desde contrato';
           detalleResumen = `Contrato: ${contratoUsable.orden?.name || ''}`;
         } else if (contratoEncontrado?.multiples) {
-          contratoBadge = '<span class="badge badge-warn" title="Varias líneas de contrato pendientes, ninguna coincide exacto con el monto — revisar a mano">⚠ Revisar (multi-línea)</span>';
+          const preciosCandidatos = contratoEncontrado.lineas.map(l => l.price_unit).join(' / ');
+          contratoBadge = `<span class="badge badge-warn" title="Buscado: $${montoRef} — precios en contrato: ${preciosCandidatos} — revisar a mano">⚠ Revisar (multi-línea)</span>`;
           estadoResumen = 'REVISAR — múltiples líneas de contrato, sin match exacto';
-          detalleResumen = `${contratoEncontrado.lineas.length} líneas pendientes en ${contratoEncontrado.ordenes.map(o=>o.name).join(', ')}`;
+          detalleResumen = `Monto buscado: $${montoRef}. ${contratoEncontrado.lineas.length} líneas pendientes en ${contratoEncontrado.ordenes.map(o=>o.name).join(', ')} — precios: ${preciosCandidatos}`;
         } else {
           contratoBadge = '<span class="badge badge-muted" title="Sin contrato/OC pendiente encontrado — línea armada desde el PDF">✎ Sin contrato</span>';
           estadoResumen = 'REVISAR — sin contrato encontrado';
