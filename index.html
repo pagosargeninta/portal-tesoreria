@@ -5902,13 +5902,20 @@ async function honExtractWithClaude(file, intentos) {
         throw new Error('CUIT de Fundacion detectado');
       }
 
-      // El CUIT extraído no pasa el dígito verificador de AFIP: muy probablemente
-      // la IA tomó Ingresos Brutos, Convenio Multilateral u otro número de 11
-      // dígitos por error. Reintentar forzando modo visual (con el layout intacto)
-      // en vez de devolver un dato que sabemos matemáticamente inválido.
-      if (cuitLimpio && !honCuitValido(cuitLimpio)) {
+      // El CUIT extraído no pasa el dígito verificador de AFIP (probablemente
+      // tomó Ingresos Brutos/CM), o vino directamente VACÍO — esto último pasa
+      // seguido en modo texto: pdf.js extrae el contenido en el orden interno
+      // de dibujo del PDF, no en el orden visual, y en algunas facturas de
+      // AFIP el número de CUIT del emisor queda "flotando" lejos de la
+      // palabra "CUIT:" mientras que la única etiqueta bien pegada es la del
+      // receptor (Fundación, prohibida) — la IA se queda sin nada que
+      // devolver. En ambos casos reintentamos forzando modo visual, que sí
+      // ve el layout real de la factura.
+      if (!cuitLimpio || !honCuitValido(cuitLimpio)) {
         if (intento < intentos) {
-          notaExtra = '\nATENCION: el CUIT "' + cuitLimpio + '" que devolviste NO es un CUIT valido (no pasa el digito verificador de AFIP). Seguramente confundiste el CUIT con el numero de Ingresos Brutos, Convenio Multilateral, u otro numero de 11 digitos de la factura. Busca de nuevo el numero que esta literalmente al lado de la palabra "CUIT" o "C.U.I.T." del EMISOR (arriba de la factura, no el receptor).';
+          notaExtra = cuitLimpio
+            ? '\nATENCION: el CUIT "' + cuitLimpio + '" que devolviste NO es un CUIT valido (no pasa el digito verificador de AFIP). Seguramente confundiste el CUIT con el numero de Ingresos Brutos, Convenio Multilateral, u otro numero de 11 digitos de la factura. Busca de nuevo el numero que esta literalmente al lado de la palabra "CUIT" o "C.U.I.T." del EMISOR (arriba de la factura, no el receptor).'
+            : '\nATENCION: no devolviste ningun CUIT. El texto plano de esta factura puede tener el orden de las palabras desordenado (el numero de CUIT del emisor puede aparecer separado de la palabra "CUIT"). Mira con cuidado TODOS los numeros de 11 digitos del documento e identifica cual es el CUIT del EMISOR (arriba de la factura) por su posicion visual, no solo por tener la palabra "CUIT" pegada al lado.';
           usarTexto = false; // forzar modo visual desde el próximo intento
           await new Promise(function(r){ setTimeout(r, 500); });
           continue;
@@ -5941,9 +5948,19 @@ async function honExtractWithClaude(file, intentos) {
 async function honResolverPartner(datos) {
   if (!datos.cuit) return { id: null, duplicado: false };
   const cuitClean = datos.cuit.replace(/\D/g, '');
-  const partners = await odooCall('res.partner', 'search_read',
-    [[['vat', 'like', cuitClean]]], { fields: ['id', 'name'] });
-  if (!partners?.length) return { id: null, duplicado: false };
+  if (cuitClean.length !== 11) return { id: null, duplicado: false };
+
+  // Buscamos por los 8 dígitos centrales del CUIT: quedan contiguos sin
+  // importar cómo esté formateado el campo "vat" en Odoo (con guiones,
+  // espacios, o sin nada) — evita el falso negativo de comparar substrings
+  // exactas cuando el proveedor tiene el CUIT cargado con guiones
+  // (ej: "30-71234567-8") y por eso no matcheaba antes aunque existiera.
+  const nucleo = cuitClean.slice(2, 10);
+  const candidatos = await odooCall('res.partner', 'search_read',
+    [[['vat', 'like', nucleo]]], { fields: ['id', 'name', 'vat'] });
+  const partners = (candidatos || []).filter(p => (p.vat || '').replace(/\D/g, '') === cuitClean);
+
+  if (!partners.length) return { id: null, duplicado: false };
   if (partners.length > 1) return { id: null, duplicado: true, candidatos: partners };
   return { id: partners[0].id, duplicado: false };
 }
