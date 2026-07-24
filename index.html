@@ -1822,17 +1822,6 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
     <!-- ══════════ NOTAS MIAMI ══════════ -->
     <div id="page-notasmiami" class="page">
 
-      <div class="tabs" style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--border);">
-        <div id="nm-tabbtn-transferencia" class="nav-item" onclick="nmSwitchTab('transferencia')" style="border-left:none;border-bottom:2px solid var(--verde);color:var(--text);font-weight:600;padding:8px 14px;cursor:pointer;">
-          <i class="ti ti-world"></i> Transferencia al exterior
-        </div>
-        <div id="nm-tabbtn-plazofijo" class="nav-item" onclick="nmSwitchTab('plazofijo')" style="border-left:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 14px;cursor:pointer;">
-          <i class="ti ti-calendar-time"></i> Plazo fijo
-        </div>
-      </div>
-
-      <div id="nm-tab-transferencia">
-
       <div class="grid2" style="margin-bottom:16px;">
         <div class="card">
           <div class="card-header">
@@ -1961,82 +1950,6 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
         <i class="ti ti-file-download"></i> Generar NOTA (.docx)
       </button>
       <span id="nm-generar-msg" style="margin-left:10px;font-size:12px;"></span>
-
-      </div>
-      <!-- ══════════ FIN TAB TRANSFERENCIA ══════════ -->
-
-      <!-- ══════════ TAB PLAZO FIJO ══════════ -->
-      <div id="nm-tab-plazofijo" style="display:none;">
-
-        <div class="card" style="margin-bottom:16px;">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-clipboard-text"></i> Datos del plazo fijo</div>
-          </div>
-          <div class="card-body">
-            <div class="grid3" style="margin-bottom:4px;">
-              <div class="field">
-                <label>Fecha de la nota</label>
-                <input type="date" id="pf-fecha">
-              </div>
-              <div class="field">
-                <label>Clave (calculada automático)</label>
-                <div style="text-align:center;padding:8px;background:var(--verde-claro);border-radius:var(--radius);">
-                  <div style="font-size:20px;font-weight:700;color:var(--verde);font-family:'JetBrains Mono',monospace;" id="pf-clave-display">—</div>
-                </div>
-              </div>
-              <div class="field">
-                <label>Plazo (días)</label>
-                <input type="number" id="pf-dias" value="32">
-              </div>
-            </div>
-            <div class="grid3" style="margin-bottom:4px;">
-              <div class="field">
-                <label>Cuenta</label>
-                <select id="pf-cuenta">
-                  <option value="4350106005">4350106005</option>
-                  <option value="4350110001">4350110001</option>
-                  <option value="4350120002">4350120002</option>
-                  <option value="4350130003">4350130003</option>
-                  <option value="4350180008">4350180008</option>
-                  <option value="4350200002">4350200002</option>
-                  <option value="4350210001">4350210001</option>
-                  <option value="4350260006">4350260006</option>
-                  <option value="4350280008">4350280008</option>
-                  <option value="4350290009">4350290009</option>
-                  <option value="4350300000">4350300000</option>
-                  <option value="4350310001">4350310001</option>
-                  <option value="4350320002">4350320002</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Moneda</label>
-                <input type="text" id="pf-moneda" value="U$D">
-              </div>
-              <div class="field">
-                <label>Tasa (%)</label>
-                <input type="number" step="0.01" id="pf-tasa" value="2.25">
-              </div>
-            </div>
-            <div class="grid2">
-              <div class="field">
-                <label>Monto (capital)</label>
-                <input type="number" step="0.01" id="pf-monto">
-              </div>
-              <div class="field">
-                <label>Fecha de acreditación/vencimiento</label>
-                <input type="date" id="pf-vencimiento">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <button class="btn btn-primary" id="pf-btn-generar" onclick="pfGenerarDocx()" style="padding:10px 24px;">
-          <i class="ti ti-file-download"></i> Generar NOTA Plazo Fijo (.docx)
-        </button>
-        <span id="pf-generar-msg" style="margin-left:10px;font-size:12px;"></span>
-
-      </div>
-      <!-- ══════════ FIN TAB PLAZO FIJO ══════════ -->
 
     </div>
     <!-- ══════════ FIN NOTAS MIAMI ══════════ -->
@@ -5855,6 +5768,23 @@ async function honAdjuntarPDF(file, invoiceId, intentos = 3) {
 }
 
 // ── Llama a Claude para extraer datos del PDF ──
+// ── Valida un CUIT con el algoritmo de dígito verificador de AFIP ──
+// Sirve para detectar cuando la IA tomó por error otro número de 11 dígitos
+// (Ingresos Brutos, Convenio Multilateral, etc.) en vez del CUIT real: esos
+// números no tienen por qué cumplir esta fórmula, así que casi siempre queda
+// detectado matemáticamente, sin depender de que la IA "se dé cuenta".
+function honCuitValido(cuit) {
+  if (!/^\d{11}$/.test(cuit)) return false;
+  var mult = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  var suma = 0;
+  for (var i = 0; i < 10; i++) suma += parseInt(cuit[i], 10) * mult[i];
+  var resto = suma % 11;
+  var verificador = 11 - resto;
+  if (verificador === 11) verificador = 0;
+  if (verificador === 10) return false; // no existe CUIT válido con este cálculo
+  return verificador === parseInt(cuit[10], 10);
+}
+
 async function honExtractWithClaude(file, intentos) {
   if (intentos === undefined) intentos = 4;
   var claudeKey = localStorage.getItem('claude_key');
@@ -5887,7 +5817,8 @@ async function honExtractWithClaude(file, intentos) {
         '- ARRIBA: datos del EMISOR (prestador/vendedor) con su CUIT\n' +
         '- ABAJO: seccion Datos del receptor con CUIT 30676303657 (Fundacion ArgenINTA = RECEPTOR)\n\n' +
         'REGLAS:\n' +
-        '- cuit = CUIT del EMISOR de arriba. NUNCA 30676303657.\n' +
+        '- cuit = SOLO el numero que esta explicitamente etiquetado como "CUIT" o "C.U.I.T." del EMISOR de arriba. NUNCA 30676303657.\n' +
+        '- OJO: muchas facturas tienen OTROS numeros de 11 digitos parecidos a un CUIT, como "Ingresos Brutos" (IIBB), "Convenio Multilateral" (CM) o un numero de inscripcion provincial. NO son el CUIT. Fijate bien la etiqueta al lado de cada numero antes de elegir.\n' +
         '- nro_factura = numero completo como 00001-00000123\n' +
         '- fecha = YYYY-MM-DD (si ves DD/MM/YYYY convertila)\n' +
         '- montos = numeros sin puntos de miles ni signo pesos\n' +
@@ -5969,6 +5900,23 @@ async function honExtractWithClaude(file, intentos) {
           continue;
         }
         throw new Error('CUIT de Fundacion detectado');
+      }
+
+      // El CUIT extraído no pasa el dígito verificador de AFIP: muy probablemente
+      // la IA tomó Ingresos Brutos, Convenio Multilateral u otro número de 11
+      // dígitos por error. Reintentar forzando modo visual (con el layout intacto)
+      // en vez de devolver un dato que sabemos matemáticamente inválido.
+      if (cuitLimpio && !honCuitValido(cuitLimpio)) {
+        if (intento < intentos) {
+          notaExtra = '\nATENCION: el CUIT "' + cuitLimpio + '" que devolviste NO es un CUIT valido (no pasa el digito verificador de AFIP). Seguramente confundiste el CUIT con el numero de Ingresos Brutos, Convenio Multilateral, u otro numero de 11 digitos de la factura. Busca de nuevo el numero que esta literalmente al lado de la palabra "CUIT" o "C.U.I.T." del EMISOR (arriba de la factura, no el receptor).';
+          usarTexto = false; // forzar modo visual desde el próximo intento
+          await new Promise(function(r){ setTimeout(r, 500); });
+          continue;
+        }
+        // Se agotaron los intentos: devolver igual, pero con confianza baja y
+        // aviso explícito para que quede marcado en el resumen como "revisar".
+        parsed.confidence = Math.min(parsed.confidence || 0, 40);
+        parsed._cuit_no_validado = true;
       }
 
       if (parsed.fecha) {
@@ -6126,14 +6074,18 @@ function honColorEstado(estado) {
   return 'FFFFFFFF';
 }
 
-// ── Genera y descarga un Excel prolijo con el estado de cada operación de la carga ──
-// Hoja "Resumen": contadores por estado + totales. Hoja "Detalle": una fila por PDF procesado.
-async function honDescargarResumen(filas) {
+// ── Genera y descarga un INFORME completo de la carga, con varias hojas ──
+// 1) Portada — carta, fecha, totales grandes
+// 2) Resumen ejecutivo — contadores y montos por estado, % de éxito
+// 3) Por proveedor — agrupado, para detectar proveedores con problemas recurrentes
+// 4) A revisar — solo lo que necesita acción humana, ordenado por gravedad
+// 5) Detalle — una fila por PDF procesado (como antes)
+async function honDescargarResumen(filas, cartaNombre) {
   if (!filas.length) return;
   try {
     await honCargarExcelJS();
   } catch (e) {
-    console.warn('ExcelJS no disponible, no se genera el resumen descargable:', e.message);
+    console.warn('ExcelJS no disponible, no se genera el informe descargable:', e.message);
     showToast('No se pudo generar el Excel de resumen (sin conexión a CDN)', 'err');
     return;
   }
@@ -6142,36 +6094,222 @@ async function honDescargarResumen(filas) {
   wb.creator = 'Portal de Tesorería — Fundación ArgenINTA';
   wb.created = new Date();
 
-  const VERDE = 'FF27AE60', VERDE_TXT = 'FFFFFFFF';
+  const VERDE = 'FF27AE60', VERDE_TXT = 'FFFFFFFF', GRIS_TXT = 'FF4A6555';
+  const parseNum = v => parseFloat(String(v || '0').replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
+  const fmtMoneda = n => '$' + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  const ahora = new Date();
 
-  // ── Hoja 1: Resumen ──
-  const wsR = wb.addWorksheet('Resumen', { views: [{ showGridLines: false }] });
-  wsR.columns = [{ width: 34 }, { width: 16 }];
-  wsR.mergeCells('A1:B1');
-  wsR.getCell('A1').value = 'Resumen de carga — Honorarios';
-  wsR.getCell('A1').font = { bold: true, size: 14, color: { argb: VERDE } };
-  wsR.getCell('A2').value = 'Generado';
-  wsR.getCell('B2').value = new Date().toLocaleString('es-AR');
-  wsR.getCell('A2').font = { italic: true, color: { argb: 'FF4A6555' } };
-  wsR.getCell('B2').font = { italic: true, color: { argb: 'FF4A6555' } };
+  // Clasificación de severidad para ordenar "A revisar" (mayor = más urgente)
+  const severidad = estado => {
+    if (estado === 'ERROR') return 5;
+    if (estado.startsWith('REVISAR — CUIT duplicado') || estado.startsWith('REVISAR — PROVEEDOR DUPLICADO')) return 4;
+    if (estado.startsWith('REVISAR — múltiples')) return 3;
+    if (estado.startsWith('REVISAR')) return 2;
+    if (estado.startsWith('HECHO — PROVEEDOR DUPLICADO')) return 1;
+    return 0; // LISTA
+  };
 
-  const conteos = {};
-  filas.forEach(f => { conteos[f.estado] = (conteos[f.estado] || 0) + 1; });
+  const montoTotal = filas.reduce((s, f) => s + parseNum(f.total), 0);
+  const listas = filas.filter(f => f.estado.startsWith('LISTA'));
+  const aRevisar = filas.filter(f => severidad(f.estado) > 0).sort((a, b) => severidad(b.estado) - severidad(a.estado));
+  const errores = filas.filter(f => f.estado === 'ERROR');
+  const conPdf = filas.filter(f => f.pdf_adjunto === 'SI').length;
+  const pctExito = filas.length ? Math.round(listas.length / filas.length * 100) : 0;
 
-  let row = 4;
-  wsR.getCell(`A${row}`).value = 'Total procesadas';
-  wsR.getCell(`B${row}`).value = filas.length;
-  wsR.getRow(row).font = { bold: true };
-  row++;
-  Object.keys(conteos).sort().forEach(estado => {
-    wsR.getCell(`A${row}`).value = estado;
-    wsR.getCell(`B${row}`).value = conteos[estado];
-    wsR.getCell(`A${row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: honColorEstado(estado) } };
-    wsR.getCell(`B${row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: honColorEstado(estado) } };
-    row++;
+  // ══════════════════════════════════════════════════════════
+  // HOJA 1 — PORTADA
+  // ══════════════════════════════════════════════════════════
+  const wsP = wb.addWorksheet('Portada', { views: [{ showGridLines: false }] });
+  wsP.columns = [{ width: 4 }, { width: 34 }, { width: 22 }, { width: 4 }];
+  wsP.mergeCells('B2:C2');
+  wsP.getCell('B2').value = 'Informe de carga de Honorarios';
+  wsP.getCell('B2').font = { bold: true, size: 18, color: { argb: VERDE } };
+  wsP.mergeCells('B3:C3');
+  wsP.getCell('B3').value = 'Fundación ArgenINTA — Portal de Tesorería';
+  wsP.getCell('B3').font = { italic: true, size: 11, color: { argb: GRIS_TXT } };
+
+  let pr = 5;
+  const ficha = [
+    ['Carta / Convenio', cartaNombre || '—'],
+    ['Fecha del informe', ahora.toLocaleString('es-AR')],
+    ['Facturas procesadas', filas.length],
+    ['Monto total procesado', fmtMoneda(montoTotal)],
+  ];
+  ficha.forEach(([k, v]) => {
+    wsP.getCell(`B${pr}`).value = k;
+    wsP.getCell(`B${pr}`).font = { bold: true, color: { argb: GRIS_TXT } };
+    wsP.getCell(`C${pr}`).value = v;
+    pr++;
   });
 
-  // ── Hoja 2: Detalle ──
+  pr += 1;
+  // Tarjetas grandes tipo "KPI" con color según resultado
+  const kpis = [
+    { label: 'LISTAS PARA CONFIRMAR', valor: listas.length, color: 'FFE8F8EE', texto: 'FF1E8449' },
+    { label: 'A REVISAR', valor: aRevisar.length, color: 'FFFEFCE8', texto: 'FFA16207' },
+    { label: 'ERRORES', valor: errores.length, color: 'FFFEF2F2', texto: 'FFC0392B' },
+    { label: 'CON PDF ADJUNTO', valor: `${conPdf} / ${filas.length}`, color: 'FFEEF4FF', texto: 'FF1A5C9E' },
+  ];
+  kpis.forEach(k => {
+    wsP.getCell(`B${pr}`).value = k.label;
+    wsP.getCell(`B${pr}`).font = { bold: true, size: 10, color: { argb: k.texto } };
+    wsP.getCell(`B${pr}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: k.color } };
+    wsP.getCell(`C${pr}`).value = k.valor;
+    wsP.getCell(`C${pr}`).font = { bold: true, size: 14, color: { argb: k.texto } };
+    wsP.getCell(`C${pr}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: k.color } };
+    wsP.getRow(pr).height = 22;
+    pr++;
+  });
+
+  pr += 1;
+  wsP.getCell(`B${pr}`).value = `% de facturas que quedaron listas sin tocar nada: ${pctExito}%`;
+  wsP.getCell(`B${pr}`).font = { bold: true, size: 12, color: { argb: pctExito >= 70 ? 'FF1E8449' : pctExito >= 40 ? 'FFA16207' : 'FFC0392B' } };
+  pr += 2;
+  wsP.getCell(`B${pr}`).value = 'Ver hoja "A revisar" para la lista de acciones pendientes.';
+  wsP.getCell(`B${pr}`).font = { italic: true, size: 10, color: { argb: GRIS_TXT } };
+
+  // ══════════════════════════════════════════════════════════
+  // HOJA 2 — RESUMEN EJECUTIVO (por estado, con montos)
+  // ══════════════════════════════════════════════════════════
+  const wsR = wb.addWorksheet('Resumen ejecutivo', { views: [{ showGridLines: false }] });
+  wsR.columns = [{ width: 38 }, { width: 14 }, { width: 18 }, { width: 12 }];
+  wsR.mergeCells('A1:D1');
+  wsR.getCell('A1').value = 'Resumen por estado';
+  wsR.getCell('A1').font = { bold: true, size: 14, color: { argb: VERDE } };
+
+  const headRow2 = wsR.getRow(3);
+  ['Estado', 'Cantidad', 'Monto', '% del total'].forEach((h, i) => {
+    const c = headRow2.getCell(i + 1);
+    c.value = h;
+    c.font = { bold: true, color: { argb: VERDE_TXT } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
+  });
+
+  const conteoPorEstado = {};
+  filas.forEach(f => {
+    if (!conteoPorEstado[f.estado]) conteoPorEstado[f.estado] = { cant: 0, monto: 0 };
+    conteoPorEstado[f.estado].cant++;
+    conteoPorEstado[f.estado].monto += parseNum(f.total);
+  });
+
+  let row2 = 4;
+  Object.keys(conteoPorEstado).sort((a, b) => severidad(b) - severidad(a)).forEach(estado => {
+    const d = conteoPorEstado[estado];
+    const color = honColorEstado(estado);
+    wsR.getCell(`A${row2}`).value = estado;
+    wsR.getCell(`B${row2}`).value = d.cant;
+    wsR.getCell(`C${row2}`).value = d.monto;
+    wsR.getCell(`C${row2}`).numFmt = '#,##0.00';
+    wsR.getCell(`D${row2}`).value = filas.length ? d.cant / filas.length : 0;
+    wsR.getCell(`D${row2}`).numFmt = '0%';
+    ['A', 'B', 'C', 'D'].forEach(col => {
+      wsR.getCell(`${col}${row2}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+    });
+    row2++;
+  });
+  wsR.getCell(`A${row2}`).value = 'TOTAL';
+  wsR.getCell(`A${row2}`).font = { bold: true };
+  wsR.getCell(`B${row2}`).value = filas.length;
+  wsR.getCell(`B${row2}`).font = { bold: true };
+  wsR.getCell(`C${row2}`).value = montoTotal;
+  wsR.getCell(`C${row2}`).numFmt = '#,##0.00';
+  wsR.getCell(`C${row2}`).font = { bold: true };
+
+  // ══════════════════════════════════════════════════════════
+  // HOJA 3 — POR PROVEEDOR
+  // ══════════════════════════════════════════════════════════
+  const wsPv = wb.addWorksheet('Por proveedor', { views: [{ state: 'frozen', ySplit: 1, showGridLines: false }] });
+  const headersPv = ['Proveedor', 'CUIT', 'Facturas', 'Monto total', 'Listas', 'A revisar', 'Estados'];
+  wsPv.columns = [
+    { header: headersPv[0], key: 'proveedor', width: 32 },
+    { header: headersPv[1], key: 'cuit',      width: 15 },
+    { header: headersPv[2], key: 'cant',      width: 10 },
+    { header: headersPv[3], key: 'monto',     width: 16 },
+    { header: headersPv[4], key: 'listas',    width: 9 },
+    { header: headersPv[5], key: 'revisar',   width: 10 },
+    { header: headersPv[6], key: 'estados',   width: 44 },
+  ];
+  wsPv.getRow(1).eachCell(c => {
+    c.font = { bold: true, color: { argb: VERDE_TXT } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
+  });
+  wsPv.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headersPv.length } };
+
+  const porProveedor = {};
+  filas.forEach(f => {
+    const key = (f.cuit || f.proveedor || 'sin dato').trim() || 'sin dato';
+    if (!porProveedor[key]) porProveedor[key] = { proveedor: f.proveedor || '—', cuit: f.cuit || '—', cant: 0, monto: 0, listas: 0, revisar: 0, estados: new Set() };
+    const p = porProveedor[key];
+    p.cant++;
+    p.monto += parseNum(f.total);
+    if (f.estado.startsWith('LISTA')) p.listas++; else if (severidad(f.estado) > 0) p.revisar++;
+    p.estados.add(f.estado);
+  });
+
+  Object.values(porProveedor).sort((a, b) => b.revisar - a.revisar || b.monto - a.monto).forEach(p => {
+    const r = wsPv.addRow({
+      proveedor: p.proveedor, cuit: p.cuit, cant: p.cant, monto: p.monto,
+      listas: p.listas, revisar: p.revisar, estados: [...p.estados].join(' · ')
+    });
+    r.getCell('monto').numFmt = '#,##0.00';
+    if (p.revisar > 0) {
+      ['proveedor', 'cuit', 'cant', 'monto', 'listas', 'revisar', 'estados'].forEach(k => {
+        r.getCell(k).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEFCE8' } };
+      });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // HOJA 4 — A REVISAR (solo lo que necesita acción)
+  // ══════════════════════════════════════════════════════════
+  const wsAR = wb.addWorksheet('A revisar', { views: [{ state: 'frozen', ySplit: 1, showGridLines: false }] });
+  const headersAR = ['Prioridad', 'Archivo', 'Proveedor', 'CUIT', 'Total', 'ID Odoo', 'Estado', 'Qué hacer'];
+  wsAR.columns = [
+    { header: headersAR[0], key: 'prioridad', width: 11 },
+    { header: headersAR[1], key: 'archivo',   width: 28 },
+    { header: headersAR[2], key: 'proveedor', width: 28 },
+    { header: headersAR[3], key: 'cuit',      width: 15 },
+    { header: headersAR[4], key: 'total',     width: 14 },
+    { header: headersAR[5], key: 'odoo_id',   width: 10 },
+    { header: headersAR[6], key: 'estado',    width: 34 },
+    { header: headersAR[7], key: 'detalle',   width: 46 },
+  ];
+  wsAR.getRow(1).eachCell(c => {
+    c.font = { bold: true, color: { argb: VERDE_TXT } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
+  });
+  wsAR.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headersAR.length } };
+
+  const etiquetaPrioridad = s => s === 5 ? 'URGENTE' : s === 4 ? 'ALTA' : s === 3 ? 'MEDIA' : s === 2 ? 'MEDIA' : 'BAJA';
+
+  if (aRevisar.length === 0) {
+    wsAR.mergeCells('A2:H2');
+    wsAR.getCell('A2').value = '✓ No hay nada pendiente de revisión — todas las facturas quedaron listas.';
+    wsAR.getCell('A2').font = { bold: true, color: { argb: 'FF1E8449' } };
+    wsAR.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F8EE' } };
+  } else {
+    aRevisar.forEach(f => {
+      const sev = severidad(f.estado);
+      const r = wsAR.addRow({
+        prioridad: etiquetaPrioridad(sev), archivo: f.archivo, proveedor: f.proveedor, cuit: f.cuit,
+        total: f.total, odoo_id: f.odoo_id, estado: f.estado, detalle: f.detalle
+      });
+      const color = honColorEstado(f.estado);
+      r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } }; });
+      r.getCell('total').numFmt = '#,##0.00';
+      if (f.odoo_id) {
+        const baseUrl = (JSON.parse(localStorage.getItem('odoo_config') || '{}').url || localStorage.getItem('odoo_url') || 'https://argeninta.odoo.com').replace(/\/$/, '');
+        r.getCell('odoo_id').value = { text: String(f.odoo_id), hyperlink: `${baseUrl}/odoo/accounting/${f.odoo_id}` };
+        r.getCell('odoo_id').font = { color: { argb: 'FF1A5C9E' }, underline: true };
+      }
+    });
+    wsAR.getColumn('estado').alignment = { wrapText: true };
+    wsAR.getColumn('detalle').alignment = { wrapText: true };
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // HOJA 5 — DETALLE (todas las filas, como antes)
+  // ══════════════════════════════════════════════════════════
   const wsD = wb.addWorksheet('Detalle', { views: [{ state: 'frozen', ySplit: 1, showGridLines: false }] });
   const headers = ['Archivo', 'Proveedor', 'CUIT', 'Nro Factura', 'Total', 'Confianza IA %', 'ID Odoo', 'PDF adjunto', 'Estado', 'Detalle'];
   wsD.columns = [
@@ -6214,7 +6352,7 @@ async function honDescargarResumen(filas) {
   const a = document.createElement('a');
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   a.href = url;
-  a.download = `resumen_honorarios_${ts}.xlsx`;
+  a.download = `informe_honorarios_${ts}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -6225,6 +6363,8 @@ async function honDescargarResumen(filas) {
 async function honProcesar() {
   const cartaId = parseInt(document.getElementById('hon-sel-carta').value);
   if (!cartaId) return showToast('Seleccioná una carta', 'err');
+  const cartaSelEl = document.getElementById('hon-sel-carta');
+  const cartaNombre = cartaSelEl.options[cartaSelEl.selectedIndex]?.text || `Carta #${cartaId}`;
   if (!honFiles.length) return showToast('Subí al menos un PDF', 'err');
   const claudeKey = localStorage.getItem('claude_key');
   if (!claudeKey) return showToast('Configurá la API key de Claude en Configuración', 'err');
@@ -6316,7 +6456,11 @@ async function honProcesar() {
           : '<span class="badge badge-warn" title="Sin PDF">⚠</span>';
 
         let contratoBadge, estadoResumen, detalleResumen;
-        if (esDuplicado && usoContrato) {
+        if (datos._cuit_no_validado) {
+          contratoBadge = `<span class="badge badge-danger" title="El CUIT extraído (${datos.cuit || '—'}) no pasa el dígito verificador de AFIP — la IA probablemente confundió CUIT con Ingresos Brutos/CM. No se buscó proveedor ni contrato.">⚠ CUIT inválido (revisar PDF)</span>`;
+          estadoResumen = 'REVISAR — CUIT no válido (posible confusión con IIBB)';
+          detalleResumen = `CUIT extraído: ${datos.cuit || '—'} — no pasa el dígito verificador de AFIP. Abrir el PDF y corregir el CUIT manualmente.`;
+        } else if (esDuplicado && usoContrato) {
           const nombres = resPartner.candidatos.map(c => `#${c.id} ${c.name}`).join(' / ');
           contratoBadge = `<span class="badge badge-warn" title="Proveedor duplicado en Odoo (${nombres}) — se usó el contrato de #${partnerId}. Corregir el maestro de proveedores.">📑 Contrato · ⚠ Duplicado</span>`;
           estadoResumen = 'HECHO — PROVEEDOR DUPLICADO - CORREGIR';
@@ -6403,7 +6547,7 @@ async function honProcesar() {
   if (document.getElementById('hon-total-err')) document.getElementById('hon-total-err').textContent = prevErr + errCount;
 
   // Descarga automática del resumen de la carga (Excel)
-  await honDescargarResumen(resumenFilas);
+  await honDescargarResumen(resumenFilas, cartaNombre);
 
   // Limpiar selección
   honFiles = [];
@@ -12250,170 +12394,6 @@ async function nmGenerarDocx() {
   } catch (e) {
     console.error('nmGenerarDocx error:', e);
     nmSetMsg('nm-generar-msg', 'Error generando el documento: ' + e.message, 'error');
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// NOTAS MIAMI — selector de pestañas (Transferencia / Plazo Fijo)
-// ═══════════════════════════════════════════════════════
-function nmSwitchTab(tab) {
-  const tabs = ['transferencia', 'plazofijo'];
-  tabs.forEach(t => {
-    const panel = document.getElementById('nm-tab-' + t);
-    const btn = document.getElementById('nm-tabbtn-' + t);
-    if (!panel || !btn) return;
-    if (t === tab) {
-      panel.style.display = '';
-      btn.style.borderBottomColor = 'var(--verde)';
-      btn.style.color = 'var(--text)';
-      btn.style.fontWeight = '600';
-    } else {
-      panel.style.display = 'none';
-      btn.style.borderBottomColor = 'transparent';
-      btn.style.color = 'var(--muted)';
-      btn.style.fontWeight = '400';
-    }
-  });
-}
-
-// Clave del Plazo Fijo: misma fórmula que Notas Miami (transferencias),
-// verificado contra las dos notas de referencia (753 y 941) — coincide exacto.
-function pfCalcularClave() {
-  const fechaEl = document.getElementById('pf-fecha');
-  const montoEl = document.getElementById('pf-monto');
-  const dispEl = document.getElementById('pf-clave-display');
-  if (!fechaEl || !montoEl) return null;
-  const fechaVal = fechaEl.value;
-  const monto = parseFloat(montoEl.value || '0');
-  const totalSinCentavos = Math.floor(monto);
-
-  let s2 = totalSinCentavos === 0 ? NM_SIN_IMPORTE : nmDecompose(totalSinCentavos).reduce((a, b) => a + b, 0);
-  let s3 = 0, s4 = 0;
-  if (fechaVal) {
-    const d = new Date(fechaVal + 'T00:00:00');
-    s3 = NM_MESES_CIFRA[d.getMonth()];
-    s4 = NM_DIAS_CIFRA[d.getDate()] || 0;
-  }
-
-  const clave = fechaVal ? NM_NUMERO_FIJO + s2 + s3 + s4 : null;
-  if (dispEl) dispEl.textContent = clave ?? '—';
-  return clave;
-}
-
-// Autocompleta la fecha de vencimiento = fecha de la nota + días de plazo,
-// solo si el usuario todavía no la tocó a mano.
-let pfVencimientoTocadoAMano = false;
-function pfCalcularVencimiento() {
-  const fechaEl = document.getElementById('pf-fecha');
-  const diasEl = document.getElementById('pf-dias');
-  const vencEl = document.getElementById('pf-vencimiento');
-  if (!fechaEl || !diasEl || !vencEl || pfVencimientoTocadoAMano) return;
-  const fechaVal = fechaEl.value;
-  const dias = parseInt(diasEl.value || '0', 10);
-  if (!fechaVal || !dias) return;
-  const d = new Date(fechaVal + 'T00:00:00');
-  d.setDate(d.getDate() + dias);
-  vencEl.value = d.toISOString().slice(0, 10);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const pfFecha = document.getElementById('pf-fecha');
-  if (pfFecha && !pfFecha.value) pfFecha.valueAsDate = new Date();
-  document.getElementById('pf-fecha')?.addEventListener('input', pfCalcularVencimiento);
-  document.getElementById('pf-fecha')?.addEventListener('input', pfCalcularClave);
-  document.getElementById('pf-dias')?.addEventListener('input', pfCalcularVencimiento);
-  document.getElementById('pf-monto')?.addEventListener('input', pfCalcularClave);
-  document.getElementById('pf-vencimiento')?.addEventListener('input', () => { pfVencimientoTocadoAMano = true; });
-  pfCalcularVencimiento();
-  pfCalcularClave();
-});
-
-function pfSetMsg(text, type) {
-  const el = document.getElementById('pf-generar-msg');
-  if (!el) return;
-  el.textContent = text;
-  el.style.color = type === 'error' ? 'var(--danger)' : type === 'ok' ? 'var(--success)' : 'var(--warn)';
-}
-
-async function pfGenerarDocx() {
-  try {
-    if (typeof docx === 'undefined') {
-      pfSetMsg('Error: la librería docx no cargó (revisá tu conexión o bloqueador de scripts). Abrí la consola del navegador (F12) para más detalle.', 'error');
-      return;
-    }
-
-    const fechaVal = document.getElementById('pf-fecha').value;
-    const clave = pfCalcularClave();
-    const cuenta = document.getElementById('pf-cuenta').value;
-    const moneda = document.getElementById('pf-moneda').value || 'U$D';
-    const monto = parseFloat(document.getElementById('pf-monto').value || '0');
-    const dias = parseInt(document.getElementById('pf-dias').value || '0', 10);
-    const tasa = parseFloat(document.getElementById('pf-tasa').value || '0');
-    const vencimientoVal = document.getElementById('pf-vencimiento').value;
-
-    if (!fechaVal) { pfSetMsg('Falta la fecha de la nota.', 'error'); return; }
-    if (!clave) { pfSetMsg('Falta la clave.', 'error'); return; }
-    if (!cuenta) { pfSetMsg('Falta la cuenta.', 'error'); return; }
-    if (!monto) { pfSetMsg('Falta el monto.', 'error'); return; }
-    if (!dias) { pfSetMsg('Falta el plazo en días.', 'error'); return; }
-    if (!vencimientoVal) { pfSetMsg('Falta la fecha de vencimiento.', 'error'); return; }
-
-    const { Document, Packer, Paragraph, TextRun, AlignmentType, ImageRun } = docx;
-
-    const d = new Date(fechaVal + 'T00:00:00');
-    const mesNombre = NM_MESES_NOMBRE[d.getMonth()];
-    const fechaTexto = `${d.getDate()} de ${mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)} de ${d.getFullYear()}`;
-
-    const dv = new Date(vencimientoVal + 'T00:00:00');
-    const vencTexto = `${String(dv.getDate()).padStart(2, '0')}-${String(dv.getMonth() + 1).padStart(2, '0')}-${dv.getFullYear()}`;
-
-    const montoTexto = monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    function par(text, opts) { return new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text, ...opts })] }); }
-
-    const espacioFirmas = new Paragraph({ spacing: { before: 900, after: 0 }, children: [new TextRun({ text: '' })] });
-
-    const doc = new Document({
-      styles: { default: { document: { run: { font: 'Arial', size: 24 } } } },
-      sections: [{
-        properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
-        children: [
-          new Paragraph({
-            spacing: { after: 200 },
-            children: [
-              new ImageRun({
-                data: nmBase64ToUint8(NM_LOGO_BASE64),
-                transformation: { width: 110, height: 36 },
-              }),
-            ],
-          }),
-          new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 40 }, children: [new TextRun({ text: `Buenos Aires, ${fechaTexto}` })] }),
-          new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 260 }, children: [new TextRun({ text: `Clave ${clave}` })] }),
-          par('Sres.'),
-          new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: 'Banco de la Nación Argentina', bold: true })] }),
-          new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: 'Sucursal: Miami', bold: true })] }),
-          par('Atentamente'),
-          par('Solicitamos por intermedio de la presente, se constituya un plazo fijo, autorizando el débito y acreditación al vencimiento, del capital más los intereses en la siguiente cuenta', { spacing: 220 }),
-          new Paragraph({ spacing: { before: 100, after: 20 }, children: [new TextRun({ text: `Cta. ${cuenta}: ${moneda} ${montoTexto} a ${dias} días - Tasa ${tasa}%` })] }),
-          new Paragraph({ spacing: { after: 320 }, children: [new TextRun({ text: `Fecha de acreditación/vencimiento será el ${vencTexto}` })] }),
-          par('Sin otro particular saludamos a Uds. muy atte.', { spacing: 200 }),
-          espacioFirmas,
-        ],
-      }],
-    });
-
-    const blob = await Packer.toBlob(doc);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `NOTA_PLAZO_FIJO_${fechaVal}_${clave}.docx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    pfSetMsg('Listo, .docx descargado.', 'ok');
-  } catch (e) {
-    console.error('pfGenerarDocx error:', e);
-    pfSetMsg('Error generando el documento: ' + e.message, 'error');
   }
 }
 
