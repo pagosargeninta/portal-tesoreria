@@ -5969,8 +5969,18 @@ async function honResolverPartner(datos) {
 // para ese proveedor, e intenta identificar cuál es "la que tiene que quedar":
 // si hay una sola línea pendiente la usa directo; si hay varias, matchea por monto
 // EXACTO (tolerancia 0%) contra lo extraído del PDF. Devuelve null si no hay contrato,
-// o {multiples:true,...} si hay ambigüedad real (no matchea ninguna exacto).
-async function honBuscarLineaContrato(partnerId, montoRef) {
+// {multiples:true,...} si hay ambigüedad real (no matchea ninguna exacto), o
+// {agotado:true,...} si ya no queda ninguna línea disponible SIN RESERVAR en este lote
+// (todas las que matcheaban ya fueron "tomadas" por otra factura procesada en paralelo).
+//
+// `reservadas` es un Set<number> con los IDs de purchase.order.line ya asignados
+// a otra factura DENTRO DEL MISMO honProcesar — necesario porque el portal procesa
+// varias facturas en paralelo (Promise.allSettled), y Odoo no actualiza
+// qty_to_invoice hasta que cada factura individual termina de postearse. Sin esta
+// reserva en memoria, dos facturas en el mismo lote pueden "ver" la misma línea
+// pendiente al mismo tiempo y las dos la usan — exactamente el bug de facturar
+// una línea de contrato más veces de las que tiene.
+async function honBuscarLineaContrato(partnerId, montoRef, reservadas) {
   if (!partnerId) return null;
   try {
     const ordenes = await odooCall('purchase.order', 'search_read',
@@ -5982,12 +5992,46 @@ async function honBuscarLineaContrato(partnerId, montoRef) {
     }
 
     const orderIds = ordenes.map(o => o.id);
-    const lineas = await odooCall('purchase.order.line', 'search_read',
+    const lineasPendientes = await odooCall('purchase.order.line', 'search_read',
       [[['order_id', 'in', orderIds], ['qty_to_invoice', '!=', 0]]],
       { fields: ['id', 'order_id', 'product_id', 'name', 'price_unit', 'product_qty', 'qty_invoiced', 'qty_to_invoice', 'taxes_id', 'analytic_distribution'] });
-    if (!lineas?.length) {
+    if (!lineasPendientes?.length) {
       console.info(`[contrato] partner #${partnerId}: OC encontradas (${ordenes.map(o=>o.name).join(', ')}) pero ninguna línea con qty_to_invoice != 0 — puede que ya estén completamente facturadas.`);
       return null;
+    }
+
+    // IMPORTANTE: qty_to_invoice de Odoo solo baja cuando la factura queda
+    // CONFIRMADA — pero acá las creamos en BORRADOR a propósito, para que
+    // admin las revise antes de tocar nada. Mientras no se confirman, Odoo
+    // sigue mostrando la línea como "pendiente" aunque ya tenga una factura
+    // borrador enganchada, y una carga posterior (otro lote, otra sesión) la
+    // vuelve a tomar. Por eso, además del filtro anterior, chequeamos
+    // directo si la línea YA tiene alguna account.move.line vinculada por
+    // purchase_line_id (borrador o confirmada, cualquiera no cancelada) y la
+    // excluimos — esto sí persiste entre cargas distintas, a diferencia de
+    // la reserva en memoria de más abajo (que solo cubre el lote actual).
+    const idsCandidatos = lineasPendientes.map(l => l.id);
+    const yaFacturadas = await odooCall('account.move.line', 'search_read',
+      [[['purchase_line_id', 'in', idsCandidatos], ['move_id.state', '!=', 'cancel']]],
+      { fields: ['purchase_line_id'] });
+    const idsConFacturaExistente = new Set(yaFacturadas.map(l => l.purchase_line_id[0]));
+    const lineasTodas = lineasPendientes.filter(l => !idsConFacturaExistente.has(l.id));
+    if (idsConFacturaExistente.size) {
+      console.info(`[contrato] partner #${partnerId}: se excluyeron ${idsConFacturaExistente.size} línea(s) que ya tienen una factura (borrador o confirmada) enganchada en Odoo, aunque qty_to_invoice todavía las mostraba como pendientes.`);
+    }
+    if (!lineasTodas.length) {
+      console.info(`[contrato] partner #${partnerId}: todas las líneas pendientes ya tienen factura enganchada en Odoo (borrador o confirmada) — contrato agotado.`);
+      return { agotado: true, lineas: lineasPendientes, ordenes };
+    }
+
+    // A PARTIR DE ACÁ TODO ES SÍNCRONO (sin ningún await) hasta reservar la
+    // línea elegida — así ninguna otra factura procesándose en paralelo puede
+    // "colarse" entre que la elegimos y la marcamos como tomada.
+    const lineas = lineasTodas.filter(l => !reservadas.has(l.id));
+
+    if (!lineas.length) {
+      console.info(`[contrato] partner #${partnerId}: las ${lineasTodas.length} línea(s) pendientes ya fueron reservadas por otra factura de este mismo lote — contrato agotado por ahora.`);
+      return { agotado: true, lineas: lineasTodas, ordenes };
     }
 
     let elegida = null;
@@ -6001,13 +6045,15 @@ async function honBuscarLineaContrato(partnerId, montoRef) {
 
     if (!elegida) {
       console.info(
-        `[contrato] partner #${partnerId}: ${lineas.length} línea(s) pendiente(s), ninguna coincide EXACTO con el monto extraído de la factura ($${montoRef}).\n` +
+        `[contrato] partner #${partnerId}: ${lineas.length} línea(s) disponible(s) (sin reservar), ninguna coincide EXACTO con el monto extraído de la factura ($${montoRef}).\n` +
         `Monto buscado: ${montoRef}\n` +
         'Líneas candidatas (OC — price_unit):\n' +
         lineas.map(l => `  · ${ordenes.find(o=>o.id===l.order_id[0])?.name || l.order_id[1]} — price_unit: ${l.price_unit}`).join('\n')
       );
       return { multiples: true, lineas, ordenes };
     }
+
+    reservadas.add(elegida.id); // reservar YA, antes de cualquier await posterior
 
     const orden = ordenes.find(o => o.id === elegida.order_id[0]) || ordenes[0];
     return { linea: elegida, orden, multiples: false };
@@ -6414,6 +6460,11 @@ async function honProcesar() {
 
   let okCount = 0, errCount = 0;
   const resumenFilas = []; // acumula el estado de cada operación para el CSV final
+  // Líneas de contrato ya "tomadas" por alguna factura de ESTE mismo procesamiento
+  // (incluye todos los lotes, no solo el actual) — evita que dos facturas en
+  // paralelo (o de lotes distintos) usen la misma línea dos veces, porque Odoo
+  // no actualiza qty_to_invoice hasta que cada factura individual se postea.
+  const lineasReservadas = new Set();
 
   const BATCH_SIZE = 25;
   const BATCH_DELAY = 5000; // 5s entre lotes con 25 paralelos
@@ -6458,12 +6509,12 @@ async function honProcesar() {
         let esDuplicado = resPartner.duplicado;
 
         if (!resPartner.duplicado) {
-          contratoEncontrado = await honBuscarLineaContrato(resPartner.id, montoRef);
-          contratoUsable = (contratoEncontrado && !contratoEncontrado.multiples) ? contratoEncontrado : null;
+          contratoEncontrado = await honBuscarLineaContrato(resPartner.id, montoRef, lineasReservadas);
+          contratoUsable = (contratoEncontrado && contratoEncontrado.linea) ? contratoEncontrado : null;
         } else {
           for (const cand of resPartner.candidatos) {
-            const c = await honBuscarLineaContrato(cand.id, montoRef);
-            if (c && !c.multiples) {
+            const c = await honBuscarLineaContrato(cand.id, montoRef, lineasReservadas);
+            if (c && c.linea) {
               partnerId = cand.id;
               contratoEncontrado = c;
               contratoUsable = c;
@@ -6476,6 +6527,26 @@ async function honProcesar() {
         }
 
         const { invoiceId: odooId, usoContrato } = await honCrearFactura(datos, cartaId, contratoUsable, partnerId);
+
+        // Si NO se pudo enganchar a una línea de contrato (sin contrato, contrato
+        // agotado, ambigüedad de monto, CUIT inválido), marcamos la factura
+        // DIRECTO en Odoo — no solo acá en el portal — para que quede visible
+        // aunque alguien la mire/confirme desde Odoo sin pasar por el resumen
+        // del portal. El portal nunca bloquea la creación (por diseño: siempre
+        // crea y marca en vez de fallar en silencio), así que esta marca es la
+        // única defensa real contra confirmar una factura problemática sin
+        // darse cuenta.
+        if (!usoContrato) {
+          try {
+            const actual = await odooCall('account.move', 'read', [[odooId], ['ref']]);
+            const refActual = actual?.[0]?.ref || '';
+            if (!refActual.startsWith('⚠ NO CONFIRMAR SIN REVISAR')) {
+              await odooCall('account.move', 'write', [[odooId], { ref: `⚠ NO CONFIRMAR SIN REVISAR — ${refActual}` }]);
+            }
+          } catch (e) {
+            console.warn(`No se pudo marcar la advertencia en Odoo para la factura #${odooId}:`, e.message);
+          }
+        }
 
         let adjuntado = false;
         try { await honAdjuntarPDF(file, odooId); adjuntado = true; } catch(e) {}
@@ -6514,6 +6585,10 @@ async function honProcesar() {
           contratoBadge = `<span class="badge badge-warn" title="Buscado: $${montoRef} — precios en contrato: ${preciosCandidatos} — revisar a mano">⚠ Revisar (multi-línea)</span>`;
           estadoResumen = 'REVISAR — múltiples líneas de contrato, sin match exacto';
           detalleResumen = `Monto buscado: $${montoRef}. ${contratoEncontrado.lineas.length} líneas pendientes en ${contratoEncontrado.ordenes.map(o=>o.name).join(', ')} — precios: ${preciosCandidatos}`;
+        } else if (contratoEncontrado?.agotado) {
+          contratoBadge = `<span class="badge badge-danger" title="Todas las líneas del contrato (${contratoEncontrado.lineas.length}) ya fueron usadas por otras facturas de este mismo proveedor en esta carga — hay más facturas que líneas de contrato pendientes. NO se creó línea de contrato, se armó desde el PDF.">⚠ Contrato agotado en esta carga</span>`;
+          estadoResumen = 'REVISAR — más facturas que líneas de contrato disponibles';
+          detalleResumen = `El contrato tenía ${contratoEncontrado.lineas.length} línea(s) pendiente(s) por $${montoRef}, pero ya fueron todas asignadas a otras facturas de este mismo proveedor cargadas en este lote. Revisar si corresponde ampliar el contrato o si hay una factura de más/duplicada.`;
         } else {
           contratoBadge = '<span class="badge badge-muted" title="Sin contrato/OC pendiente encontrado — línea armada desde el PDF">✎ Sin contrato</span>';
           estadoResumen = 'REVISAR — sin contrato encontrado';
