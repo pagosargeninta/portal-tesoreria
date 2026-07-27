@@ -6104,6 +6104,7 @@ async function honCargarExcelJS() {
 function honColorEstado(estado) {
   if (estado.startsWith('LISTA'))                                 return 'FFE8F8EE'; // verde claro
   if (estado.startsWith('HECHO — PROVEEDOR DUPLICADO'))           return 'FFFEF3D6'; // amarillo suave
+  if (estado.startsWith('BLOQUEADA — tope de contrato'))          return 'FFFCE4D6'; // naranja claro
   if (estado.startsWith('REVISAR — CUIT duplicado') ||
       estado.startsWith('REVISAR — PROVEEDOR DUPLICADO'))         return 'FFFDE7E5'; // rosado
   if (estado.startsWith('REVISAR'))                                return 'FFFEFCE8'; // amarillo pálido
@@ -6139,6 +6140,7 @@ async function honDescargarResumen(filas, cartaNombre) {
   // Clasificación de severidad para ordenar "A revisar" (mayor = más urgente)
   const severidad = estado => {
     if (estado === 'ERROR') return 5;
+    if (estado.startsWith('BLOQUEADA — tope de contrato')) return 5;
     if (estado.startsWith('REVISAR — CUIT duplicado') || estado.startsWith('REVISAR — PROVEEDOR DUPLICADO')) return 4;
     if (estado.startsWith('REVISAR — múltiples')) return 3;
     if (estado.startsWith('REVISAR')) return 2;
@@ -6565,14 +6567,25 @@ async function honProcesar() {
         document.getElementById('hon-count-ok').textContent = okCount;
 
       } catch(e) {
-        const msg = e?.message || String(e);
+        const msgCruda = e?.message || String(e);
+        // El bloqueo de Odoo (automatización "no facturar más de lo contratado")
+        // llega envuelto en el fault de XML-RPC. Lo detectamos por el prefijo
+        // "BLOQUEADO:" que le puse a propósito al mensaje, y extraemos solo la
+        // frase útil para que en el resumen se vea limpio y se distinga de
+        // cualquier otro error técnico (red, CUIT, etc.).
+        const matchBloqueo = msgCruda.match(/BLOQUEADO:[^"<]*/);
+        const esBloqueoContrato = !!matchBloqueo;
+        const msg = esBloqueoContrato ? matchBloqueo[0].trim() : msgCruda;
+
         tr.innerHTML = `
           <td style="font-size:11px;color:var(--muted);" title="${file.name}">${file.name}</td>
           <td colspan="3" style="font-size:11px;color:var(--danger);">${msg}</td>
-          <td><span class="badge badge-danger">✗ Error</span></td>`;
+          <td><span class="badge badge-danger">${esBloqueoContrato ? '⛔ Tope de contrato' : '✗ Error'}</span></td>`;
         resumenFilas.push({
           archivo: file.name, proveedor: '', cuit: '', nro_factura: '', total: '', confianza: '',
-          odoo_id: '', pdf_adjunto: '', estado: 'ERROR', detalle: msg
+          odoo_id: '', pdf_adjunto: '',
+          estado: esBloqueoContrato ? 'BLOQUEADA — tope de contrato (Odoo)' : 'ERROR',
+          detalle: msg
         });
         errCount++;
       }
