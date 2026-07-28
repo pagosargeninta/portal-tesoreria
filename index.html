@@ -2320,6 +2320,27 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
 
         </div>
       </div>
+
+      <!-- ══════════ REPORTE DE SALDO POR ORGANISMO (on-demand, sin mail) ══════════ -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-file-spreadsheet"></i> Reporte de Saldo por Organismo</div>
+        </div>
+        <div class="card-body" style="padding-top:14px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+            Genera el mismo Excel que reciben las delegaciones y organismos por mail (reporte_saldos.py), pero acá en el momento y sin enviar nada — para pruebas o uso propio.
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <select id="rs-organismo-select" style="flex:1;min-width:260px;max-width:420px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:12.5px;background:var(--surface);color:var(--text);">
+              <option value="">Seleccioná un organismo o DEC...</option>
+            </select>
+            <button class="btn" id="rs-generar-btn" onclick="rsGenerarReporteSeleccionado()" style="padding:7px 16px;font-size:12.5px;">
+              <i class="ti ti-download"></i> Generar y descargar
+            </button>
+          </div>
+          <div id="rs-estado" style="font-size:11.5px;color:var(--muted);margin-top:10px;"></div>
+        </div>
+      </div>
     </div>
 
 
@@ -3996,6 +4017,10 @@ function showPage(id, el) {
   if(_hs)_hs.textContent=t[1]||'';
   if (id === 'carta29') { c29IniciarMeses(); c29Cargar(); }
   if (id === 'fondos') { fpCargar(); }
+  if (id === 'reportes' && !document.getElementById('rs-organismo-select')._rsInit) {
+    document.getElementById('rs-organismo-select')._rsInit = true;
+    rsInicializarSelector();
+  }
   if (id === 'plan') {
     var hoy = new Date();
     var d1  = document.getElementById('plan-desde');
@@ -6396,6 +6421,572 @@ async function honDescargarResumen(filas, cartaNombre) {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+
+// ═══════════════════════════════════════════════════════
+// REPORTE DE SALDO POR ORGANISMO — Generación on-demand (sin mail)
+// Port de reporte_saldos.py: misma lógica de datos, mismo diseño de Excel.
+// ═══════════════════════════════════════════════════════
+
+const RS_DEC_CLAVES = [
+  "14.INTA.DEC.140000","14.INTA.DEC.142000","14.INTA.DEC.143000","14.INTA.DEC.145000",
+  "14.INTA.DEC.150000","14.INTA.DEC.151000","14.INTA.DEC.152000","14.INTA.DEC.153000",
+  "14.INTA.DEC.210000","14.INTA.DEC.220000","14.INTA.DEC.230000",
+  "14.INTA.DEC.310000","14.INTA.DEC.311000","14.INTA.DEC.312000","14.INTA.DEC.314000",
+  "14.INTA.DEC.320000","14.INTA.DEC.321000","14.INTA.DEC.322000","14.INTA.DEC.323000",
+  "14.INTA.DEC.410000","14.INTA.DEC.411000","14.INTA.DEC.412000","14.INTA.DEC.413000","14.INTA.DEC.414000",
+  "14.INTA.DEC.421000","14.INTA.DEC.422000",
+  "14.INTA.DEC.430000","14.INTA.DEC.431000","14.INTA.DEC.432000","14.INTA.DEC.433000",
+  "14.INTA.DEC.510000","14.INTA.DEC.511000","14.INTA.DEC.513000",
+  "14.INTA.DEC.610000","14.INTA.DEC.611000","14.INTA.DEC.612000","14.INTA.DEC.613000",
+  "14.INTA.DEC.621000","14.INTA.DEC.622000",
+  "14.INTA.DEC.630000","14.INTA.DEC.631000","14.INTA.DEC.632000","14.INTA.DEC.633000",
+  "14.INTA.DEC.711000","14.INTA.DEC.712000","14.INTA.DEC.713000","14.INTA.DEC.714000",
+  "14.INTA.DEC.720000","14.INTA.DEC.721000","14.INTA.DEC.722000","14.INTA.DEC.723000","14.INTA.DEC.724000","14.INTA.DEC.725000",
+  "14.INTA.DEC.810000","14.INTA.DEC.811000","14.INTA.DEC.812000","14.INTA.DEC.813000",
+  "14.INTA.DEC.821000","14.INTA.DEC.822000",
+  "14.INTA.DEC.910000","14.INTA.DEC.911000","14.INTA.DEC.912000","14.INTA.DEC.913000","14.INTA.DEC.914000",
+];
+const RS_IGNORAR_ORG = ["INTA","OTRAS","BID","UCAR","INNOVA","IMPULS","INTEA","INAFCI","OAA","IPCVA","MAYDS","GNA","INV","MDS","MINCYT"];
+
+function rsExtraerClaveDec(nombre) {
+  if (!nombre) return null;
+  const codigo = nombre.split(" ")[0];
+  for (const clave of RS_DEC_CLAVES) {
+    if (codigo.startsWith(clave)) return clave;
+  }
+  return null;
+}
+
+function rsExtraerClaveCa(nombre) {
+  if (!nombre) return null;
+  if (nombre.toUpperCase().includes("DEC")) return null;
+  const codigo = nombre.split(" ")[0];
+  const partes = codigo.split(".");
+  if (partes.length < 3) return null;
+  const organismo = partes[1].toUpperCase();
+  if (RS_IGNORAR_ORG.includes(organismo)) return null;
+  if (organismo === "INA") {
+    if (partes.length >= 4) return `INA.${partes[2].toUpperCase()}.${partes[3].toUpperCase()}`;
+    return null;
+  }
+  const convenio = partes[2].toUpperCase();
+  if (!/^[A-Z0-9]+$/.test(convenio)) return null;
+  return `${organismo}.${convenio}`;
+}
+
+// Carga la lista de "organismos" disponibles para el selector (convenios agrupados + DECs).
+// No busca contacto/mail — no hace falta para generación on-demand.
+let _rsOrganismosCache = null;
+async function rsCargarListaOrganismos(forzar = false) {
+  if (_rsOrganismosCache && !forzar) return _rsOrganismosCache;
+  const cuentas = await odooCall('account.analytic.account', 'search_read',
+    [[['active', '=', true]]], { fields: ['id', 'name'] });
+  const convenios = {}; // clave -> [{id,name}]
+  for (const c of cuentas) {
+    const clave = rsExtraerClaveCa(c.name);
+    if (clave) {
+      if (!convenios[clave]) convenios[clave] = [];
+      convenios[clave].push({ id: c.id, name: c.name });
+    }
+  }
+  const grupos = {}; // organismo -> {convenios:[{clave,subcuentas}]}
+  for (const clave of Object.keys(convenios)) {
+    const organismo = clave.split(".")[0];
+    if (!grupos[organismo]) grupos[organismo] = { convenios: [] };
+    grupos[organismo].convenios.push({
+      clave,
+      subcuentas: convenios[clave].slice().sort((a, b) => a.name.localeCompare(b.name)),
+    });
+  }
+  const resultado = [];
+  for (const org of Object.keys(grupos).sort()) {
+    resultado.push({
+      organismo: org,
+      esDec: false,
+      convenios: grupos[org].convenios.slice().sort((a, b) => a.clave.localeCompare(b.clave)),
+    });
+  }
+  for (const decClave of RS_DEC_CLAVES) {
+    resultado.push({ organismo: decClave, esDec: true, decClave, convenios: null });
+  }
+  _rsOrganismosCache = resultado;
+  return resultado;
+}
+
+async function rsCargarSubcuentasDec(decClave) {
+  const cuentas = await odooCall('account.analytic.account', 'search_read',
+    [[['name', 'like', decClave], ['active', '=', true]]], { fields: ['id', 'name'] });
+  return cuentas.slice().sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function rsGetCuentasExcluir() {
+  const cuentasFin = await odooCall('account.account', 'search_read',
+    [[['account_type', '=', 'asset_cash'], '|', ['name', 'ilike', 'anticipo'], ['name', 'ilike', 'fondos de terceros']]],
+    { fields: ['id', 'name'] });
+  const cuentasDev = await odooCall('account.account', 'search_read',
+    [['|', ['account_type', '=', 'liability_current'], ['account_type', '=', 'liability_payable'], ['name', 'ilike', 'retenc']]],
+    { fields: ['id', 'name'] });
+  return {
+    fin: cuentasFin.map(c => c.id),
+    dev: cuentasDev.map(c => c.id),
+  };
+}
+
+async function rsGetRetencionesPorMove(moveIds) {
+  if (!moveIds.length) return {};
+  const pagos = await odooCall('account.payment', 'search_read',
+    [[['move_id', 'in', moveIds]]], { fields: ['id', 'move_id', 'name'] });
+  if (!pagos.length) return {};
+  const pagoIds = pagos.map(p => p.id);
+  const pagoToMove = {};
+  for (const p of pagos) {
+    const moveId = Array.isArray(p.move_id) ? p.move_id[0] : p.move_id;
+    pagoToMove[p.id] = moveId;
+  }
+  const rets = await odooCall('l10n_ar.payment.withholding', 'search_read',
+    [[['payment_id', 'in', pagoIds], ['amount', '>', 0]]],
+    { fields: ['id', 'payment_id', 'amount', 'name', 'tax_id'] });
+  const retPorMove = {};
+  for (const r of rets) {
+    const pagoId = Array.isArray(r.payment_id) ? r.payment_id[0] : r.payment_id;
+    const moveId = pagoToMove[pagoId];
+    if (moveId) {
+      if (!retPorMove[moveId]) retPorMove[moveId] = [];
+      retPorMove[moveId].push({
+        amount: parseFloat(r.amount || 0),
+        name: r.name || '-',
+        tax_name: r.tax_id ? r.tax_id[1] : 'Retencion',
+      });
+    }
+  }
+  return retPorMove;
+}
+
+// Devuelve { [subcuentaId]: { financiero:[...], devengado:[...] } }
+async function rsGetMovimientosGrupo(subcuentas, cuentasExcluirFin, cuentasExcluirDev) {
+  const accountIds = subcuentas.map(s => s.id);
+  const result = {};
+  for (const id of accountIds) result[id] = { financiero: [], devengado: [] };
+  if (!accountIds.length) return result;
+
+  const lineasRaw = await odooCall('account.analytic.line', 'search_read',
+    [[['x_plan2_id', 'in', accountIds]]],
+    { fields: ['date', 'name', 'amount', 'ref', 'partner_id', 'move_line_id', 'x_plan2_id', 'general_account_id'], order: 'date asc' });
+  if (!lineasRaw.length) return result;
+
+  const mlIds = [...new Set(lineasRaw.filter(l => l.move_line_id).map(l => l.move_line_id[0]))];
+  let mlInfo = {};
+  let accountTypeMap = {};
+  if (mlIds.length) {
+    const mls = await odooCall('account.move.line', 'search_read',
+      [[['id', 'in', mlIds]]], { fields: ['id', 'move_id', 'account_id'] });
+    const mlToMove = {}, mlToAcc = {};
+    for (const ml of mls) {
+      if (ml.move_id) mlToMove[ml.id] = ml.move_id[0];
+      mlToAcc[ml.id] = Array.isArray(ml.account_id) ? ml.account_id[0] : ml.account_id;
+    }
+    const allMoveIds = [...new Set(Object.values(mlToMove))];
+    let moveData = {};
+    if (allMoveIds.length) {
+      const moves = await odooCall('account.move', 'search_read',
+        [[['id', 'in', allMoveIds]]], { fields: ['id', 'name', 'journal_id'] });
+      for (const m of moves) {
+        moveData[m.id] = { name: m.name, journal: m.journal_id ? m.journal_id[1] : '-' };
+      }
+    }
+    for (const mlId of mlIds) {
+      const moveId = mlToMove[mlId];
+      mlInfo[mlId] = {
+        move_name: moveId ? (moveData[moveId]?.name || '-') : '-',
+        journal: moveId ? (moveData[moveId]?.journal || '-') : '-',
+        account_id: mlToAcc[mlId],
+        move_id: moveId,
+      };
+    }
+    const accIdsNeeded = [...new Set(Object.values(mlInfo).map(i => i.account_id).filter(Boolean))];
+    if (accIdsNeeded.length) {
+      const accs = await odooCall('account.account', 'search_read',
+        [[['id', 'in', accIdsNeeded]]], { fields: ['id', 'account_type'] });
+      for (const a of accs) accountTypeMap[a.id] = a.account_type;
+    }
+  }
+
+  const allMoveIdsSet = [...new Set(Object.values(mlInfo).map(i => i.move_id).filter(Boolean))];
+  const retPorMove = await rsGetRetencionesPorMove(allMoveIdsSet);
+
+  const excluirSet = new Set(cuentasExcluirFin);
+  const excluirDevSet = new Set(cuentasExcluirDev);
+  const TIPOS_FIN = new Set(['asset_cash', 'asset_current']);
+  const movesConRetencionProcesados = new Set();
+
+  for (const l of lineasRaw) {
+    const accId = Array.isArray(l.x_plan2_id) ? l.x_plan2_id[0] : l.x_plan2_id;
+    if (!accId || !(accId in result)) continue;
+    const mlId = l.move_line_id ? l.move_line_id[0] : null;
+    const info = mlId ? (mlInfo[mlId] || {}) : {};
+    const cuentaId = info.account_id;
+    const cuentaType = accountTypeMap[cuentaId] || '';
+    let cuentaNombre = '-';
+    if (l.general_account_id) {
+      cuentaNombre = Array.isArray(l.general_account_id) ? l.general_account_id[1] : String(l.general_account_id);
+    }
+    const amountOriginal = parseFloat(l.amount || 0);
+    const esFin = TIPOS_FIN.has(cuentaType) && !excluirSet.has(cuentaId);
+    const amountFinal = esFin ? -amountOriginal : amountOriginal;
+    const linea = {
+      date: l.date || '-',
+      name: l.name || '-',
+      amount: amountFinal,
+      ref: l.ref || '-',
+      partner: l.partner_id ? l.partner_id[1] : '-',
+      move_name: info.move_name || '-',
+      journal: info.journal || '-',
+      cuenta: cuentaNombre,
+    };
+    const esExcluidoDev = excluirDevSet.has(cuentaId);
+    if (esFin) {
+      result[accId].financiero.push(linea);
+      const moveId = info.move_id;
+      if (moveId && !movesConRetencionProcesados.has(moveId)) {
+        movesConRetencionProcesados.add(moveId);
+        for (const ret of (retPorMove[moveId] || [])) {
+          result[accId].financiero.push({
+            date: linea.date,
+            name: 'Retencion: ' + ret.tax_name,
+            amount: -ret.amount,
+            ref: ret.name,
+            partner: linea.partner,
+            move_name: linea.move_name,
+            journal: 'Retenciones',
+            cuenta: ret.tax_name,
+          });
+        }
+      }
+    } else if (!esExcluidoDev) {
+      result[accId].devengado.push(linea);
+    }
+  }
+  return result;
+}
+
+// Arma la estructura todosConveniosData para un organismo/DEC puntual (equivalente a procesar_organismo, sin envío).
+async function rsArmarDatosOrganismo(orgEntry) {
+  const { fin, dev } = await rsGetCuentasExcluir();
+  const todosConveniosData = [];
+
+  if (orgEntry.esDec) {
+    const subcuentas = await rsCargarSubcuentasDec(orgEntry.decClave);
+    if (!subcuentas.length) return { organismo: orgEntry.organismo, todosConveniosData: [] };
+    const movs = await rsGetMovimientosGrupo(subcuentas, fin, dev);
+    const subcuentasData = [];
+    for (const sub of subcuentas) {
+      const m = movs[sub.id] || { financiero: [], devengado: [] };
+      if (m.financiero.length || m.devengado.length) {
+        subcuentasData.push({ name: sub.name, lineas_fin: m.financiero, lineas_dev: m.devengado });
+      }
+    }
+    if (subcuentasData.length) {
+      todosConveniosData.push({ clave: orgEntry.organismo, subcuentas: subcuentasData });
+    }
+  } else {
+    for (const conv of orgEntry.convenios) {
+      const movs = await rsGetMovimientosGrupo(conv.subcuentas, fin, dev);
+      const subcuentasData = [];
+      for (const sub of conv.subcuentas) {
+        const m = movs[sub.id] || { financiero: [], devengado: [] };
+        if (m.financiero.length || m.devengado.length) {
+          subcuentasData.push({ name: sub.name, lineas_fin: m.financiero, lineas_dev: m.devengado });
+        }
+      }
+      if (subcuentasData.length) {
+        todosConveniosData.push({ clave: conv.clave, subcuentas: subcuentasData });
+      }
+    }
+  }
+  return { organismo: orgEntry.organismo, todosConveniosData };
+}
+
+// ── Estilos (mismos colores que reporte_saldos.py) ──
+const RS_VERDE = 'FF1A5C38', RS_VERDE_CLA = 'FFE8F5E9', RS_ROJO = 'FFB71C1C', RS_ROJO_CLA = 'FFFFEBEE';
+const RS_GRIS = 'FFF5F5F5', RS_BLANCO = 'FFFFFFFF', RS_AZUL = 'FF1565C0', RS_AZUL_CLA = 'FFE3F2FD';
+
+function rsFc(cell, { bg, color = 'FF333333', bold = false, size = 9, align = 'left', numFmt, border = false, italic = false } = {}) {
+  cell.font = { name: 'Calibri', size, bold, color: { argb: color }, italic };
+  if (bg) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+  cell.alignment = { horizontal: align, vertical: 'middle' };
+  if (numFmt) cell.numFmt = numFmt;
+  if (border) {
+    const s = { style: 'thin', color: { argb: 'FFDDDDDD' } };
+    cell.border = { left: s, right: s, top: s, bottom: s };
+  }
+}
+
+function rsAgregarHojaSubcuenta(wb, subcuentaName, lineas, hoy, tipo) {
+  const esFin = tipo === 'FINANCIERO';
+  const colorH = esFin ? RS_VERDE : RS_AZUL;
+  const tag = esFin ? 'FIN' : 'DEV';
+  let tab = (subcuentaName.split(' ')[0].slice(0, 24) + ' ' + tag).slice(0, 31);
+  // Excel no permite hojas duplicadas ni ciertos caracteres
+  tab = tab.replace(/[\\/*?:[\]]/g, '-');
+  let tabFinal = tab, i2 = 1;
+  const nombresUsados = wb._rsHojasUsadas || (wb._rsHojasUsadas = new Set());
+  while (nombresUsados.has(tabFinal)) { tabFinal = (tab.slice(0, 28) + '_' + (++i2)); }
+  nombresUsados.add(tabFinal);
+
+  const ws = wb.addWorksheet(tabFinal, { views: [{ showGridLines: false }] });
+  ws.columns = [
+    { width: 11 }, { width: 10 }, { width: 20 }, { width: 26 },
+    { width: 26 }, { width: 15 }, { width: 22 }, { width: 22 },
+  ];
+  const ingresos = lineas.filter(l => l.amount > 0).reduce((a, l) => a + l.amount, 0);
+  const egresos = lineas.filter(l => l.amount < 0).reduce((a, l) => a + l.amount, 0);
+  const saldo = ingresos + egresos;
+  const colS = saldo >= 0 ? RS_VERDE : RS_ROJO;
+  const bgS = saldo >= 0 ? RS_VERDE_CLA : RS_ROJO_CLA;
+
+  ws.mergeCells('A1:H1');
+  ws.getCell('A1').value = subcuentaName + (esFin ? ' — SALDO FINANCIERO' : ' — SALDO DEVENGADO');
+  rsFc(ws.getCell('A1'), { bold: true, size: 11, color: colorH, align: 'center' });
+  ws.getRow(1).height = 22;
+  ws.mergeCells('A2:H2');
+  ws.getCell('A2').value = 'Generado: ' + hoy;
+  rsFc(ws.getCell('A2'), { size: 8, color: 'FF888888', align: 'center', italic: true });
+  ws.getRow(2).height = 14;
+  ws.getRow(3).height = 6;
+
+  const bloques = [
+    ['A', 'INGRESOS', ingresos, bgS === RS_VERDE_CLA && esFin ? RS_VERDE_CLA : RS_VERDE_CLA, colorH],
+    ['B', 'EGRESOS', Math.abs(egresos), RS_ROJO_CLA, RS_ROJO],
+    ['E', 'SALDO ' + tipo, saldo, bgS, colS],
+  ];
+  for (const [col, titulo, valor, bg, color] of bloques) {
+    ws.getCell(col + '4').value = titulo;
+    rsFc(ws.getCell(col + '4'), { bg, color, bold: true, size: 8, align: 'center', border: true });
+    ws.getRow(4).height = 18;
+    ws.getCell(col + '5').value = valor;
+    rsFc(ws.getCell(col + '5'), { bg, color, bold: true, size: 13, align: 'center', numFmt: '#,##0.00', border: true });
+    ws.getRow(5).height = 26;
+    ws.getCell(col + '6').value = 'ARS';
+    rsFc(ws.getCell(col + '6'), { bg, color: 'FF888888', size: 8, align: 'center', border: true });
+    ws.getRow(6).height = 14;
+  }
+
+  let row = 8;
+  ws.mergeCells(`A${row}:H${row}`);
+  rsFc(ws.getCell(row, 1), { bg: colorH, color: 'FFFFFFFF', bold: true, size: 10, align: 'center', border: true });
+  ws.getCell(row, 1).value = 'MOVIMIENTOS ' + tipo;
+  ws.getRow(row).height = 20;
+  row += 1;
+  const encs = ['Fecha', 'Tipo', 'Comprobante', 'Descripcion', 'Proveedor / Razon Social', 'Importe (ARS)', 'Referencia', 'Cuenta / Diario'];
+  encs.forEach((enc, j) => {
+    const c = ws.getCell(row, j + 1);
+    c.value = enc;
+    rsFc(c, { bg: RS_GRIS, color: 'FF444444', bold: true, size: 8, align: 'center', border: true });
+  });
+  ws.getRow(row).height = 16;
+  row += 1;
+  ws.views = [{ state: 'frozen', ySplit: row - 1, showGridLines: false }];
+  ws.autoFilter = `A${row - 1}:H${row - 1}`;
+
+  lineas.forEach((l, i) => {
+    const bg = i % 2 === 0 ? RS_BLANCO : 'FFF7F7F7';
+    const esIng = l.amount > 0;
+    const colImp = esIng ? RS_VERDE : RS_ROJO;
+    const detalle = esFin ? l.journal : l.cuenta;
+    const valores = [l.date, esIng ? 'INGRESO' : 'EGRESO', l.move_name, l.name, l.partner, l.amount, l.ref, detalle];
+    valores.forEach((val, j) => {
+      const c = ws.getCell(row, j + 1);
+      c.value = val;
+      if (j === 5) rsFc(c, { bg, color: colImp, bold: true, size: 9, align: 'right', numFmt: '#,##0.00', border: true });
+      else if (j === 0 || j === 1) rsFc(c, { bg, size: 9, align: 'center', border: true });
+      else rsFc(c, { bg, size: 9, border: true });
+    });
+    row += 1;
+  });
+  ws.mergeCells(`A${row}:E${row}`);
+  rsFc(ws.getCell(row, 1), { bg: colorH, color: 'FFFFFFFF', bold: true, size: 9, align: 'right', border: true });
+  ws.getCell(row, 1).value = 'TOTAL ' + tipo;
+  rsFc(ws.getCell(row, 6), { bg: colorH, color: 'FFFFFFFF', bold: true, size: 9, align: 'right', numFmt: '#,##0.00', border: true });
+  ws.getCell(row, 6).value = saldo;
+  ws.getRow(row).height = 18;
+}
+
+function rsAgregarHojaResumen(wb, organismo, todosConveniosData, hoy) {
+  const ws = wb.addWorksheet('RESUMEN', { views: [{ showGridLines: false }] });
+  wb.worksheets.splice(wb.worksheets.indexOf(ws), 1);
+  wb.worksheets.unshift(ws);
+
+  ws.getRow(1).height = 30;
+  ws.mergeCells('A1:H1');
+  ws.getCell('A1').value = 'REPORTE DE SALDO CONSOLIDADO — ' + organismo;
+  rsFc(ws.getCell('A1'), { bold: true, size: 13, color: RS_VERDE, align: 'center' });
+  ws.mergeCells('A2:H2');
+  ws.getCell('A2').value = 'Fundacion ArgenINTA — Departamento de Tesoreria — Generado: ' + hoy;
+  rsFc(ws.getCell('A2'), { size: 9, color: 'FF666666', align: 'center', italic: true });
+  ws.getRow(2).height = 16;
+  ws.getRow(3).height = 8;
+  ws.getRow(4).height = 18;
+  ws.columns = [
+    { width: 35 }, { width: 18 }, { width: 18 }, { width: 18 },
+    { width: 18 }, { width: 4 }, { width: 18 }, { width: 18 },
+  ];
+  const encsFin = ['Convenio / Subcuenta', 'Ing. Financiero', 'Egr. Financiero', 'Saldo Financiero'];
+  const encsDev = ['Ing. Devengado', 'Egr. Devengado', '', 'Saldo Devengado'];
+  encsFin.forEach((enc, j) => {
+    const c = ws.getCell(4, j + 1); c.value = enc;
+    rsFc(c, { bg: RS_VERDE, color: 'FFFFFFFF', bold: true, size: 9, align: 'center', border: true });
+  });
+  encsDev.forEach((enc, j) => {
+    const c = ws.getCell(4, j + 5); c.value = enc;
+    rsFc(c, { bg: RS_AZUL, color: 'FFFFFFFF', bold: true, size: 9, align: 'center', border: true });
+  });
+
+  let row = 5;
+  let totIf = 0, totEf = 0, totSf = 0, totId = 0, totEd = 0, totSd = 0;
+  for (const conv of todosConveniosData) {
+    ws.mergeCells(`A${row}:H${row}`);
+    rsFc(ws.getCell(row, 1), { bg: 'FFF0F0F0', color: 'FF333333', bold: true, size: 9, border: true });
+    ws.getCell(row, 1).value = '  ' + conv.clave;
+    ws.getRow(row).height = 16;
+    row += 1;
+    for (const sub of conv.subcuentas) {
+      const bg = row % 2 === 0 ? RS_BLANCO : 'FFFAFAFA';
+      const linF = sub.lineas_fin, linD = sub.lineas_dev;
+      const ifV = linF.filter(l => l.amount > 0).reduce((a, l) => a + l.amount, 0);
+      const efV = linF.filter(l => l.amount < 0).reduce((a, l) => a + l.amount, 0);
+      const sfV = ifV + efV;
+      const idV = linD.filter(l => l.amount > 0).reduce((a, l) => a + l.amount, 0);
+      const edV = linD.filter(l => l.amount < 0).reduce((a, l) => a + l.amount, 0);
+      const sdV = idV + edV;
+      const colSf = sfV >= 0 ? RS_VERDE : RS_ROJO;
+      const colSd = sdV >= 0 ? RS_VERDE : RS_ROJO;
+      totIf += ifV; totEf += efV; totSf += sfV;
+      totId += idV; totEd += edV; totSd += sdV;
+
+      const c1 = ws.getCell(row, 1); c1.value = '    ' + sub.name;
+      rsFc(c1, { bg, size: 9, border: true });
+      const c2 = ws.getCell(row, 2); c2.value = ifV;
+      rsFc(c2, { bg, color: RS_VERDE, bold: true, size: 9, align: 'right', numFmt: '#,##0.00', border: true });
+      const c3 = ws.getCell(row, 3); c3.value = Math.abs(efV);
+      rsFc(c3, { bg, color: RS_ROJO, bold: true, size: 9, align: 'right', numFmt: '#,##0.00', border: true });
+      const c4 = ws.getCell(row, 4); c4.value = sfV;
+      rsFc(c4, { bg, color: colSf, bold: true, size: 9, align: 'right', numFmt: '#,##0.00', border: true });
+      const c5 = ws.getCell(row, 5); c5.value = idV;
+      rsFc(c5, { bg, color: RS_AZUL, bold: true, size: 9, align: 'right', numFmt: '#,##0.00', border: true });
+      const c6 = ws.getCell(row, 6); c6.value = Math.abs(edV);
+      rsFc(c6, { bg, color: RS_ROJO, bold: true, size: 9, align: 'right', numFmt: '#,##0.00', border: true });
+      ws.getCell(row, 7).value = '';
+      const c8 = ws.getCell(row, 8); c8.value = sdV;
+      rsFc(c8, { bg, color: colSd, bold: true, size: 9, align: 'right', numFmt: '#,##0.00', border: true });
+      ws.getRow(row).height = 15;
+      row += 1;
+    }
+  }
+  const colTotSf = totSf >= 0 ? RS_VERDE : RS_ROJO;
+  const colTotSd = totSd >= 0 ? RS_VERDE : RS_ROJO;
+  const t1 = ws.getCell(row, 1); t1.value = 'TOTAL ' + organismo;
+  rsFc(t1, { bg: RS_VERDE, color: 'FFFFFFFF', bold: true, size: 10, border: true });
+  const t2 = ws.getCell(row, 2); t2.value = totIf;
+  rsFc(t2, { bg: RS_VERDE, color: 'FFFFFFFF', bold: true, size: 10, align: 'right', numFmt: '#,##0.00', border: true });
+  const t3 = ws.getCell(row, 3); t3.value = Math.abs(totEf);
+  rsFc(t3, { bg: RS_VERDE, color: 'FFFFFFFF', bold: true, size: 10, align: 'right', numFmt: '#,##0.00', border: true });
+  const t4 = ws.getCell(row, 4); t4.value = totSf;
+  rsFc(t4, { bg: colTotSf, color: 'FFFFFFFF', bold: true, size: 10, align: 'right', numFmt: '#,##0.00', border: true });
+  const t5 = ws.getCell(row, 5); t5.value = totId;
+  rsFc(t5, { bg: RS_AZUL, color: 'FFFFFFFF', bold: true, size: 10, align: 'right', numFmt: '#,##0.00', border: true });
+  const t6 = ws.getCell(row, 6); t6.value = Math.abs(totEd);
+  rsFc(t6, { bg: RS_AZUL, color: 'FFFFFFFF', bold: true, size: 10, align: 'right', numFmt: '#,##0.00', border: true });
+  ws.getCell(row, 7).value = '';
+  const t8 = ws.getCell(row, 8); t8.value = totSd;
+  rsFc(t8, { bg: colTotSd, color: 'FFFFFFFF', bold: true, size: 10, align: 'right', numFmt: '#,##0.00', border: true });
+  ws.getRow(row).height = 20;
+}
+
+async function rsGenerarExcelOrganismo(organismo, todosConveniosData, hoy) {
+  await honCargarExcelJS();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Portal de Tesorería — Fundación ArgenINTA';
+  wb.created = new Date();
+  rsAgregarHojaResumen(wb, organismo, todosConveniosData, hoy);
+  for (const conv of todosConveniosData) {
+    for (const sub of conv.subcuentas) {
+      if (sub.lineas_fin.length) rsAgregarHojaSubcuenta(wb, sub.name, sub.lineas_fin, hoy, 'FINANCIERO');
+      if (sub.lineas_dev.length) rsAgregarHojaSubcuenta(wb, sub.name, sub.lineas_dev, hoy, 'DEVENGADO');
+    }
+  }
+  return wb;
+}
+
+function rsDescargarWorkbook(wb, organismo) {
+  return wb.xlsx.writeBuffer().then(buf => {
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const nombreOrg = organismo.replace(/\./g, '_').replace(/\//g, '_');
+    const fecha = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `Reporte_Saldo_${nombreOrg}_${fecha}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  });
+}
+
+// ── UI: poblar selector y disparar generación ──
+async function rsInicializarSelector() {
+  const sel = document.getElementById('rs-organismo-select');
+  const estado = document.getElementById('rs-estado');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Cargando organismos...</option>';
+  estado.textContent = '';
+  try {
+    const lista = await rsCargarListaOrganismos();
+    sel.innerHTML = '<option value="">Seleccioná un organismo o DEC...</option>' +
+      lista.map((o, i) => `<option value="${i}">${o.organismo}${o.esDec ? ' (DEC)' : ''}</option>`).join('');
+    sel._rsLista = lista;
+  } catch (e) {
+    sel.innerHTML = '<option value="">Error al cargar</option>';
+    estado.textContent = 'Error: ' + e.message;
+    estado.style.color = '#c0392b';
+  }
+}
+
+async function rsGenerarReporteSeleccionado() {
+  const sel = document.getElementById('rs-organismo-select');
+  const btn = document.getElementById('rs-generar-btn');
+  const estado = document.getElementById('rs-estado');
+  const idx = sel.value;
+  if (idx === '') { estado.textContent = 'Elegí un organismo primero.'; estado.style.color = '#c0392b'; return; }
+  const orgEntry = sel._rsLista[parseInt(idx, 10)];
+  btn.disabled = true;
+  const original = btn.innerHTML;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i> Generando...';
+  estado.style.color = '#666';
+  estado.textContent = 'Consultando movimientos en Odoo...';
+  try {
+    const hoy = new Date().toLocaleDateString('es-AR');
+    const { organismo, todosConveniosData } = await rsArmarDatosOrganismo(orgEntry);
+    if (!todosConveniosData.length) {
+      estado.textContent = `${organismo}: sin movimientos para mostrar.`;
+      estado.style.color = '#c0392b';
+      return;
+    }
+    estado.textContent = 'Armando Excel...';
+    const wb = await rsGenerarExcelOrganismo(organismo, todosConveniosData, hoy);
+    await rsDescargarWorkbook(wb, organismo);
+    estado.textContent = `Listo: ${organismo} descargado.`;
+    estado.style.color = '#1a5c38';
+  } catch (e) {
+    console.error(e);
+    estado.textContent = 'Error: ' + e.message;
+    estado.style.color = '#c0392b';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 }
 
 // ── Proceso principal: extrae con IA → crea factura → adjunta PDF ──
