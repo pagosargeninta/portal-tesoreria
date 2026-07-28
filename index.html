@@ -6909,15 +6909,16 @@ function rsAgregarHojaResumen(wb, organismo, todosConveniosData, hoy) {
 }
 
 // Hoja "POR CATEGORIA" — replica el pivot de "Reportes analíticos" de Odoo agrupado por
-// account.move.line.product_id (las categorías "G3-..."). Solo ARS, solo saldo financiero
-// (movimiento real de caja/banco), consolidado para todo el organismo.
+// account.move.line.product_id (las categorías "G3-..."). Solo ARS.
+// IMPORTANTE: el product_id vive en la línea de la FACTURA (cuenta de gasto/ingreso),
+// no en la línea de caja/banco — por eso se agrupa el saldo DEVENGADO, no el financiero.
 function rsAgregarHojaCategoria(wb, organismo, todosConveniosData, hoy) {
   const ws = wb.addWorksheet('POR CATEGORIA', { views: [{ showGridLines: false }] });
   ws.columns = [{ width: 38 }, { width: 20 }];
 
   ws.mergeCells('A1:B1');
-  ws.getCell('A1').value = 'SALDO FINANCIERO POR CATEGORÍA — ' + organismo;
-  rsFc(ws.getCell('A1'), { bold: true, size: 12, color: RS_VERDE, align: 'center' });
+  ws.getCell('A1').value = 'SALDO DEVENGADO POR CATEGORÍA — ' + organismo;
+  rsFc(ws.getCell('A1'), { bold: true, size: 12, color: RS_AZUL, align: 'center' });
   ws.getRow(1).height = 24;
   ws.mergeCells('A2:B2');
   ws.getCell('A2').value = 'Fundacion ArgenINTA — Departamento de Tesoreria — Generado: ' + hoy;
@@ -6925,12 +6926,12 @@ function rsAgregarHojaCategoria(wb, organismo, todosConveniosData, hoy) {
   ws.getRow(2).height = 16;
   ws.getRow(3).height = 8;
 
-  // Agrupar TODAS las líneas financieras del organismo (todos los convenios/subcuentas) por producto
+  // Agrupar TODAS las líneas devengadas del organismo (todos los convenios/subcuentas) por producto
   const porCategoria = {}; // nombre -> suma
   let total = 0;
   for (const conv of todosConveniosData) {
     for (const sub of conv.subcuentas) {
-      for (const l of sub.lineas_fin) {
+      for (const l of sub.lineas_dev) {
         const cat = l.producto || 'Sin categoría';
         porCategoria[cat] = (porCategoria[cat] || 0) + l.amount;
         total += l.amount;
