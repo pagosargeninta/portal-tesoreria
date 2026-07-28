@@ -12703,7 +12703,9 @@ async function icProcesar() {
     }]);
     icDocumentosCreados.push({ tipo:'account.move', id: facIngresoId, etiqueta: 'Factura de ingreso' });
     await icPostearVerificado('account.move', facIngresoId, 'la factura de ingreso');
-    icSetPaso(0, 'ok', `Factura de ingreso creada (ID ${facIngresoId})`);
+    const facIngresoData = await odooCall('account.move', 'read', [[facIngresoId], ['name']]);
+    const numeroFacIngreso = facIngresoData[0].name;
+    icSetPaso(0, 'ok', `Factura de ingreso creada — N° ${numeroFacIngreso}`);
 
     // ── PASO 2: Cobro de la factura de ingreso (RE-X) ──
     icSetPaso(1, 'cargando', 'Cobrando la factura de ingreso...');
@@ -12778,7 +12780,7 @@ async function icProcesar() {
       l10n_latam_document_type_id: IC_DOC_TYPE_LU_C,
       invoice_date: hoy,
       date: hoy,
-      ref: numeroFacCogayt,
+      ref: numeroFacIngreso,
       invoice_line_ids: [[0, 0, {
         product_id: IC_PRODUCTO_GASTOS_ADM,
         name: 'G3-Gastos Administrativos',
@@ -13461,7 +13463,7 @@ async function cbiProcesar() {
       l10n_latam_document_type_id: 87, // LU-C (29)
       invoice_date: hoy,
       date: hoy,
-      ref: numeroFacCogayt,
+      ref: ref,
       invoice_line_ids: [[0, 0, {
         product_id: IC_PRODUCTO_GASTOS_ADM,
         name: 'G3-Gastos Administrativos — ' + ref,
@@ -14426,7 +14428,7 @@ async function ccProcesar() {
         l10n_latam_document_type_id: 87, // LU-C (29)
         invoice_date: hoy,
         date: hoy,
-        ref: numeroFacCogayt,
+        ref: linea.ref,
         invoice_line_ids: [[0, 0, {
           product_id: IC_PRODUCTO_GASTOS_ADM,
           name: 'G3-Gastos Administrativos — ' + linea.ref,
