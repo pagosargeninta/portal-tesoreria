@@ -12735,6 +12735,7 @@ async function icProcesar() {
       journal_id: IC_JOURNAL_COGAYT_VTA,
       invoice_date: hoy,
       date: hoy,
+      ref: refCogayt,
       invoice_line_ids: [[0, 0, {
         product_id: IC_PRODUCTO_COGAYT,
         name: 'Ingreso Prestaciones de Servicios',
@@ -13407,9 +13408,10 @@ async function cbiProcesar() {
       journal_id: IC_JOURNAL_COGAYT_VTA,
       invoice_date: fechaFactura,
       date: fechaFactura,
+      ref: ref,
       invoice_line_ids: [[0, 0, {
         product_id: IC_PRODUCTO_COGAYT,
-        name: 'Ingreso Prestaciones de Servicios — ' + ref,
+        name: 'Ingreso Prestaciones de Servicios',
         quantity: 1,
         price_unit: importe,
         account_id: IC_CUENTA_411000,
@@ -14385,9 +14387,10 @@ async function ccProcesar() {
         journal_id: IC_JOURNAL_COGAYT_VTA,
         invoice_date: hoy,
         date: hoy,
+        ref: linea.ref,
         invoice_line_ids: [[0, 0, {
           product_id: IC_PRODUCTO_COGAYT,
-          name: 'Ingreso Prestaciones de Servicios — ' + linea.ref,
+          name: 'Ingreso Prestaciones de Servicios',
           quantity: 1,
           price_unit: linea.monto,
           account_id: IC_CUENTA_411000,
