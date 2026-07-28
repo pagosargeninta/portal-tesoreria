@@ -6581,11 +6581,12 @@ async function rsGetMovimientosGrupo(subcuentas, cuentasExcluirFin, cuentasExclu
   let accountTypeMap = {};
   if (mlIds.length) {
     const mls = await odooCall('account.move.line', 'search_read',
-      [[['id', 'in', mlIds]]], { fields: ['id', 'move_id', 'account_id'] });
-    const mlToMove = {}, mlToAcc = {};
+      [[['id', 'in', mlIds]]], { fields: ['id', 'move_id', 'account_id', 'product_id'] });
+    const mlToMove = {}, mlToAcc = {}, mlToProducto = {};
     for (const ml of mls) {
       if (ml.move_id) mlToMove[ml.id] = ml.move_id[0];
       mlToAcc[ml.id] = Array.isArray(ml.account_id) ? ml.account_id[0] : ml.account_id;
+      mlToProducto[ml.id] = ml.product_id ? ml.product_id[1] : null;
     }
     const allMoveIds = [...new Set(Object.values(mlToMove))];
     let moveData = {};
@@ -6603,6 +6604,7 @@ async function rsGetMovimientosGrupo(subcuentas, cuentasExcluirFin, cuentasExclu
         journal: moveId ? (moveData[moveId]?.journal || '-') : '-',
         account_id: mlToAcc[mlId],
         move_id: moveId,
+        producto: mlToProducto[mlId] || 'Sin categoría',
       };
     }
     const accIdsNeeded = [...new Set(Object.values(mlInfo).map(i => i.account_id).filter(Boolean))];
@@ -6644,6 +6646,7 @@ async function rsGetMovimientosGrupo(subcuentas, cuentasExcluirFin, cuentasExclu
       move_name: info.move_name || '-',
       journal: info.journal || '-',
       cuenta: cuentaNombre,
+      producto: info.producto || 'Sin categoría',
     };
     const esExcluidoDev = excluirDevSet.has(cuentaId);
     if (esFin) {
@@ -6661,6 +6664,7 @@ async function rsGetMovimientosGrupo(subcuentas, cuentasExcluirFin, cuentasExclu
             move_name: linea.move_name,
             journal: 'Retenciones',
             cuenta: ret.tax_name,
+            producto: 'Retenciones',
           });
         }
       }
@@ -6904,12 +6908,66 @@ function rsAgregarHojaResumen(wb, organismo, todosConveniosData, hoy) {
   ws.getRow(row).height = 20;
 }
 
+// Hoja "POR CATEGORIA" — replica el pivot de "Reportes analíticos" de Odoo agrupado por
+// account.move.line.product_id (las categorías "G3-..."). Solo ARS, solo saldo financiero
+// (movimiento real de caja/banco), consolidado para todo el organismo.
+function rsAgregarHojaCategoria(wb, organismo, todosConveniosData, hoy) {
+  const ws = wb.addWorksheet('POR CATEGORIA', { views: [{ showGridLines: false }] });
+  ws.columns = [{ width: 38 }, { width: 20 }];
+
+  ws.mergeCells('A1:B1');
+  ws.getCell('A1').value = 'SALDO FINANCIERO POR CATEGORÍA — ' + organismo;
+  rsFc(ws.getCell('A1'), { bold: true, size: 12, color: RS_VERDE, align: 'center' });
+  ws.getRow(1).height = 24;
+  ws.mergeCells('A2:B2');
+  ws.getCell('A2').value = 'Fundacion ArgenINTA — Departamento de Tesoreria — Generado: ' + hoy;
+  rsFc(ws.getCell('A2'), { size: 9, color: 'FF666666', align: 'center', italic: true });
+  ws.getRow(2).height = 16;
+  ws.getRow(3).height = 8;
+
+  // Agrupar TODAS las líneas financieras del organismo (todos los convenios/subcuentas) por producto
+  const porCategoria = {}; // nombre -> suma
+  let total = 0;
+  for (const conv of todosConveniosData) {
+    for (const sub of conv.subcuentas) {
+      for (const l of sub.lineas_fin) {
+        const cat = l.producto || 'Sin categoría';
+        porCategoria[cat] = (porCategoria[cat] || 0) + l.amount;
+        total += l.amount;
+      }
+    }
+  }
+  const categoriasOrdenadas = Object.keys(porCategoria).sort((a, b) => porCategoria[a] - porCategoria[b]);
+
+  let row = 4;
+  ws.getCell(row, 1).value = 'Total';
+  rsFc(ws.getCell(row, 1), { bg: RS_GRIS, color: 'FF333333', bold: true, size: 10, border: true });
+  const colTot = total >= 0 ? RS_VERDE : RS_ROJO;
+  ws.getCell(row, 2).value = total;
+  rsFc(ws.getCell(row, 2), { bg: RS_GRIS, color: colTot, bold: true, size: 10, align: 'right', numFmt: '#,##0.00', border: true });
+  ws.getRow(row).height = 20;
+  row += 1;
+
+  for (const cat of categoriasOrdenadas) {
+    const valor = porCategoria[cat];
+    const bg = row % 2 === 0 ? RS_BLANCO : 'FFFAFAFA';
+    const col = valor >= 0 ? RS_VERDE : RS_ROJO;
+    ws.getCell(row, 1).value = '  ' + cat;
+    rsFc(ws.getCell(row, 1), { bg, size: 9.5, border: true });
+    ws.getCell(row, 2).value = valor;
+    rsFc(ws.getCell(row, 2), { bg, color: col, bold: true, size: 9.5, align: 'right', numFmt: '#,##0.00', border: true });
+    ws.getRow(row).height = 16;
+    row += 1;
+  }
+}
+
 async function rsGenerarExcelOrganismo(organismo, todosConveniosData, hoy) {
   await honCargarExcelJS();
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Portal de Tesorería — Fundación ArgenINTA';
   wb.created = new Date();
   rsAgregarHojaResumen(wb, organismo, todosConveniosData, hoy);
+  rsAgregarHojaCategoria(wb, organismo, todosConveniosData, hoy);
   for (const conv of todosConveniosData) {
     for (const sub of conv.subcuentas) {
       if (sub.lineas_fin.length) rsAgregarHojaSubcuenta(wb, sub.name, sub.lineas_fin, hoy, 'FINANCIERO');
