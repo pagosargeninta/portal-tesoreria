@@ -5744,7 +5744,22 @@ function honFiltrarCartas() {
 }
 
 function honAddFiles(files) {
-  honFiles = [...honFiles, ...files.filter(f => !honFiles.find(x => x.name === f.name))];
+  // Deduplicar por nombre en DOS pasos: contra lo ya agregado antes (como
+  // ya hacía), y ADEMÁS dentro de esta misma tanda (files) — si el navegador
+  // entrega la misma selección/drop con un archivo repetido, antes los dos
+  // sobrevivían porque se comparaban contra la lista vieja, no entre ellos.
+  const nombresVistos = new Set(honFiles.map(f => f.name));
+  const nuevosSinDuplicar = [];
+  files.forEach(f => {
+    if (nombresVistos.has(f.name)) return; // ya existía o ya lo agregamos en esta misma tanda
+    nombresVistos.add(f.name);
+    nuevosSinDuplicar.push(f);
+  });
+  honFiles = [...honFiles, ...nuevosSinDuplicar];
+  const descartados = files.length - nuevosSinDuplicar.length;
+  if (descartados > 0) {
+    showToast(`${descartados} archivo(s) duplicado(s) en la selección — se descartaron automáticamente`, 'warn');
+  }
   document.getElementById('hon-count-sel').textContent = honFiles.length;
   document.getElementById('hon-btn-process').disabled = honFiles.length === 0;
   if (honFiles.length > 0) {
