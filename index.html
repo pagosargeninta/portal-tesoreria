@@ -1160,6 +1160,13 @@ td[style*="text-align:right"],td[style*="text-align: right"]{
                 </select>
                 <div style="font-size:10px;color:var(--muted);margin-top:3px;" id="hon-carta-count"></div>
               </div>
+              <div class="field" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface-alt,#f8faf9);border:1px solid var(--border);border-radius:7px;margin-bottom:14px;margin-top:-4px;">
+                <input type="checkbox" id="hon-sin-contrato" style="width:15px;height:15px;cursor:pointer;flex-shrink:0;">
+                <label for="hon-sin-contrato" style="margin:0;font-size:12px;font-weight:500;cursor:pointer;line-height:1.3;">
+                  Sin contrato (locación de servicios)
+                  <div style="font-size:10px;color:var(--muted);font-weight:400;margin-top:2px;">Para cartas donde se paga como locación sin OC — no busca ningún contrato, arma la línea directo con "G3-Otros Servicios Técnicos".</div>
+                </label>
+              </div>
               <div class="dropzone" id="hon-dropzone" onclick="document.getElementById('hon-fileInput').click()" style="margin-bottom:14px;">
                 <i class="ti ti-files"></i>
                 <p>Arrastrá los PDFs o hacé <span>clic para seleccionar</span></p>
@@ -6094,7 +6101,12 @@ async function honBuscarLineaContrato(partnerId, montoRef) {
   }
 }
 
-async function honCrearFactura(datos, cartaId, contrato, partnerId) {
+// Producto usado para las cartas "sin contrato" (locación de servicios) —
+// G3-Otros Servicios Técnicos, el mismo que usan la mayoría de las líneas
+// de contrato de honorarios normales.
+const HON_PRODUCTO_OTROS_SERVICIOS = 139;
+
+async function honCrearFactura(datos, cartaId, contrato, partnerId, sinContrato) {
   const parseNum = v => parseFloat((v || '0').toString().replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
   const neto   = parseNum(datos.neto) || parseNum(datos.total);
   const iva    = parseNum(datos.iva);
@@ -6126,8 +6138,11 @@ async function honCrearFactura(datos, cartaId, contrato, partnerId) {
     usoContrato = true;
   } else {
     // ── Fallback: sin contrato identificado, se arma desde lo extraído del PDF ──
+    // Si la carta es de las "sin contrato" (locación de servicios), se fuerza
+    // el producto G3-Otros Servicios Técnicos en la línea de neto.
     if (neto > 0) {
       const l = { name: ref, quantity: 1, price_unit: neto };
+      if (sinContrato) l.product_id = HON_PRODUCTO_OTROS_SERVICIOS;
       if (cartaId) l.analytic_distribution = { [cartaId]: 100 };
       lineas.push([0, 0, l]);
     }
@@ -7182,6 +7197,7 @@ async function honProcesar() {
   if (!cartaId) return showToast('Seleccioná una carta', 'err');
   const cartaSelEl = document.getElementById('hon-sel-carta');
   const cartaNombre = cartaSelEl.options[cartaSelEl.selectedIndex]?.text || `Carta #${cartaId}`;
+  const sinContrato = !!document.getElementById('hon-sin-contrato')?.checked;
   if (!honFiles.length) return showToast('Subí al menos un PDF', 'err');
   const claudeKey = localStorage.getItem('claude_key');
   if (!claudeKey) return showToast('Configurá la API key de Claude en Configuración', 'err');
@@ -7243,7 +7259,13 @@ async function honProcesar() {
         let contratoUsable = null;
         let esDuplicado = resPartner.duplicado;
 
-        if (!resPartner.duplicado) {
+        if (sinContrato) {
+          // Modo "locación de servicios" — no se busca ningún purchase.order,
+          // la línea se arma directo con el producto G3-Otros Servicios Técnicos.
+          // Si el CUIT matcheó 2+ proveedores, igual usamos el primer candidato
+          // (queda marcado como duplicado para corregir el maestro más abajo).
+          if (resPartner.duplicado) partnerId = resPartner.candidatos[0].id;
+        } else if (!resPartner.duplicado) {
           contratoEncontrado = await honBuscarLineaContrato(resPartner.id, montoRef);
           contratoUsable = (contratoEncontrado && contratoEncontrado.linea) ? contratoEncontrado : null;
         } else {
@@ -7261,7 +7283,7 @@ async function honProcesar() {
           if (!contratoUsable) partnerId = resPartner.candidatos[0].id;
         }
 
-        const { invoiceId: odooId, usoContrato } = await honCrearFactura(datos, cartaId, contratoUsable, partnerId);
+        const { invoiceId: odooId, usoContrato } = await honCrearFactura(datos, cartaId, contratoUsable, partnerId, sinContrato);
 
         // Si NO se pudo enganchar a una línea de contrato (sin contrato, contrato
         // agotado, ambigüedad de monto, CUIT inválido), marcamos la factura
@@ -7271,7 +7293,7 @@ async function honProcesar() {
         // crea y marca en vez de fallar en silencio), así que esta marca es la
         // única defensa real contra confirmar una factura problemática sin
         // darse cuenta.
-        if (!usoContrato) {
+        if (!usoContrato && !sinContrato) {
           try {
             const actual = await odooCall('account.move', 'read', [[odooId], ['ref']]);
             const refActual = actual?.[0]?.ref || '';
@@ -7297,6 +7319,15 @@ async function honProcesar() {
           contratoBadge = `<span class="badge badge-danger" title="El CUIT extraído (${datos.cuit || '—'}) no pasa el dígito verificador de AFIP — la IA probablemente confundió CUIT con Ingresos Brutos/CM. No se buscó proveedor ni contrato.">⚠ CUIT inválido (revisar PDF)</span>`;
           estadoResumen = 'REVISAR — CUIT no válido (posible confusión con IIBB)';
           detalleResumen = `CUIT extraído: ${datos.cuit || '—'} — no pasa el dígito verificador de AFIP. Abrir el PDF y corregir el CUIT manualmente.`;
+        } else if (sinContrato && esDuplicado) {
+          const nombres = resPartner.candidatos.map(c => `#${c.id} ${c.name}`).join(' / ');
+          contratoBadge = `<span class="badge badge-warn" title="Proveedor duplicado en Odoo (${nombres}) — se usó #${partnerId}. Corregir el maestro de proveedores.">✎ Locación · ⚠ Duplicado</span>`;
+          estadoResumen = 'HECHO — PROVEEDOR DUPLICADO - CORREGIR';
+          detalleResumen = `Locación de servicios (sin contrato), producto G3-Otros Servicios Técnicos. Duplicados: ${nombres}`;
+        } else if (sinContrato) {
+          contratoBadge = '<span class="badge badge-ok" title="Modo locación de servicios — línea armada directo con G3-Otros Servicios Técnicos, sin buscar contrato">✎ Locación (sin contrato)</span>';
+          estadoResumen = 'LISTA — locación de servicios (sin contrato)';
+          detalleResumen = 'Línea armada directo con el producto G3-Otros Servicios Técnicos, sin buscar ningún purchase.order.';
         } else if (esDuplicado && usoContrato) {
           const nombres = resPartner.candidatos.map(c => `#${c.id} ${c.name}`).join(' / ');
           contratoBadge = `<span class="badge badge-warn" title="Proveedor duplicado en Odoo (${nombres}) — se usó el contrato de #${partnerId}. Corregir el maestro de proveedores.">📑 Contrato · ⚠ Duplicado</span>`;
