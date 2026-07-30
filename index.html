@@ -6779,6 +6779,43 @@ async function rsGetDesembolsosPorCarta(cartaIds) {
   return porCarta;
 }
 
+// Gastos Bancarios (Gravamen Ley 25413 + Comisiones bancarias) ya reclasificados por convenio.
+// Viven en la misma cuenta FdT (2379), como asientos manuales (no tienen product_id) con
+// referencia "Reclasificación...". No se recalcula nada: es la suma neta (debit-credit) de lo
+// ya imputado por convenio. Sin filtro de parent_state porque hoy (203 y 51-33) siguen en
+// borrador — cuando se posteen, esta misma query los sigue tomando igual.
+const RS_CUENTA_GASTOS_BANCARIOS = 2379;
+
+async function rsGetGastosBancariosPorCarta(cartaIds) {
+  const cartaSet = new Set(cartaIds);
+  const porCarta = {};
+  if (!cartaIds.length) return porCarta;
+  const domain = [
+    ['account_id', '=', RS_CUENTA_GASTOS_BANCARIOS],
+    ['company_id', '=', 1],
+    ['name', 'ilike', 'Reclasificaci'],
+  ];
+  let off = 0;
+  const PAGE = 500;
+  while (true) {
+    const pg = await odooCall('account.move.line', 'search_read',
+      [domain], { fields: ['analytic_distribution', 'debit', 'credit'], limit: PAGE, offset: off });
+    for (const l of pg) {
+      if (!l.analytic_distribution) continue;
+      for (const cidStr of Object.keys(l.analytic_distribution)) {
+        const cid = parseInt(cidStr, 10);
+        if (!cartaSet.has(cid)) continue;
+        const pct = parseFloat(l.analytic_distribution[cidStr] || 100) / 100;
+        const monto = ((l.debit || 0) - (l.credit || 0)) * pct;
+        porCarta[cid] = (porCarta[cid] || 0) + monto;
+      }
+    }
+    if (pg.length < PAGE) break;
+    off += PAGE;
+  }
+  return porCarta;
+}
+
 async function rsArmarDatosOrganismo(orgEntry) {
   const { fin, dev } = await rsGetCuentasExcluir();
   const todosConveniosData = [];
@@ -6787,7 +6824,9 @@ async function rsArmarDatosOrganismo(orgEntry) {
     const subcuentas = await rsCargarSubcuentasDec(orgEntry.decClave);
     if (!subcuentas.length) return { organismo: orgEntry.organismo, todosConveniosData: [] };
     const movs = await rsGetMovimientosGrupo(subcuentas, fin, dev);
-    const desembolsosPorCarta = await rsGetDesembolsosPorCarta(subcuentas.map(s => s.id));
+    const idsAll = subcuentas.map(s => s.id);
+    const desembolsosPorCarta = await rsGetDesembolsosPorCarta(idsAll);
+    const gastosBancPorCarta = await rsGetGastosBancariosPorCarta(idsAll);
     const subcuentasData = [];
     for (const sub of subcuentas) {
       const m = movs[sub.id] || { financiero: [], devengado: [] };
@@ -6796,13 +6835,15 @@ async function rsArmarDatosOrganismo(orgEntry) {
       }
     }
     const ingresosDesembolso = subcuentas.reduce((a, s) => a + (desembolsosPorCarta[s.id] || 0), 0);
-    if (subcuentasData.length || ingresosDesembolso > 0) {
-      todosConveniosData.push({ clave: orgEntry.organismo, subcuentas: subcuentasData, ingresosDesembolso });
+    const gastosBancarios = subcuentas.reduce((a, s) => a + (gastosBancPorCarta[s.id] || 0), 0);
+    if (subcuentasData.length || ingresosDesembolso > 0 || gastosBancarios !== 0) {
+      todosConveniosData.push({ clave: orgEntry.organismo, subcuentas: subcuentasData, ingresosDesembolso, gastosBancarios });
     }
   } else {
-    // Traemos los desembolsos de TODAS las subcuentas del organismo en una sola pasada
+    // Traemos los desembolsos y gastos bancarios de TODAS las subcuentas del organismo en una sola pasada
     const todasSubcuentaIds = orgEntry.convenios.flatMap(c => c.subcuentas.map(s => s.id));
     const desembolsosPorCarta = await rsGetDesembolsosPorCarta(todasSubcuentaIds);
+    const gastosBancPorCarta = await rsGetGastosBancariosPorCarta(todasSubcuentaIds);
     for (const conv of orgEntry.convenios) {
       const movs = await rsGetMovimientosGrupo(conv.subcuentas, fin, dev);
       const subcuentasData = [];
@@ -6813,8 +6854,9 @@ async function rsArmarDatosOrganismo(orgEntry) {
         }
       }
       const ingresosDesembolso = conv.subcuentas.reduce((a, s) => a + (desembolsosPorCarta[s.id] || 0), 0);
-      if (subcuentasData.length || ingresosDesembolso > 0) {
-        todosConveniosData.push({ clave: conv.clave, subcuentas: subcuentasData, ingresosDesembolso });
+      const gastosBancarios = conv.subcuentas.reduce((a, s) => a + (gastosBancPorCarta[s.id] || 0), 0);
+      if (subcuentasData.length || ingresosDesembolso > 0 || gastosBancarios !== 0) {
+        todosConveniosData.push({ clave: conv.clave, subcuentas: subcuentasData, ingresosDesembolso, gastosBancarios });
       }
     }
   }
@@ -7028,34 +7070,46 @@ function rsNormalizarCategoria(nombre) {
 }
 
 const RS_CLAVE_DESEMBOLSO = rsNormalizarCategoria('Ingresos por desembolsos a convenios');
+const RS_CLAVE_GASTOS_BANC = rsNormalizarCategoria('Gastos Bancarios');
 
-// Hoja "POR CATEGORIA" — replica el pivot de "Reportes analíticos" de Odoo agrupado por
-// account.move.line.product_id (las categorías "G3-..."), pero separado por CONVENIO
-// (ej. "CATEGORIA C23", "CATEGORIA C27"), tomando únicamente lo de cada carta. Solo ARS.
-// IMPORTANTE: el product_id vive en la línea de la FACTURA (cuenta de gasto/ingreso),
-// no en la línea de caja/banco — por eso se agrupa el saldo DEVENGADO.
-// "Ingresos por desembolsos a convenios" tiene un producto propio en Odoo, pero ese total
-// incluye facturas sin cobrar — se descarta ese monto crudo y se reemplaza por el filtrado
-// (pagado / en proceso de pago / parcialmente pagado), igual que Control COGAYT / Fondos Propios.
+// Nombre "lindo" para gente que no usa Odoo: saca prefijos técnicos (G3-, Ge-) y
+// reformula las etiquetas de sistema en lenguaje simple.
+function rsCategoriaAmigable(catNormalizada) {
+  if (catNormalizada === RS_CLAVE_DESEMBOLSO) return 'Fondos recibidos del organismo';
+  if (catNormalizada === RS_CLAVE_GASTOS_BANC) return 'Gastos bancarios (impuestos y comisiones)';
+  if (catNormalizada === 'Sin categoría') return 'Otros movimientos';
+  return catNormalizada.replace(/^(G3|Ge)-?\s*/i, '').trim() || catNormalizada;
+}
+
+// Barra de proporción simple usando bloques unicode — da una lectura visual rápida
+// sin depender de gráficos de Excel (que no se pueden generar bien con ExcelJS).
+function rsBarra(pct, largo = 16) {
+  const n = Math.max(0, Math.min(largo, Math.round(pct * largo)));
+  return '█'.repeat(n) + '░'.repeat(largo - n);
+}
+
+// Hoja "RESUMEN SIMPLE" — pensada para gente que NO usa Odoo: por cada convenio, muestra
+// de dónde vino la plata y en qué se gastó, en lenguaje llano, con totales grandes y
+// barras de proporción en vez de la grilla técnica de Odoo. Solo ARS.
+// Fuente: saldo DEVENGADO (así aparece el producto/categoría de cada factura), más
+// "Fondos recibidos del organismo" (desembolsos pagado/en proceso/parcial, igual que
+// Control COGAYT/Fondos Propios) y "Gastos bancarios" (reclasificación ya cargada en Odoo).
 function rsAgregarHojaCategoria(wb, organismo, todosConveniosData, hoy) {
-  const ws = wb.addWorksheet('POR CATEGORIA', { views: [{ showGridLines: false }] });
-  ws.columns = [{ width: 38 }, { width: 20 }];
+  const ws = wb.addWorksheet('RESUMEN SIMPLE', { views: [{ showGridLines: false }] });
+  ws.columns = [{ width: 4 }, { width: 34 }, { width: 18 }, { width: 20 }, { width: 12 }];
 
-  ws.mergeCells('A1:B1');
-  ws.getCell('A1').value = 'SALDO POR CATEGORÍA — ' + organismo;
-  rsFc(ws.getCell('A1'), { bold: true, size: 12, color: RS_AZUL, align: 'center' });
-  ws.getRow(1).height = 24;
-  ws.mergeCells('A2:B2');
-  ws.getCell('A2').value = 'Fundacion ArgenINTA — Departamento de Tesoreria — Generado: ' + hoy;
-  rsFc(ws.getCell('A2'), { size: 9, color: 'FF666666', align: 'center', italic: true });
+  ws.mergeCells('A1:E1');
+  ws.getCell('A1').value = organismo;
+  rsFc(ws.getCell('A1'), { bold: true, size: 16, color: RS_AZUL, align: 'left' });
+  ws.getRow(1).height = 30;
+  ws.mergeCells('A2:E2');
+  ws.getCell('A2').value = 'Resumen de ingresos y gastos por convenio — Fundación ArgenINTA, Tesorería · ' + hoy;
+  rsFc(ws.getCell('A2'), { size: 10, color: 'FF888888', align: 'left', italic: true });
   ws.getRow(2).height = 16;
-  ws.getRow(3).height = 8;
+  ws.getRow(3).height = 10;
 
   let row = 4;
   for (const conv of todosConveniosData) {
-    // Agrupar por producto (normalizado) SOLO las líneas de este convenio (esta carta).
-    // Se excluye el producto "Ingresos por desembolsos a convenios" del conteo crudo:
-    // ese monto se reemplaza por el filtrado (pagado/en proceso/parcial) más abajo.
     const porCategoria = {};
     for (const sub of conv.subcuentas) {
       for (const l of sub.lineas_dev) {
@@ -7068,42 +7122,96 @@ function rsAgregarHojaCategoria(wb, organismo, todosConveniosData, hoy) {
     if (ingresosDesembolso > 0) {
       porCategoria[RS_CLAVE_DESEMBOLSO] = (porCategoria[RS_CLAVE_DESEMBOLSO] || 0) + ingresosDesembolso;
     }
-    const totalConvenio = Object.values(porCategoria).reduce((a, b) => a + b, 0);
+    const gastosBancarios = conv.gastosBancarios || 0;
+    if (gastosBancarios !== 0) {
+      porCategoria[RS_CLAVE_GASTOS_BANC] = (porCategoria[RS_CLAVE_GASTOS_BANC] || 0) - Math.abs(gastosBancarios);
+    }
 
-    // Encabezado de convenio: "CATEGORIA <clave>"
-    ws.mergeCells(`A${row}:B${row}`);
-    ws.getCell(row, 1).value = 'CATEGORIA ' + conv.clave;
-    rsFc(ws.getCell(row, 1), { bg: RS_AZUL, color: 'FFFFFFFF', bold: true, size: 10, align: 'center', border: true });
-    ws.getRow(row).height = 20;
+    const ingresos = [], gastos = [];
+    let totalIngresos = 0, totalGastos = 0;
+    for (const [cat, valor] of Object.entries(porCategoria)) {
+      if (valor >= 0) { ingresos.push([cat, valor]); totalIngresos += valor; }
+      else { gastos.push([cat, valor]); totalGastos += valor; }
+    }
+    ingresos.sort((a, b) => b[1] - a[1]);
+    gastos.sort((a, b) => a[1] - b[1]);
+    const saldo = totalIngresos + totalGastos;
+
+    // ── Título del convenio ──
+    ws.mergeCells(`A${row}:E${row}`);
+    ws.getCell(row, 1).value = '  ' + conv.clave;
+    rsFc(ws.getCell(row, 1), { bg: RS_AZUL, color: 'FFFFFFFF', bold: true, size: 12, align: 'left', border: true });
+    ws.getRow(row).height = 24;
     row += 1;
 
-    // Total del convenio
-    ws.getCell(row, 1).value = 'Total';
-    rsFc(ws.getCell(row, 1), { bg: RS_GRIS, color: 'FF333333', bold: true, size: 9.5, border: true });
-    const colTot = totalConvenio >= 0 ? RS_VERDE : RS_ROJO;
-    ws.getCell(row, 2).value = totalConvenio;
-    rsFc(ws.getCell(row, 2), { bg: RS_GRIS, color: colTot, bold: true, size: 9.5, align: 'right', numFmt: '#,##0.00', border: true });
-    ws.getRow(row).height = 18;
-    row += 1;
+    // ── Tira de 3 KPIs grandes: Recibió / Gastó / Le queda ──
+    const kpiRow = row;
+    const kpis = [
+      ['B', 'Recibió', totalIngresos, RS_VERDE_CLA, RS_VERDE],
+      ['C', 'Gastó', Math.abs(totalGastos), RS_ROJO_CLA, RS_ROJO],
+      ['D', 'Le queda', saldo, saldo >= 0 ? RS_VERDE_CLA : RS_ROJO_CLA, saldo >= 0 ? RS_VERDE : RS_ROJO],
+    ];
+    for (const [col, label, valor, bg, color] of kpis) {
+      const c = col.charCodeAt(0) - 64;
+      ws.getCell(kpiRow, c).value = label;
+      rsFc(ws.getCell(kpiRow, c), { bg, color, bold: true, size: 9, align: 'center', border: true });
+      ws.getCell(kpiRow + 1, c).value = valor;
+      rsFc(ws.getCell(kpiRow + 1, c), { bg, color, bold: true, size: 13, align: 'center', numFmt: '#,##0', border: true });
+    }
+    ws.getRow(kpiRow).height = 16;
+    ws.getRow(kpiRow + 1).height = 24;
+    row = kpiRow + 3;
 
-    // Categorías (productos) del devengado, de mayor egreso a mayor ingreso.
-    // El desembolso (filtrado) queda mezclado en el orden como una categoría más.
-    const categoriasOrdenadas = Object.keys(porCategoria).sort((a, b) => porCategoria[a] - porCategoria[b]);
-    for (const cat of categoriasOrdenadas) {
-      const valor = porCategoria[cat];
-      const esDesembolso = cat === RS_CLAVE_DESEMBOLSO;
-      const bg = esDesembolso ? RS_VERDE_CLA : (row % 2 === 0 ? RS_BLANCO : 'FFFAFAFA');
-      const col = valor >= 0 ? RS_VERDE : RS_ROJO;
-      ws.getCell(row, 1).value = '  ' + cat;
-      rsFc(ws.getCell(row, 1), { bg, size: 9.5, border: true, bold: esDesembolso });
-      ws.getCell(row, 2).value = valor;
-      rsFc(ws.getCell(row, 2), { bg, color: col, bold: true, size: 9.5, align: 'right', numFmt: '#,##0.00', border: true });
-      ws.getRow(row).height = 16;
+    // ── Ingresos: de dónde vino la plata ──
+    if (ingresos.length) {
+      ws.mergeCells(`A${row}:E${row}`);
+      ws.getCell(row, 1).value = '  De dónde vino la plata';
+      rsFc(ws.getCell(row, 1), { bg: RS_VERDE_CLA, color: RS_VERDE, bold: true, size: 9.5, border: true });
+      ws.getRow(row).height = 18;
+      row += 1;
+      for (const [cat, valor] of ingresos) {
+        const pct = totalIngresos > 0 ? valor / totalIngresos : 0;
+        const bg = row % 2 === 0 ? RS_BLANCO : 'FFFAFAFA';
+        ws.getCell(row, 2).value = rsCategoriaAmigable(cat);
+        rsFc(ws.getCell(row, 2), { bg, size: 9.5, border: true });
+        ws.getCell(row, 3).value = valor;
+        rsFc(ws.getCell(row, 3), { bg, color: RS_VERDE, bold: true, size: 9.5, align: 'right', numFmt: '#,##0', border: true });
+        ws.getCell(row, 4).value = rsBarra(pct);
+        rsFc(ws.getCell(row, 4), { bg, color: RS_VERDE, size: 9, align: 'left', border: true });
+        ws.getCell(row, 5).value = pct;
+        rsFc(ws.getCell(row, 5), { bg, color: 'FF888888', size: 8.5, align: 'right', numFmt: '0%', border: true });
+        ws.getRow(row).height = 15;
+        row += 1;
+      }
       row += 1;
     }
-    row += 1; // fila en blanco entre convenios
+
+    // ── Gastos: en qué se gastó ──
+    if (gastos.length) {
+      ws.mergeCells(`A${row}:E${row}`);
+      ws.getCell(row, 1).value = '  En qué se gastó';
+      rsFc(ws.getCell(row, 1), { bg: RS_ROJO_CLA, color: RS_ROJO, bold: true, size: 9.5, border: true });
+      ws.getRow(row).height = 18;
+      row += 1;
+      for (const [cat, valor] of gastos) {
+        const pct = totalGastos < 0 ? valor / totalGastos : 0;
+        const bg = row % 2 === 0 ? RS_BLANCO : 'FFFAFAFA';
+        ws.getCell(row, 2).value = rsCategoriaAmigable(cat);
+        rsFc(ws.getCell(row, 2), { bg, size: 9.5, border: true });
+        ws.getCell(row, 3).value = Math.abs(valor);
+        rsFc(ws.getCell(row, 3), { bg, color: RS_ROJO, bold: true, size: 9.5, align: 'right', numFmt: '#,##0', border: true });
+        ws.getCell(row, 4).value = rsBarra(pct);
+        rsFc(ws.getCell(row, 4), { bg, color: RS_ROJO, size: 9, align: 'left', border: true });
+        ws.getCell(row, 5).value = pct;
+        rsFc(ws.getCell(row, 5), { bg, color: 'FF888888', size: 8.5, align: 'right', numFmt: '0%', border: true });
+        ws.getRow(row).height = 15;
+        row += 1;
+      }
+    }
+    row += 2; // separación entre convenios
   }
 }
+
 
 async function rsGenerarExcelOrganismo(organismo, todosConveniosData, hoy) {
   await honCargarExcelJS();
